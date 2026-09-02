@@ -8,3 +8,4 @@
   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
 [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
 [2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m12:34:09 AM[22m [36m[1m[vite][22m[39m changed tsconfig file detected: C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\adopter-portal\tsconfig.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
