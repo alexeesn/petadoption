@@ -1,0 +1,154 @@
+from rest_framework import viewsets, generics, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django.utils import timezone
+from django.db.models import Q
+from .models import Application
+from .serializers import (
+    ApplicationSerializer, ApplicationCreateSerializer,
+    ApplicationStatusUpdateSerializer,
+)
+from apps.accounts.permissions import IsAdopter, IsStaff
+from apps.notifications.models import create_notification
+
+
+class ApplicationViewSet(viewsets.ModelViewSet):
+    queryset = Application.objects.select_related("adopter", "pet", "reviewed_by").all()
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return ApplicationCreateSerializer
+        if self.action == "update_status":
+            return ApplicationStatusUpdateSerializer
+        return ApplicationSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff_role or user.is_admin_role:
+            qs = self.queryset
+            status_filter = self.request.query_params.get("status")
+            if status_filter:
+                qs = qs.filter(status=status_filter)
+            adopter_id = self.request.query_params.get("adopter_id")
+            if adopter_id:
+                qs = qs.filter(adopter_id=adopter_id)
+            return qs
+        return self.queryset.filter(adopter=user)
+
+    def perform_create(self, serializer):
+        app = serializer.save(adopter=self.request.user)
+        # Notify the adopter that their application was submitted
+        create_notification(
+            user=self.request.user,
+            title="Application Submitted",
+            message=f"Your application for {app.pet.name} has been submitted successfully.",
+            notification_type="application",
+            link=f"/applications/{app.id}",
+        )
+        # Notify staff about the new application
+        from apps.accounts.models import User
+        for staff_user in User.objects.filter(role__in=["staff", "admin"], is_active=True):
+            create_notification(
+                user=staff_user,
+                title="New Application Received",
+                message=f"A new application for {app.pet.name} has been submitted.",
+                notification_type="application",
+                link=f"/applications/{app.id}",
+            )
+
+    @action(detail=True, methods=["post"], url_path="update-status")
+    def update_status(self, request, pk=None):
+        app = self.get_object()
+        if not (request.user.is_staff_role or request.user.is_admin_role):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = ApplicationStatusUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        new_status = serializer.validated_data["status"]
+        if not app.can_transition_to(new_status):
+            return Response(
+                {"error": f"Cannot transition from '{app.status}' to '{new_status}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        old_status = app.status
+        app.status = new_status
+        app.reviewed_by = request.user
+        app.reviewed_at = timezone.now()
+        if "rejection_reason" in serializer.validated_data:
+            app.rejection_reason = serializer.validated_data["rejection_reason"]
+        if "staff_notes" in serializer.validated_data:
+            app.staff_notes = serializer.validated_data["staff_notes"]
+        app.save()
+
+        # Audit log
+        from apps.audit.models import AuditLog
+        AuditLog.objects.create(
+            user=request.user,
+            action="status_change",
+            model_name="Application",
+            object_id=str(app.id),
+            previous_value=old_status,
+            new_value=new_status,
+        )
+
+        # Notify the adopter of the status change
+        status_messages = {
+            "approved": f"Your application for {app.pet.name} has been approved!",
+            "rejected": f"Your application for {app.pet.name} has been rejected.",
+            "pending_documents": f"Your application for {app.pet.name} requires additional documents.",
+            "under_review": f"Your application for {app.pet.name} is now under review.",
+            "adoption_completed": f"Congratulations! Your adoption of {app.pet.name} has been completed.",
+            "additional_info_requested": f"Additional information is required for your application for {app.pet.name}.",
+        }
+        title_messages = {
+            "approved": "Application Approved",
+            "rejected": "Application Rejected",
+            "pending_documents": "Documents Required",
+            "under_review": "Application Under Review",
+            "adoption_completed": "Adoption Completed",
+            "additional_info_requested": "Additional Information Required",
+        }
+        create_notification(
+            user=app.adopter,
+            title=title_messages.get(new_status, "Application Status Updated"),
+            message=status_messages.get(new_status, f"Your application status has been updated to '{new_status}'."),
+            notification_type="application",
+            link=f"/applications/{app.id}",
+        )
+
+        # Sync pet status on approval/completion
+        if new_status == "approved":
+            app.pet.status = "pending"
+            app.pet.save(update_fields=["status"])
+        elif new_status == "adoption_completed":
+            app.pet.status = "adopted"
+            app.pet.save(update_fields=["status"])
+
+        return Response(ApplicationSerializer(app).data)
+
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        app = self.get_object()
+        if app.adopter != request.user:
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not app.can_transition_to("cancelled"):
+            return Response(
+                {"error": f"Cannot cancel application in '{app.status}' status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        old_status = app.status
+        app.status = "cancelled"
+        app.save()
+        from apps.audit.models import AuditLog
+        AuditLog.objects.create(
+            user=request.user, action="status_change", model_name="Application",
+            object_id=str(app.id), previous_value=old_status, new_value="cancelled",
+        )
+        create_notification(
+            user=request.user,
+            title="Application Cancelled",
+            message=f"Your application for {app.pet.name} has been cancelled.",
+            notification_type="application",
+            link=f"/applications/{app.id}",
+        )
+        return Response(ApplicationSerializer(app).data)
