@@ -2,14 +2,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { FormEvent, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Alert, FieldError } from '../components/UI'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -26,6 +28,16 @@ export default function LoginPage() {
     }
   }
 
+  const handleGoogleCredential = async (credential: string) => {
+    setGoogleLoading(true)
+    try {
+      await loginWithGoogle(credential)
+      navigate('/dashboard')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <div className="max-w-md mx-auto px-4 py-12">
       <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-8">
@@ -36,7 +48,21 @@ export default function LoginPage() {
 
         {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
+        <div className="mt-6">
+          {googleLoading ? (
+            <p className="text-center text-sm text-stone-500">Signing in with Google...</p>
+          ) : (
+            <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} />
+          )}
+        </div>
+
+        <div className="my-5 flex items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-stone-200" />
+          <span className="text-xs text-stone-400">or</span>
+          <span className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-2 space-y-4" noValidate>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-stone-700">
               Email

@@ -2,9 +2,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { FormEvent, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Alert } from '../components/UI'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 
 export default function RegisterPage() {
-  const { register } = useAuth()
+  const { register, loginWithGoogle } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [form, setForm] = useState({
@@ -16,6 +17,9 @@ export default function RegisterPage() {
   })
   const [error, setError] = useState<Record<string, string | string[]> | string>({})
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+
+  const petParam = searchParams.get('pet')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -27,13 +31,25 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(form)
-      const petParam = searchParams.get('pet')
       navigate(petParam ? `/verify-email?email=${encodeURIComponent(form.email)}&pet=${petParam}` : `/verify-email?email=${encodeURIComponent(form.email)}`)
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: Record<string, string | string[]> } }
       setError(anyErr?.response?.data || {})
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleCredential = async (credential: string) => {
+    setGoogleLoading(true)
+    try {
+      await loginWithGoogle(credential)
+      navigate(petParam ? `/pets/${petParam}` : '/dashboard')
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { error?: string } } }
+      setError(anyErr?.response?.data?.error || 'Google sign-up failed. Please try again.')
+    } finally {
+      setGoogleLoading(false)
     }
   }
 
@@ -50,7 +66,21 @@ export default function RegisterPage() {
           <div className="mt-4"><Alert type="error">{error['error']}</Alert></div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
+        <div className="mt-6">
+          {googleLoading ? (
+            <p className="text-center text-sm text-stone-500">Signing up with Google...</p>
+          ) : (
+            <GoogleSignInButton onCredential={handleGoogleCredential} onError={(msg) => setError(msg)} />
+          )}
+        </div>
+
+        <div className="my-5 flex items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-stone-200" />
+          <span className="text-xs text-stone-400">or</span>
+          <span className="h-px flex-1 bg-stone-200" />
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-2 space-y-4" noValidate>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label htmlFor="first_name" className="block text-sm font-medium text-stone-700">First name</label>

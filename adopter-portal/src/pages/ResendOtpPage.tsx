@@ -1,15 +1,13 @@
 import { useState, FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { Alert, FieldError } from '../components/UI'
+import api from '../services/api'
+import { Alert } from '../components/UI'
 
-export default function VerifyEmailPage() {
-  const { verifyEmail } = useAuth()
+export default function ResendOtpPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialEmail = searchParams.get('email') || ''
   const [email, setEmail] = useState(initialEmail)
-  const [otp, setOtp] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,12 +17,12 @@ export default function VerifyEmailPage() {
     setError('')
     setLoading(true)
     try {
-      await verifyEmail(email, otp)
-      setSuccess('Email verified successfully! You can now log in.')
-      setTimeout(() => navigate('/login'), 1500)
+      await api.post('/auth/resend-otp/', { email })
+      setSuccess('A new verification code has been sent.')
+      setTimeout(() => navigate(`/verify-email?email=${encodeURIComponent(email)}`), 1500)
     } catch (err: unknown) {
-      const anyErr = err as { response?: { data?: { error?: string } } }
-      setError(anyErr?.response?.data?.error || 'Verification failed. Please check your code.')
+      const anyErr = err as { response?: { data?: { error?: string; message?: string } } }
+      setError(anyErr?.response?.data?.error || anyErr?.response?.data?.message || 'Could not resend the code. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -33,9 +31,9 @@ export default function VerifyEmailPage() {
   return (
     <div className="max-w-md mx-auto px-4 py-12">
       <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-8">
-        <h1 className="text-2xl font-bold text-stone-800 text-center">Verify your email</h1>
+        <h1 className="text-2xl font-bold text-stone-800 text-center">Resend verification code</h1>
         <p className="mt-2 text-sm text-stone-500 text-center">
-          Enter the 6-digit code we emailed to you to activate your account.
+          Enter your email and we&apos;ll send you a fresh verification code.
         </p>
 
         {error && <div className="mt-4"><Alert type="error">{error}</Alert></div>}
@@ -52,34 +50,18 @@ export default function VerifyEmailPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
-            <FieldError id="email-error" />
-          </div>
-          <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-stone-700">Verification code</label>
-            <input
-              id="otp"
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              required
-              value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder="123456"
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 tracking-widest"
-            />
-            <FieldError id="otp-error" />
           </div>
           <button
             type="submit"
             disabled={loading}
             className="w-full px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 disabled:opacity-50"
           >
-            {loading ? 'Verifying...' : 'Verify email'}
+            {loading ? 'Sending...' : 'Send new code'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-stone-500">
-          <Link to={email ? `/resend-otp?email=${encodeURIComponent(email)}` : '/resend-otp'} className="text-orange-600 hover:underline">Resend code</Link>
+          <Link to="/verify-email" className="text-orange-600 hover:underline">Back to verification</Link>
         </p>
       </div>
     </div>

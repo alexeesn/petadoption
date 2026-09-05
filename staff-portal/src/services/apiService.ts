@@ -9,6 +9,14 @@ export async function login(email: string, password: string) {
   return user;
 }
 
+export async function loginWithGoogle(credential: string) {
+  const res = await api.post('/auth/google/', { credential });
+  const { token, user } = res.data as { token: string; user: User };
+  localStorage.setItem('staff_auth_token', token);
+  localStorage.setItem('staff_auth_user', JSON.stringify(user));
+  return user;
+}
+
 export async function logout() {
   try {
     await api.post('/auth/logout/');

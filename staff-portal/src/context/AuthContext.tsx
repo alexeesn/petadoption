@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import type { User } from '../types';
-import { login as loginRequest, logout as logoutRequest, getStoredUser, getStoredToken } from '../services/apiService';
+import { login as loginRequest, loginWithGoogle as googleLoginRequest, logout as logoutRequest, getStoredUser, getStoredToken } from '../services/apiService';
 
 interface AuthContextType {
   user: User | null;
@@ -9,6 +9,7 @@ interface AuthContextType {
   isStaff: boolean;
   isAdmin: boolean;
   login: (email: string, password: string) => Promise<User>;
+  loginWithGoogle: (credential: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -25,6 +26,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return u;
   };
 
+  const loginWithGoogle = async (credential: string) => {
+    const u = await googleLoginRequest(credential);
+    setUser(u);
+    setToken(getStoredToken());
+    return u;
+  };
+
   const logout = async () => {
     await logoutRequest();
     setUser(null);
@@ -36,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = !!user && user.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated, isStaff, isAdmin, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated, isStaff, isAdmin, login, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

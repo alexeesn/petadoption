@@ -537,3 +537,229 @@ class ProfileTests(BaseAPITestCase):
         user.refresh_from_db()
         self.assertEqual(user.email, "profile@example.com")
         self.assertEqual(user.role, "adopter")
+
+
+class ResendOTPThrottlingTests(BaseAPITestCase):
+    """Resend cooldown rate-limiting must prevent rapid duplicate requests."""
+
+    def test_resend_otp_respects_cooldown(self):
+        user = self.create_user(email="throttle@example.com", verified=False)
+        user.otp_created_at = self._now()
+        user.save(update_fields=["otp_created_at"])
+        otp_before = user.otp
+        resp = self.client.post("/api/auth/resend-otp/", {
+            "email": "throttle@example.com",
+        })
+        self.assertEqual(resp.status_code, 429)
+        user.refresh_from_db()
+        # OTP must not be regenerated while within the cooldown window.
+        self.assertEqual(user.otp, otp_before)
+
+    def test_resend_otp_allowed_after_cooldown(self):
+        user = self.create_user(email="throttle@example.com", verified=False)
+        user.otp_created_at = self._now() - timedelta(seconds=120)
+        user.save(update_fields=["otp_created_at"])
+        old_otp = "old_value"
+        user.otp = old_otp
+        user.save(update_fields=["otp"])
+        resp = self.client.post("/api/auth/resend-otp/", {
+            "email": "throttle@example.com",
+        })
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        self.assertNotEqual(user.otp, old_otp)
+from unittest import mock  # noqa: E402
+
+from django.test import override_settings  # noqa: E402
+
+from apps.accounts import views as accounts_views  # noqa: E402
+
+
+class GoogleAuthTests(BaseAPITestCase):
+    """Continue with Google flow: server-verified token and safe account handling."""
+
+    GOOGLE_SETTINGS = {
+        "GOOGLE_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
+        "GOOGLE_CLIENT_SECRET": "test-client-secret",
+    }
+
+    def _mock_claims(self, email="guser@example.com", first="Gina", last="User"):
+        return {"email": email, "first_name": first, "last_name": last}
+
+    def _google_login(self):
+        return self.client.post("/api/auth/google/", {"credential": "fake-id-token"})
+
+    def test_new_google_adopter_created(self):
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims()) as fake:
+            resp = self._google_login()
+            fake.assert_called_once()
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("token", resp.data)
+        user = User.objects.get(email="guser@example.com")
+        # New Google accounts are adopters and verified — never staff/admin.
+        self.assertEqual(user.role, "adopter")
+        self.assertTrue(user.is_email_verified)
+        self.assertTrue(AdopterProfile.objects.filter(user=user).exists())
+        # Password is unusable (Google-managed login).
+        self.assertFalse(user.has_usable_password())
+
+    def test_existing_account_login(self):
+        self.create_user(email="guser@example.com")
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims()) as fake:
+            resp = self._google_login()
+            fake.assert_called_once()
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("token", resp.data)
+        # Only one user exists — no duplicate is created.
+        self.assertEqual(User.objects.filter(email="guser@example.com").count(), 1)
+
+    def test_existing_account_verified_promoted(self):
+        user = self.create_user(email="guser@example.com", verified=False)
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims()):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        # Verified email claim from Google marks the account verified.
+        self.assertTrue(user.is_email_verified)
+
+    def test_existing_staff_account_not_demoted(self):
+        user = self.create_staff(email="guser@example.com")
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims()):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        # RBAC is preserved — a Google login never changes an existing role.
+        self.assertEqual(user.role, "staff")
+
+    def test_duplicate_email_prevented_case_insensitive(self):
+        self.create_user(email="GUSER@example.com")
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims(email="guser@example.com")):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(User.objects.filter(email__iexact="guser@example.com").count(), 1)
+
+    def test_invalid_token_rejected(self):
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  side_effect=accounts_views.GoogleAuthError(
+                                      "The Google sign-in could not be verified.")):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 401)
+        self.assertIn("error", resp.data)
+
+    def test_missing_credential(self):
+        with override_settings(**self.GOOGLE_SETTINGS):
+            resp = self.client.post("/api/auth/google/", {"credential": ""})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_google_not_configured(self):
+        # When Google is not configured, the endpoint refuses safely.
+        with override_settings(GOOGLE_CLIENT_ID="", GOOGLE_CLIENT_SECRET=""):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 401)
+
+    def test_disabled_account_rejected(self):
+        user = self.create_user(email="guser@example.com")
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims()):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 403)
+
+    def test_locked_account_rejected(self):
+        user = self.create_user(email="guser@example.com")
+        user.locked_until = self._now() + timedelta(minutes=15)
+        user.save(update_fields=["locked_until"])
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  return_value=self._mock_claims()):
+            resp = self._google_login()
+        self.assertEqual(resp.status_code, 423)
+
+    def test_error_message_hides_sensitive_details(self):
+        # Verification errors must not reveal whether an email exists or leak details.
+        with override_settings(**self.GOOGLE_SETTINGS), \
+                mock.patch.object(accounts_views, "verify_google_id_token",
+                                  side_effect=accounts_views.GoogleAuthError(
+                                      "The Google sign-in could not be verified.")):
+            resp = self._google_login()
+        self.assertNotIn("example.com", resp.data.get("error", ""))
+class EmailDeliveryTests(BaseAPITestCase):
+    """OTP and password reset emails must be delivered with the correct shape."""
+
+    def _outbox(self):
+        from django.core import mail
+        return mail.outbox
+
+    def test_registration_sends_verification_email(self):
+        self.client.post("/api/auth/register/", {
+            "email": "mail@example.com",
+            "first_name": "Mail",
+            "last_name": "User",
+            "password": "StrongPass123!",
+            "password_confirm": "StrongPass123!",
+        })
+        outbox = self._outbox()
+        self.assertEqual(len(outbox), 1)
+        msg = outbox[0]
+        self.assertIn("Verify your email", msg.subject)
+        self.assertIn("verification code", msg.body.lower())
+        user = User.objects.get(email="mail@example.com")
+        # The email contains the actual OTP issued to the user.
+        self.assertIn(str(user.otp), msg.body)
+
+    def test_forgot_password_sends_reset_email(self):
+        user = self.create_user(email="mailless@example.com")
+        user.otp = None
+        user.otp_created_at = None
+        user.otp_type = None
+        user.save()
+        self.client.post("/api/auth/forgot-password/", {"email": "mailless@example.com"})
+        outbox = self._outbox()
+        self.assertEqual(len(outbox), 1)
+        msg = outbox[0]
+        self.assertIn("Password Reset", msg.subject)
+        user.refresh_from_db()
+        self.assertEqual(user.otp_type, "password_reset")
+        self.assertIn(str(user.otp), msg.body)
+
+    def test_email_not_enumerated_unknown_account(self):
+        resp = self.client.post("/api/auth/forgot-password/", {"email": "ghost@example.com"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(self._outbox()), 0)
+        self.assertIn("If the email exists", resp.data["message"])
+
+    def test_forgot_password_respects_cooldown(self):
+        user = self.create_user(email="cooldown@example.com")
+        user.otp = "999999"
+        user.otp_type = "password_reset"
+        user.otp_created_at = self._now()
+        user.save()
+        resp = self.client.post("/api/auth/forgot-password/", {"email": "cooldown@example.com"})
+        self.assertEqual(resp.status_code, 429)
+        user.refresh_from_db()
+        # OTP must not be regenerated during the cooldown window.
+        self.assertEqual(user.otp, "999999")
+
+    def test_forgot_password_allowed_after_cooldown(self):
+        user = self.create_user(email="cooldown2@example.com")
+        user.otp = "999999"
+        user.otp_type = "password_reset"
+        user.otp_created_at = self._now() - timedelta(seconds=120)
+        user.save()
+        resp = self.client.post("/api/auth/forgot-password/", {"email": "cooldown2@example.com"})
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        self.assertNotEqual(user.otp, "999999")

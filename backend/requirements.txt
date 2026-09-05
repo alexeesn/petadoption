@@ -6,3 +6,5 @@ django-filter>=26.1
 Pillow>=12.3
 psycopg2-binary>=2.9
 python-dotenv>=1.2
+google-auth>=2.29
+requests>=2.32
