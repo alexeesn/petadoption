@@ -139,8 +139,18 @@ REST_FRAMEWORK = {
 }
 
 # Email
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@petadopt.example.com")
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.smtp.EmailBackend"
+    if (os.environ.get("SMTP_HOST") or os.environ.get("EMAIL_HOST_USER") or os.environ.get("SMTP_USERNAME"))
+    else "django.core.mail.backends.console.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("SMTP_HOST", os.environ.get("EMAIL_HOST", "smtp.gmail.com"))
+EMAIL_PORT = int(os.environ.get("SMTP_PORT", os.environ.get("EMAIL_PORT", "587")))
+EMAIL_HOST_USER = os.environ.get("SMTP_USERNAME", os.environ.get("EMAIL_HOST_USER", ""))
+EMAIL_HOST_PASSWORD = os.environ.get("SMTP_PASSWORD", os.environ.get("EMAIL_HOST_PASSWORD", ""))
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "noreply@petadopt.example.com")
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = False
