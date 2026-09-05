@@ -170,6 +170,18 @@ export interface Notification {
   created_at: string;
 }
 
+export interface AuditLog {
+  id: string;
+  user?: string;
+  user_email?: string;
+  action: string;
+  model_name: string;
+  object_id: string;
+  previous_value: string;
+  new_value: string;
+  created_at: string;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

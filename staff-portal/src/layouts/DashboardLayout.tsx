@@ -14,6 +14,7 @@ const navItems = [
   { to: '/packages', label: 'Packages', icon: '📦' },
   { to: '/payments', label: 'Payments', icon: '💳' },
   { to: '/reports', label: 'Reports', icon: '📈' },
+  { to: '/notifications', label: 'Notifications', icon: '🔔' },
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
@@ -25,6 +26,11 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     navigate('/login');
   };
 
+  const visibleNavItems = [
+    ...navItems,
+    ...(user?.role === 'admin' ? [{ to: '/audit', label: 'Audit Logs', icon: '🔒' }] : []),
+  ];
+
   return (
     <div className="min-h-screen bg-slate-100 flex">
       {/* Sidebar */}
@@ -34,7 +40,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <p className="text-xs text-slate-400">Staff Portal</p>
         </div>
         <nav className="flex-1 py-4 space-y-1 px-3 overflow-y-auto">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -73,7 +79,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <nav className="bg-white border-b border-slate-200 px-2 py-2 flex gap-1 overflow-x-auto">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

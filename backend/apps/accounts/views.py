@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from apps.adopters.models import AdopterProfile
 
+from .emails import send_verification_email, send_password_reset_email
 from .services import verify_google_id_token, GoogleAuthError
 from .serializers import (
     RegisterSerializer, VerifyEmailSerializer, ResendOTPSerializer,
@@ -44,16 +45,7 @@ class RegisterView(generics.CreateAPIView):
         user.otp_type = "verify"
         user.otp_attempts = 0
         user.save(update_fields=["otp", "otp_created_at", "otp_type", "otp_attempts"])
-        try:
-            send_mail(
-                subject="Verify your email - Pet Adoption",
-                message=f"Your verification code is: {otp}\nIt expires in {OTP_EXPIRY_MINUTES} minutes.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-        except Exception as e:
-            logger.error(f"Failed to send verification email to {user.email}: {e}")
+        send_verification_email(user, otp, expiry_minutes=OTP_EXPIRY_MINUTES)
         return Response(
             {"message": "Registration successful. Please check your email for verification code."},
             status=status.HTTP_201_CREATED,
@@ -119,16 +111,7 @@ class ResendOTPView(APIView):
         user.otp_created_at = timezone.now()
         user.otp_attempts = 0
         user.save(update_fields=["otp", "otp_created_at", "otp_attempts"])
-        try:
-            send_mail(
-                subject="Verify your email - Pet Adoption",
-                message=f"Your verification code is: {otp}\nIt expires in {OTP_EXPIRY_MINUTES} minutes.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-        except Exception as e:
-            logger.error(f"Failed to send verification email to {user.email}: {e}")
+        send_verification_email(user, otp, expiry_minutes=OTP_EXPIRY_MINUTES)
         return Response({"message": "If the email exists, a new code has been sent."}, status=status.HTTP_200_OK)
 
 
@@ -203,16 +186,7 @@ class ForgotPasswordView(APIView):
         user.otp_type = "password_reset"
         user.otp_attempts = 0
         user.save(update_fields=["otp", "otp_created_at", "otp_type", "otp_attempts"])
-        try:
-            send_mail(
-                subject="Password Reset - Pet Adoption",
-                message=f"Your password reset code is: {otp}\nIt expires in {OTP_EXPIRY_MINUTES} minutes.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[user.email],
-                fail_silently=True,
-            )
-        except Exception as e:
-            logger.error(f"Failed to send password reset email to {user.email}: {e}")
+        send_password_reset_email(user, otp, expiry_minutes=OTP_EXPIRY_MINUTES)
         return Response({"message": "If the email exists, a reset code has been sent."}, status=status.HTTP_200_OK)
 
 

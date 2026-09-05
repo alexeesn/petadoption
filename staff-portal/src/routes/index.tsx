@@ -16,6 +16,8 @@ import AdoptionsPage from '../pages/AdoptionsPage';
 import PackagesPage from '../pages/PackagesPage';
 import PaymentsPage from '../pages/PaymentsPage';
 import ReportsPage from '../pages/ReportsPage';
+import NotificationsPage from '../pages/NotificationsPage';
+import AuditLogsPage from '../pages/AuditLogsPage';
 
 export default function AppRoutes() {
   return (
@@ -52,6 +54,8 @@ export default function AppRoutes() {
           <Route path="/packages" element={<PackagesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/audit" element={<AuditLogsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

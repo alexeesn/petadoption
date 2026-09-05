@@ -132,18 +132,33 @@ export const paymentService = {
 
 // ----- Reports -----
 export const reportService = {
-  adoption: (params?: Record<string, unknown>) => api.get('/reports/adoption/', { params }),
-  petInventory: (params?: Record<string, unknown>) => api.get('/reports/pet-inventory/', { params }),
-  adopter: (params?: Record<string, unknown>) => api.get('/reports/adopter/', { params }),
-  application: (params?: Record<string, unknown>) => api.get('/reports/application/', { params }),
+  adoption: (params?: Record<string, unknown>) => api.get('/reports/adoptions/', { params }),
+  petInventory: (params?: Record<string, unknown>) => api.get('/reports/pets/', { params }),
+  adopter: (params?: Record<string, unknown>) => api.get('/reports/adopters/', { params }),
+  application: (params?: Record<string, unknown>) => api.get('/reports/applications/', { params }),
   health: (params?: Record<string, unknown>) => api.get('/reports/health/', { params }),
-  payment: (params?: Record<string, unknown>) => api.get('/reports/payment/', { params }),
-  csv: (reportType: string, params?: Record<string, unknown>) =>
-    api.get(`/reports/${reportType}/export/`, { params, responseType: 'blob' }),
+  payment: (params?: Record<string, unknown>) => api.get('/reports/payments/', { params }),
+  csv: (reportType: string, params?: Record<string, unknown>) => {
+    const urlMap: Record<string, string> = {
+      adoption: '/reports/adoptions/',
+      'pet-inventory': '/reports/pets/',
+      adopter: '/reports/adopters/',
+      application: '/reports/applications/',
+      health: '/reports/health/',
+      payment: '/reports/payments/',
+    };
+    const url = urlMap[reportType] || `/reports/${reportType}/`;
+    return api.get(url, { params: { ...params, export: 'csv' }, responseType: 'blob' });
+  },
 };
 
 // ----- Notifications -----
 export const notificationService = {
   list: (params?: Record<string, unknown>) => api.get('/notifications/', { params }),
   markRead: (id: string) => api.patch(`/notifications/${id}/`, { is_read: true }),
+};
+
+// ----- Audit Logs (Admin only) -----
+export const auditService = {
+  list: (params?: Record<string, unknown>) => api.get('/audit/', { params }),
 };

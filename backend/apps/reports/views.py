@@ -177,4 +177,15 @@ class HealthReportView(views.APIView):
             ).count(),
         }
 
+        if request.query_params.get("export") == "csv":
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = 'attachment; filename="health_report.csv"'
+            writer = csv.writer(response)
+            writer.writerow(["Pet", "Vaccine Name", "Administered Date", "Next Due Date", "Status"])
+            for v in Vaccination.objects.select_related("pet").all()[:200]:
+                is_overdue = v.next_due_date and v.next_due_date < timezone.now().date()
+                status_str = "Overdue" if is_overdue else "Up to Date"
+                writer.writerow([v.pet.name, v.vaccine_name, v.administered_date, v.next_due_date, status_str])
+            return response
+
         return Response({"stats": stats})

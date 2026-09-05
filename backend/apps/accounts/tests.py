@@ -719,6 +719,12 @@ class EmailDeliveryTests(BaseAPITestCase):
         user = User.objects.get(email="mail@example.com")
         # The email contains the actual OTP issued to the user.
         self.assertIn(str(user.otp), msg.body)
+        # Verify branded HTML alternative is attached for Gmail/HTML clients
+        self.assertTrue(len(msg.alternatives) > 0)
+        html_content, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn("Pet Adoption Portal", html_content)
+        self.assertIn(str(user.otp), html_content)
 
     def test_forgot_password_sends_reset_email(self):
         user = self.create_user(email="mailless@example.com")
@@ -734,6 +740,12 @@ class EmailDeliveryTests(BaseAPITestCase):
         user.refresh_from_db()
         self.assertEqual(user.otp_type, "password_reset")
         self.assertIn(str(user.otp), msg.body)
+        # Verify branded HTML alternative is attached for Gmail/HTML clients
+        self.assertTrue(len(msg.alternatives) > 0)
+        html_content, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn("Pet Adoption Portal", html_content)
+        self.assertIn(str(user.otp), html_content)
 
     def test_email_not_enumerated_unknown_account(self):
         resp = self.client.post("/api/auth/forgot-password/", {"email": "ghost@example.com"})
