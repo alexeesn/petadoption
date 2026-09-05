@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,6 +20,7 @@ export default function LoginPage() {
     try {
       const user = await login(email, password);
       if (user.role === 'adopter') {
+        await logout();
         setError('This account does not have staff access.');
         return;
       }
@@ -38,6 +39,7 @@ export default function LoginPage() {
     try {
       const user = await loginWithGoogle(credential);
       if (user.role === 'adopter') {
+        await logout();
         setError('This account does not have staff access. Google accounts are created as adopters only.');
         return;
       }

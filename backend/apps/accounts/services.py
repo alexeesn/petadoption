@@ -27,7 +27,8 @@ def verify_google_id_token(credential: str) -> dict:
     Raises `GoogleAuthError` when the token is missing, invalid, expired,
     malformed, or issued for the wrong audience/client.
     """
-    if not settings.GOOGLE_OAUTH_ENABLED:
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", "")
+    if not client_id:
         raise GoogleAuthError("Google authentication is not configured.")
 
     if not credential or not isinstance(credential, str):
@@ -37,7 +38,7 @@ def verify_google_id_token(credential: str) -> dict:
         info = id_token.verify_oauth2_token(
             credential,
             google_requests.Request(),
-            audience=settings.GOOGLE_CLIENT_ID,
+            audience=client_id,
         )
     except ValueError as exc:
         # Occurs when the token is invalid, expired, or for the wrong audience.
