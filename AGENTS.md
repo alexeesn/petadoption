@@ -1713,4 +1713,69 @@ Build the system according to the FDD and specification while maintaining a clea
 
 **Read `docs/AGENT-SPEC.md` before implementation.**
 
+---
+
+# 53. ACTIVE QA FINDINGS — READ BEFORE YOUR NEXT SESSION
+
+> **IMPORTANT:** An independent audit was performed on 2026-09-09,
+> including a live end-to-end API walkthrough against a running server
+> (not just static code review and unit tests). It found the codebase
+> to be genuinely strong — all 10 FDD modules implemented, 240 backend
+> tests passing, both frontends build cleanly, no stub/TODO markers —
+> but it also found one confirmed breaking bug and one confirmed API
+> design defect in the core adoption lifecycle.
+>
+> Full details, evidence, and reproduction steps are in:
+>
+> `docs/QA-REPORT-2026-09-09.md`
+>
+> **Read that file completely before making further changes.** Do not
+> re-derive these findings from scratch; the report already contains
+> the root cause and the required fix for each.
+
+## 53.1 Required fixes, in order
+
+1. **Fix: applications never leave `"draft"` status.**
+   Adopters have no way to move a newly created application from
+   `draft` to `submitted` — only staff can call the status-update
+   endpoint, and staff should not be performing the adopter's submit
+   step for them. See `docs/QA-REPORT-2026-09-09.md` §2 for the two
+   acceptable fix approaches. This blocks the rest of the adoption
+   lifecycle from being testable end-to-end, so fix it first.
+
+2. **Fix: `POST /api/applications/` response omits `id` and `status`.**
+   The create action returns the write-only serializer instead of the
+   read serializer. See `docs/QA-REPORT-2026-09-09.md` §3.
+
+3. **Add regression tests for both fixes** that call the real HTTP
+   endpoints (not just the model/serializer layer directly), so this
+   class of bug — correct at the unit-test level, broken in the actual
+   flow — is caught automatically going forward.
+
+4. **Re-run the full live walkthrough** end to end: register → verify
+   email → login → browse pets → submit application → confirm status
+   is `submitted` → staff review → approve → attach package → record
+   payment → adoption record created → adoption completed → pet status
+   synced to `adopted`. Confirm each step against a running server, not
+   only against passing unit tests.
+
+5. **Do the same live-flow audit on payments, packages, and document
+   upload** — see `docs/QA-REPORT-2026-09-09.md` §5 for what has and
+   has not yet been verified live.
+
+6. **Add a minimal CI workflow** (backend tests + both frontend
+   builds) so future regressions are caught without a manual audit.
+
+## 53.2 Do not
+
+* Do not mark Finding §2 or §3 as resolved without adding the
+  regression test described above.
+* Do not silently change the `Application.Status` transition map in a
+  way that removes the `draft` state — it may be needed for a future
+  save-as-draft feature (see Option B in the report). Confirm with the
+  user which fix option was intended if it isn't obvious from existing
+  frontend code.
+* Do not treat items listed in `docs/QA-REPORT-2026-09-09.md` §4
+  ("verified as correct") as broken — they were checked and are fine.
+
 # END OF AGENTS.md
