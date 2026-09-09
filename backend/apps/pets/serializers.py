@@ -37,5 +37,5 @@ class PetListSerializer(serializers.ModelSerializer):
         if not img:
             img = obj.images.first()
         if img:
-            return PetImageSerializer(img).data
+            return PetImageSerializer(img, context=self.context).data
         return None
