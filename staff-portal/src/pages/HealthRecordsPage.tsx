@@ -127,12 +127,12 @@ export default function HealthRecordsPage() {
             {records.map((rec) => (
               <tr key={rec.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">{rec.pet_name}</td>
-                <td className="px-4 py-3"><StatusBadge status={rec.record_type} /></td>
+                <td className="px-4 py-3"><StatusBadge status={rec.record_type || 'other'} /></td>
                 <td className="px-4 py-3 text-sm text-slate-600">{rec.date}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{rec.vet_name}</td>
                 <td className="px-4 py-3 text-sm text-slate-500">{rec.notes}</td>
                 <td className="px-4 py-3 text-sm text-slate-500">
-                  {new Date(rec.created_at).toLocaleDateString()}
+                  {rec.created_at ? new Date(rec.created_at).toLocaleDateString() : 'N/A'}
                 </td>
               </tr>
             ))}
@@ -142,3 +142,4 @@ export default function HealthRecordsPage() {
     </div>
   );
 }
+
