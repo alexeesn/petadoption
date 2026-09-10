@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
-import { fetchDocuments, deleteDocument } from '../services/apiService'
+import { useSearchParams } from 'react-router-dom'
+import { fetchDocuments, deleteDocument, uploadDocument, fetchApplications } from '../services/apiService'
 import { useAuth } from '../context/AuthContext'
 import { Spinner, EmptyState, ErrorState, Alert, FieldError } from '../components/UI'
-import type { Document } from '../types'
+import type { Document, Application } from '../types'
 
 export default function DocumentsPage() {
   const { token } = useAuth()
+  const [searchParams] = useSearchParams()
+  const preselectedApplicationId = searchParams.get('application') || null
+
   const [documents, setDocuments] = useState<Document[]>([])
+  const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string>(preselectedApplicationId || '')
   const [selectedType, setSelectedType] = useState('identification')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState('')
+  const [uploading, setUploading] = useState(false)
   const [success, setSuccess] = useState('')
 
   const load = useCallback(async () => {
@@ -19,28 +26,62 @@ export default function DocumentsPage() {
     setLoading(true)
     setError('')
     try {
-      const data = await fetchDocuments()
+      const data = await fetchDocuments(preselectedApplicationId || undefined)
       setDocuments(Array.isArray(data) ? data : data.results ?? [])
     } catch {
       setError('Unable to load your documents.')
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, preselectedApplicationId])
 
   useEffect(() => {
     load()
   }, [load])
 
-  const handleUpload = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!token) return
+    fetchApplications()
+      .then((data) => {
+        const apps = Array.isArray(data) ? data : data.results ?? []
+        setApplications(apps)
+        // Preselect first application if none selected
+        if (!selectedApplicationId && apps.length > 0) {
+          setSelectedApplicationId(apps[0].id)
+        }
+      })
+      .catch(() => {
+        // Silently fail - applications list is optional
+      })
+  }, [token])
+
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedFile) {
       setUploadError('Please select a file to upload.')
       return
     }
-    setUploadError(
-      'Please open an application and upload your documents from there so they can be attached to the correct application.'
-    )
+    if (!selectedApplicationId) {
+      setUploadError('Please select an application to attach this document to.')
+      return
+    }
+
+    setUploading(true)
+    setUploadError('')
+    setSuccess('')
+
+    try {
+      await uploadDocument(selectedApplicationId, selectedFile, selectedType)
+      setSuccess('Document uploaded successfully.')
+      setSelectedFile(null)
+      // Reload documents list
+      await load()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to upload document. Please try again.'
+      setUploadError(message)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -65,6 +106,24 @@ export default function DocumentsPage() {
       <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-6 mb-6">
         <h2 className="text-lg font-semibold text-stone-800 mb-4">Upload a Document</h2>
         <form onSubmit={handleUpload} className="space-y-4">
+          <div>
+            <label htmlFor="application" className="block text-sm font-medium text-stone-700 mb-1">
+              Application
+            </label>
+            <select
+              id="application"
+              value={selectedApplicationId}
+              onChange={(e) => setSelectedApplicationId(e.target.value)}
+              className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="">Select an application...</option>
+              {applications.map((app) => (
+                <option key={app.id} value={app.id}>
+                  {app.pet_name} ({app.status})
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label htmlFor="docType" className="block text-sm font-medium text-stone-700 mb-1">
               Document Type
@@ -100,10 +159,10 @@ export default function DocumentsPage() {
           {uploadError && <FieldError message={uploadError} />}
           <button
             type="submit"
-            disabled={!selectedFile}
+            disabled={!selectedFile || !selectedApplicationId || uploading}
             className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
           >
-            Upload
+            {uploading ? 'Uploading...' : 'Upload'}
           </button>
         </form>
       </div>
@@ -119,6 +178,7 @@ export default function DocumentsPage() {
               <thead className="bg-stone-50">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-stone-500 uppercase">Type</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-stone-500 uppercase">Application</th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-stone-500 uppercase">Filename</th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-stone-500 uppercase">Size</th>
                   <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-stone-500 uppercase">Uploaded</th>
@@ -129,6 +189,7 @@ export default function DocumentsPage() {
                 {documents.map((doc) => (
                   <tr key={doc.id}>
                     <td className="px-4 py-3 text-sm text-stone-700 capitalize">{doc.document_type.replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3 text-sm text-stone-500">{doc.application_pet || '—'}</td>
                     <td className="px-4 py-3 text-sm text-stone-700">{doc.original_filename}</td>
                     <td className="px-4 py-3 text-sm text-stone-500">{(doc.file_size / 1024).toFixed(1)} KB</td>
                     <td className="px-4 py-3 text-sm text-stone-500">{new Date(doc.created_at).toLocaleDateString()}</td>

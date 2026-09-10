@@ -89,7 +89,7 @@ export default function ApplicationDetailPage() {
         {(app.status === 'draft' || app.status === 'submitted' || app.status === 'pending_documents' || app.status === 'additional_info_requested') && (
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              to={`/documents`}
+              to={`/documents?application=${app.id}`}
               className="px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700"
             >
               Upload documents
