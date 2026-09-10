@@ -61,3 +61,44 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         self.authenticate(self.adopter)
         resp = self.client.post("/api/adoptions/", {"application_id": str(self.app.id)})
         self.assertEqual(resp.status_code, 403)
+
+    def test_scheduled_to_cancelled_reverts_pet_to_available(self):
+        # Pet is pending because the application was approved; cancellation
+        # must put it back to available.
+        self.pet.status = "pending"
+        self.pet.save(update_fields=["status"])
+        self.authenticate_staff()
+        resp = self.client.post("/api/adoptions/", {"application_id": str(self.app.id)})
+        self.assertEqual(resp.status_code, 201)
+        adoption_id = resp.data["id"]
+        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {"status": "cancelled"})
+        self.assertEqual(resp.status_code, 200)
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "available")
+
+    def test_completed_to_returned_reverts_pet_and_allows_reapply(self):
+        # scheduled -> completed (pet adopted) -> returned (pet available),
+        # then a NEW adopter can apply for the returned pet.
+        self.pet.status = "pending"
+        self.pet.save(update_fields=["status"])
+        self.authenticate_staff()
+        resp = self.client.post("/api/adoptions/", {"application_id": str(self.app.id)})
+        self.assertEqual(resp.status_code, 201)
+        adoption_id = resp.data["id"]
+        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {"status": "completed"})
+        self.assertEqual(resp.status_code, 200)
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "adopted")
+        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {
+            "status": "returned", "return_reason": "Allergies",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "available")
+        # New adopter can submit an application for the returned pet.
+        new_adopter = self.create_user(email="newadopter@example.com")
+        self.authenticate(new_adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id), "why_adopt": "New family",
+        })
+        self.assertEqual(resp.status_code, 201)

@@ -34,3 +34,19 @@ class HealthTests(BaseAPITestCase):
             next_due_date=date(2020, 1, 15),
         )
         self.assertEqual(vax.vaccination_status, "overdue")
+
+    def test_vaccination_computed_status_via_api(self):
+        # The computed vaccination_status must come back from the real
+        # endpoint (staff-created vaccination with a long-past due date is
+        # always "overdue", so the assertion is stable regardless of when the
+        # suite runs).
+        self.authenticate(self.staff)
+        resp = self.client.post("/api/health-records/vaccinations/", {
+            "pet": str(self.pet.id),
+            "vaccine_name": "Rabies",
+            "date_administered": "2020-01-01",
+            "next_due_date": "2020-06-01",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["vaccination_status"], "overdue")
+        self.assertTrue(resp.data["is_due"])

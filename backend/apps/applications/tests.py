@@ -1,8 +1,10 @@
 from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 from apps.accounts.tests import BaseAPITestCase
 from apps.pets.models import Pet
 from apps.applications.models import Application
+from apps.documents.models import Document
 
 
 class ApplicationTests(BaseAPITestCase):
@@ -120,3 +122,100 @@ class ApplicationTests(BaseAPITestCase):
         self.authenticate(self.adopter)
         resp = self.client.get(f"/api/applications/{app.id}/")
         self.assertEqual(resp.status_code, 404)
+
+    def make_pdf(self, name="doc.pdf", content=b"%PDF-1.4 test"):
+        return SimpleUploadedFile(name, content, content_type="application/pdf")
+
+    def test_under_review_to_rejected_shows_reason_and_allows_reapply(self):
+        # Regression from live walkthrough (QA report branch test):
+        # under_review -> rejected with a rejection_reason, the adopter sees
+        # the reason, and rejected is a terminal (non-active) state so the
+        # adopter CAN re-apply for the same pet.
+        app = self.create_application(status="submitted")
+        self.authenticate(self.staff)
+        resp = self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        self.assertEqual(resp.status_code, 200)
+        resp = self.client.post(f"/api/applications/{app.id}/update-status/", {
+            "status": "rejected",
+            "rejection_reason": "Fencing requirement not met",
+        })
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "rejected")
+        # Adopter can see the rejection reason via the real endpoint.
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/applications/{app.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["status"], "rejected")
+        self.assertEqual(resp.data["rejection_reason"], "Fencing requirement not met")
+        # Re-application for the same pet is allowed (rejected is not active).
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id), "why_adopt": "Fence fixed",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["status"], "submitted")
+
+    def test_pending_documents_round_trip_with_upload(self):
+        # under_review -> pending_documents -> (real upload) -> under_review
+        app = self.create_application(status="submitted")
+        self.authenticate(self.staff)
+        self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        resp = self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "pending_documents"})
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "pending_documents")
+        # Adopter uploads a real document through the documents endpoint.
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/documents/", {
+            "application": str(app.id),
+            "document_type": "vet_reference",
+            "file": self.make_pdf(),
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        doc_id = resp.data["id"]
+        self.assertEqual(Document.objects.filter(application=app).count(), 1)
+        # Staff can see the uploaded document.
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/documents/?application_id={app.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+        # Owning adopter can download it.
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/documents/{doc_id}/download/")
+        self.assertEqual(resp.status_code, 200)
+        # Staff moves the application back under review once documents arrived.
+        self.authenticate(self.staff)
+        resp = self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "under_review")
+
+    def test_additional_info_round_trip(self):
+        # under_review -> additional_info_requested -> under_review
+        app = self.create_application(status="submitted")
+        self.authenticate(self.staff)
+        self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        resp = self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "additional_info_requested"})
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "additional_info_requested")
+        resp = self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "under_review")
+
+    def test_adopter_can_cancel_submitted_application(self):
+        app = self.create_application(status="submitted")
+        self.authenticate(self.adopter)
+        resp = self.client.post(f"/api/applications/{app.id}/cancel/")
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "cancelled")
+
+    def test_adopter_can_cancel_draft_application(self):
+        app = self.create_application(status="draft")
+        self.authenticate(self.adopter)
+        resp = self.client.post(f"/api/applications/{app.id}/cancel/")
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "cancelled")

@@ -58,3 +58,29 @@ class ReviewTests(BaseAPITestCase):
             "application": str(self.app.id), "decision": "approve",
         })
         self.assertEqual(Review.objects.filter(application=self.app).count(), 2)
+
+    def test_staff_can_review_after_adoption_completed(self):
+        # A review can be created for an application whose adoption already
+        # completed (terminal state). Staff sees internal_notes; adopters are
+        # denied entirely (staff-only endpoint), so nothing leaks.
+        self.app.status = "adoption_completed"
+        self.app.save(update_fields=["status"])
+        self.authenticate(self.staff)
+        resp = self.client.post("/api/reviews/", {
+            "application": str(self.app.id),
+            "decision": "approve",
+            "internal_notes": "SECRET post-adoption note",
+            "adopter_visible_notes": "Post-adoption review note",
+        })
+        self.assertEqual(resp.status_code, 201)
+        review_id = resp.data["id"]
+        # Staff sees internal_notes on the review detail endpoint.
+        resp = self.client.get(f"/api/reviews/{review_id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["internal_notes"], "SECRET post-adoption note")
+        # Adopter cannot access the staff-only review endpoints at all.
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/reviews/{review_id}/")
+        self.assertEqual(resp.status_code, 403)
+        resp = self.client.get("/api/reviews/")
+        self.assertEqual(resp.status_code, 403)
