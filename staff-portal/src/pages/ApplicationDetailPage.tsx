@@ -6,6 +6,7 @@ import { applicationService } from '../services/apiService';
 import type { Application } from '../types';
 
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ['submitted', 'cancelled'],
   submitted: ['under_review', 'rejected'],
   under_review: ['pending_documents', 'additional_info_requested', 'approved', 'rejected'],
   pending_documents: ['under_review', 'rejected'],
@@ -130,6 +131,12 @@ export default function ApplicationDetailPage() {
         <Card className="p-6">
           <h3 className="font-semibold text-slate-900 mb-3">Update status</h3>
           <div className="flex flex-wrap gap-3">
+            {allowed.includes('submitted') && (
+              <Button onClick={() => transition('submitted')} disabled={updating}>Submit</Button>
+            )}
+            {allowed.includes('cancelled') && (
+              <Button variant="secondary" onClick={() => transition('cancelled')} disabled={updating}>Cancel</Button>
+            )}
             {allowed.includes('under_review') && (
               <Button onClick={() => transition('under_review')} disabled={updating}>Mark Under Review</Button>
             )}

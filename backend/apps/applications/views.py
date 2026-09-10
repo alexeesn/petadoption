@@ -53,22 +53,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         app = serializer.save(adopter=self.request.user)
-        # Option A: a normal submission must leave "draft" immediately.
-        # The model default is "draft"; auto-advance to "submitted" so the
-        # adopter does not need a staff member to submit for them
-        # (see docs/QA-REPORT-2026-09-09.md section 2).
-        if app.status == Application.Status.DRAFT:
-            app.status = Application.Status.SUBMITTED
-            app.save(update_fields=["status", "updated_at"])
-            from apps.audit.models import AuditLog
-            AuditLog.objects.create(
-                user=self.request.user,
-                action="status_change",
-                model_name="Application",
-                object_id=str(app.id),
-                previous_value="draft",
-                new_value="submitted",
-            )
+        # The draft → submitted auto-advance and its AuditLog entry are now
+        # handled by Application.save() so that *every* creation path
+        # (API, Django admin, shell, management commands) is covered — see
+        # docs/QA-REPORT-2026-09-09.md section 2 and the model's save()
+        # override in models.py.
         # Notify the adopter that their application was submitted
         create_notification(
             user=self.request.user,

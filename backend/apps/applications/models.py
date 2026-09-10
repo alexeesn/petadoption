@@ -74,9 +74,51 @@ class Application(models.Model):
         allowed = self.VALID_TRANSITIONS.get(self.status, [])
         return new_status in allowed
 
+    # ------------------------------------------------------------------
+    # Persistence: auto-advance draft -> submitted on initial creation.
+    #
+    # Previously the draft->submitted auto-advance lived only in
+    # ApplicationViewSet.perform_create, so applications created through
+    # any other path (Django admin, shell, management commands, direct ORM)
+    # were left permanently stuck in "draft".  Moving it here makes the
+    # model the single source of truth for ALL creation paths.
+    #
+    # The "draft" status is still retained as a valid choice (and is in
+    # VALID_TRANSITIONS) so a future save-as-draft feature can opt into it
+    # explicitly.  Only the *default* creation path is auto-advanced.
+    # ------------------------------------------------------------------
+    def save(self, *args, **kwargs):
+        auto_advanced = False
+        if self._state.adding and self.status == self.Status.DRAFT:
+            self.status = self.Status.SUBMITTED
+            auto_advanced = True
+        super().save(*args, **kwargs)
+        if auto_advanced:
+            from apps.audit.models import AuditLog
+            AuditLog.objects.create(
+                action="status_change",
+                model_name="Application",
+                object_id=str(self.id),
+                previous_value="draft",
+                new_value="submitted",
+            )
+
     def clean(self):
         from django.core.exceptions import ValidationError
-        if self.status and not self.can_transition_to(self.status):
+        if self._state.adding:
+            # New object: the initial status is being set for the first time
+            # (not a transition), so any valid status choice is acceptable.
+            # The auto-advance to "submitted" happens in save().
+            return
+        # Existing object: validate the transition from the *persisted* old
+        # status to the new status being saved.  We must query the DB for the
+        # old value because self.status may have already been overwritten by
+        # the form/view before clean() runs.
+        try:
+            old = self.__class__.objects.get(pk=self.pk)
+        except self.__class__.DoesNotExist:
+            return
+        if old.status != self.status and not old.can_transition_to(self.status):
             raise ValidationError(
-                f"Cannot transition from '{self.get_status_display()}' to '{self.status}'."
+                f"Cannot transition from '{old.status}' to '{self.status}'."
             )

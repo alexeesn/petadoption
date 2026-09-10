@@ -15,12 +15,20 @@ class ApplicationTests(BaseAPITestCase):
         self.adopter = self.create_user(email="adopter1@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
 
-    def create_application(self, user=None, status="draft"):
+    def create_application(self, user=None, status="submitted"):
+        # Application.save() auto-advances draft → submitted on creation
+        # (see models.py).  Tests that need a specific status (e.g. "draft")
+        # must bypass save() via .update(), which is a standard test pattern.
         app = Application.objects.create(
             adopter=user or self.adopter,
             pet=self.pet,
             status=status,
         )
+        if status == "draft":
+            # save() already advanced to "submitted"; force back to draft
+            # without re-triggering the auto-advance in save().
+            Application.objects.filter(pk=app.pk).update(status="draft")
+            app.refresh_from_db()
         return app
 
     def test_adopter_can_create_application(self):
@@ -219,3 +227,53 @@ class ApplicationTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
         app.refresh_from_db()
         self.assertEqual(app.status, "cancelled")
+
+    # ------------------------------------------------------------------
+    # Regression tests for docs/QA-REPORT-2026-09-09.md section 2 and
+    # the staff-portal ApplicationDetailPage missing "draft" entry.
+    # ------------------------------------------------------------------
+
+    def test_staff_can_move_draft_to_submitted_via_api(self):
+        """Staff must be able to manually advance a stuck draft application to
+        'submitted' through the update-status API endpoint.  This is the
+        backend counterpart to the UI fix in ApplicationDetailPage.tsx
+        (adding 'draft' to VALID_STATUS_TRANSITIONS)."""
+        app = self.create_application(status="draft")
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{app.id}/update-status/",
+            {"status": "submitted"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "submitted")
+
+    def test_staff_can_cancel_draft_application(self):
+        """Staff can also cancel a stuck draft application (draft -> cancelled)."""
+        app = self.create_application(status="draft")
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{app.id}/update-status/",
+            {"status": "cancelled"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "cancelled")
+
+    def test_model_save_auto_advances_draft_to_submitted(self):
+        """Direct ORM creation (non-API path) must also auto-advance
+        draft -> submitted and create an AuditLog entry, preventing new
+        stuck drafts through shell, admin, or management commands."""
+        app = Application.objects.create(
+            adopter=self.adopter, pet=self.pet
+        )
+        self.assertEqual(app.status, "submitted")
+        from apps.audit.models import AuditLog
+        self.assertTrue(
+            AuditLog.objects.filter(
+                model_name="Application",
+                object_id=str(app.id),
+                previous_value="draft",
+                new_value="submitted",
+            ).exists()
+        )
