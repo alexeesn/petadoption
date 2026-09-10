@@ -36,8 +36,39 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return qs
         return self.queryset.filter(adopter=user)
 
+    def create(self, request, *args, **kwargs):
+        # Validate with the write serializer, then respond with the read
+        # serializer so the client receives id/status/created_at etc.
+        # (see docs/QA-REPORT-2026-09-09.md section 3).
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        read_serializer = ApplicationSerializer(
+            serializer.instance, context=self.get_serializer_context()
+        )
+        return Response(
+            read_serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
+
     def perform_create(self, serializer):
         app = serializer.save(adopter=self.request.user)
+        # Option A: a normal submission must leave "draft" immediately.
+        # The model default is "draft"; auto-advance to "submitted" so the
+        # adopter does not need a staff member to submit for them
+        # (see docs/QA-REPORT-2026-09-09.md section 2).
+        if app.status == Application.Status.DRAFT:
+            app.status = Application.Status.SUBMITTED
+            app.save(update_fields=["status", "updated_at"])
+            from apps.audit.models import AuditLog
+            AuditLog.objects.create(
+                user=self.request.user,
+                action="status_change",
+                model_name="Application",
+                object_id=str(app.id),
+                previous_value="draft",
+                new_value="submitted",
+            )
         # Notify the adopter that their application was submitted
         create_notification(
             user=self.request.user,

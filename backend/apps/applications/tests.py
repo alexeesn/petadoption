@@ -29,6 +29,45 @@ class ApplicationTests(BaseAPITestCase):
         })
         self.assertEqual(resp.status_code, 201)
 
+    def test_create_application_leaves_draft_and_becomes_submitted(self):
+        # Regression for QA-REPORT-2026-09-09.md section 2: a normal
+        # submission must not remain stuck in "draft" with no way for the
+        # adopter to advance it. Hit the real endpoint, not the model layer.
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I love dogs",
+        })
+        self.assertEqual(resp.status_code, 201)
+        app = Application.objects.get(adopter=self.adopter, pet=self.pet)
+        self.assertEqual(app.status, "submitted")
+        # Notifications and audit log must fire for the new flow.
+        from apps.audit.models import AuditLog
+        self.assertTrue(
+            AuditLog.objects.filter(
+                model_name="Application",
+                object_id=str(app.id),
+                previous_value="draft",
+                new_value="submitted",
+            ).exists()
+        )
+
+    def test_create_application_response_includes_id_and_status(self):
+        # Regression for QA-REPORT-2026-09-09.md section 3: the create
+        # response must use the read serializer so clients learn the new
+        # application's id and status from the response body.
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I love dogs",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertIn("id", resp.data)
+        self.assertIn("status", resp.data)
+        self.assertEqual(resp.data["status"], "submitted")
+        app = Application.objects.get(pk=resp.data["id"])
+        self.assertEqual(app.adopter, self.adopter)
+
     def test_adopter_sees_only_own_applications(self):
         other = self.create_user(email="other@example.com")
         Application.objects.create(adopter=other, pet=self.pet)

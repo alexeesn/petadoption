@@ -213,7 +213,7 @@ class ResendOTPTests(BaseAPITestCase):
 
     def test_resend_otp_success(self):
         user = self.create_user(email="resend@example.com", verified=False)
-        old_otp = "old_otp_value"
+        old_otp = "abcdef"
         user.otp = old_otp
         user.otp_attempts = 3
         user.save()
@@ -559,7 +559,7 @@ class ResendOTPThrottlingTests(BaseAPITestCase):
         user = self.create_user(email="throttle@example.com", verified=False)
         user.otp_created_at = self._now() - timedelta(seconds=120)
         user.save(update_fields=["otp_created_at"])
-        old_otp = "old_value"
+        old_otp = "xyzxyz"
         user.otp = old_otp
         user.save(update_fields=["otp"])
         resp = self.client.post("/api/auth/resend-otp/", {
