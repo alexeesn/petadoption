@@ -19,7 +19,7 @@ export default function AdoptionsPage() {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
-    application: '',
+    application_id: '',
     scheduled_date: '',
     notes: '',
     cost: '0',
@@ -51,10 +51,14 @@ export default function AdoptionsPage() {
       .then(() => {
         setSuccess('Adoption record created.');
         setShowForm(false);
-        setForm({ application: '', scheduled_date: '', notes: '', cost: '0' });
+        setForm({ application_id: '', scheduled_date: '', notes: '', cost: '0' });
         load();
       })
-      .catch(() => setSubmitError('Failed to create adoption record. Only approved applications can be adopted.'))
+      .catch((e: any) => {
+        const data = e.response?.data;
+        const msg = data?.application_id?.[0] || data?.error || data?.detail || 'Failed to create adoption record.';
+        setSubmitError(Array.isArray(msg) ? msg.join(' ') : String(msg));
+      })
       .finally(() => setSubmitting(false));
   };
 
@@ -86,8 +90,8 @@ export default function AdoptionsPage() {
           <form onSubmit={handleCreate} className="space-y-4 max-w-lg">
             <Select
               label="Approved Application"
-              value={form.application}
-              onChange={(e) => setForm({ ...form, application: e.target.value })}
+              value={form.application_id}
+              onChange={(e) => setForm({ ...form, application_id: e.target.value })}
               options={[{ value: '', label: 'Select application' }, ...apps.map((a) => ({ value: a.id, label: `${a.pet_name} - ${a.adopter_email}` }))]}
             />
             <label className="block">

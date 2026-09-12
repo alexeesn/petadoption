@@ -39,6 +39,10 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        # Create the AdopterProfile at registration so the user appears
+        # immediately in the staff Adopters list (fixes "manually registered
+        # users don't appear in Admin Adopters section").
+        AdopterProfile.objects.get_or_create(user=user)
         otp = generate_otp()
         user.otp = otp
         user.otp_created_at = timezone.now()
@@ -81,7 +85,17 @@ class VerifyEmailView(APIView):
         user.otp_type = None
         user.otp_attempts = 0
         user.save(update_fields=["is_email_verified", "otp", "otp_created_at", "otp_type", "otp_attempts"])
-        return Response({"message": "Email verified successfully."}, status=status.HTTP_200_OK)
+        # Auto-login: return a token so the client can log the user in
+        # immediately without requiring a separate login request.
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response(
+            {
+                "message": "Email verified successfully.",
+                "token": token.key,
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ResendOTPView(APIView):

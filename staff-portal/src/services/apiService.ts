@@ -68,6 +68,8 @@ export const applicationService = {
   retrieve: (id: string) => api.get(`/applications/${id}/`),
   updateStatus: (id: string, data: Record<string, unknown>) =>
     api.post(`/applications/${id}/update-status/`, data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch(`/applications/${id}/`, data),
 };
 
 // ----- Pets -----

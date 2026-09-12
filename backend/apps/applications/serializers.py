@@ -34,6 +34,19 @@ class ApplicationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"status": "Pet is not available for adoption."})
         return attrs
 
+    def to_representation(self, instance):
+        # Internal staff notes must never be exposed to adopters
+        # (AGENTS.md rule 8 — mirrors Review.internal_notes protection).
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        is_staff = user and user.is_authenticated and (
+            user.is_staff_role or user.is_admin_role
+        )
+        if not is_staff:
+            data.pop("staff_notes", None)
+        return data
+
 
 class ApplicationCreateSerializer(serializers.ModelSerializer):
     class Meta:

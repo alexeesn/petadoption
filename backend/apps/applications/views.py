@@ -16,6 +16,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     queryset = Application.objects.select_related("adopter", "pet", "reviewed_by").all()
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_permissions(self):
+        # Write access to an application (status, staff_notes, etc.) is
+        # staff/admin-only.  Without this, an adopter could PATCH their own
+        # application's `status` to "approved" directly (see AGENTS.md #14).
+        if self.action in ("update", "partial_update", "destroy"):
+            return [permissions.IsAuthenticated(), IsStaff()]
+        return [permissions.IsAuthenticated()]
+
     def get_serializer_class(self):
         if self.action == "create":
             return ApplicationCreateSerializer

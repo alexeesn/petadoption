@@ -53,6 +53,19 @@ export default function ApplicationDetailPage() {
       .finally(() => setUpdating(false));
   };
 
+  const saveNotes = () => {
+    if (!app) return;
+    setUpdating(true);
+    applicationService
+      .update(app.id, { staff_notes: notes })
+      .then((res) => {
+        setApp(res.data);
+        setNotes(res.data.staff_notes || '');
+      })
+      .catch((e) => setError(e.response?.data?.error || 'Failed to save notes.'))
+      .finally(() => setUpdating(false));
+  };
+
   if (loading) return <Loading label="Loading application..." />;
   if (error) return <ErrorMessage message={error} />;
   if (!app) return null;
@@ -94,6 +107,12 @@ export default function ApplicationDetailPage() {
           <div>
             <h3 className="font-semibold text-slate-900 mb-2">References</h3>
             <p className="text-slate-600 whitespace-pre-wrap">{app.references}</p>
+            {app.additional_notes && (
+              <>
+                <h3 className="font-semibold text-slate-900 mt-4 mb-2">Adopter's additional notes</h3>
+                <p className="text-slate-600 whitespace-pre-wrap">{app.additional_notes}</p>
+              </>
+            )}
             {app.rejection_reason && (
               <>
                 <h3 className="font-semibold text-red-600 mt-4 mb-2">Rejection reason</h3>
@@ -105,7 +124,12 @@ export default function ApplicationDetailPage() {
       </Card>
 
       <Card className="p-6 mb-6">
-        <h3 className="font-semibold text-slate-900 mb-2">Internal staff notes</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-slate-900">Internal staff notes</h3>
+          <Button onClick={saveNotes} disabled={updating}>
+            Save Notes
+          </Button>
+        </div>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -115,13 +139,14 @@ export default function ApplicationDetailPage() {
         />
       </Card>
 
-      {app.status === 'rejected' && (
+      {allowed.includes('rejected') && (
         <Card className="p-6 mb-6">
           <h3 className="font-semibold text-slate-900 mb-2">Rejection reason</h3>
           <textarea
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
             rows={3}
+            placeholder="Required — explain why this application is being rejected"
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </Card>

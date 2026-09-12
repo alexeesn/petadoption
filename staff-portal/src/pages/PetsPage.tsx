@@ -25,6 +25,7 @@ export default function PetsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Pet | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  const [submitError, setSubmitError] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -64,6 +65,7 @@ export default function PetsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
     setLoading(true);
     const payload = {
       ...form,
@@ -76,10 +78,29 @@ export default function PetsPage() {
     request
       .then(() => {
         setShowForm(false);
+        load();
+      })
+      .catch((e: any) => {
+        const data = e.response?.data;
+        const firstError = data
+          ? Object.values(data).flat().map(String).join(' ')
+          : 'Failed to save pet.';
+        setSubmitError(firstError);
+      })
+      .finally(() => setLoading(false));
+  };
+
+  return (
+    <div>
+      <PageHeader title="Pets" subtitle="Manage pet inventory and details" />
+      <div className="mb-4">
+        <Button onClick={openNew}>Add New Pet</Button>
+      </div>
 
       {showForm && (
         <Card className="p-6 mb-6">
           <h3 className="font-semibold text-slate-900 mb-4">{editing ? 'Edit Pet' : 'New Pet'}</h3>
+          {submitError && <p className="text-red-600 text-sm mb-4">{submitError}</p>}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             <Select
@@ -118,8 +139,8 @@ export default function PetsPage() {
               ]}
             />
             <Input label="Color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
-            <Input label="Adoption Fee (₱)" type="number" value={form.adoption_fee} onChange={(e) => setForm({ ...form, adoption_fee: e.target.value })} />
-            <div className="flex items-center gap-4">
+            <Input label="Adoption Fee (₱)" type="number" step="0.01" value={form.adoption_fee} onChange={(e) => setForm({ ...form, adoption_fee: e.target.value })} />
+            <div className="md:col-span-2 flex items-center gap-4">
               <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.is_vaccinated} onChange={(e) => setForm({ ...form, is_vaccinated: e.target.checked })} />
                 Vaccinated
@@ -145,19 +166,6 @@ export default function PetsPage() {
           </form>
         </Card>
       )}
-
-        load();
-      })
-      .catch(() => setError('Failed to save pet.'))
-      .finally(() => setLoading(false));
-  };
-
-  return (
-    <div>
-      <PageHeader title="Pets" subtitle="Manage pet inventory and details" />
-      <div className="mb-4">
-        <Button onClick={openNew}>Add New Pet</Button>
-      </div>
 
       {loading ? (
         <Loading />

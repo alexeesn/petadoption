@@ -19,7 +19,10 @@ export default function ReviewsPage() {
 
   return (
     <div>
-      <PageHeader title="Reviews" subtitle="Review history for adoption applications" />
+      <PageHeader
+        title="Reviews"
+        subtitle="Post-adoption feedback. A review is created after an application reaches 'adoption_completed'. Staff can record internal notes here; these are not visible to adopters."
+      />
       {loading ? (
         <Loading />
       ) : error ? (

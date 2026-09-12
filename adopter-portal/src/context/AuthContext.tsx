@@ -10,7 +10,7 @@ interface AuthContextType {
   loginWithGoogle: (credential: string) => Promise<void>
   logout: () => Promise<void>
   register: (data: { email: string; password: string; password_confirm: string; first_name: string; last_name: string }) => Promise<void>
-  verifyEmail: (email: string, otp: string) => Promise<void>
+  verifyEmail: (email: string, otp: string) => Promise<{ token?: string; user?: User }>
   updateProfile: (data: Partial<User>) => Promise<void>
 }
 
@@ -65,7 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const verifyEmail = async (email: string, otp: string) => {
-    await api.post('/auth/verify-email/', { email, otp })
+    // Auto-login: the backend returns a token + user on successful
+    // verification, so no separate login request is needed.
+    const { data } = await api.post('/auth/verify-email/', { email, otp })
+    if (data.token && data.user) {
+      setToken(data.token)
+      setUser(data.user)
+      localStorage.setItem('pam_token', data.token)
+      localStorage.setItem('pam_user', JSON.stringify(data.user))
+    }
+    return data
   }
 
   const updateProfile = async (data: Partial<User>) => {
