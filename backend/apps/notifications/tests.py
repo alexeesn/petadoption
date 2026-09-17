@@ -87,13 +87,20 @@ class NotificationTests(BaseAPITestCase):
     def test_application_submission_creates_notifications(self):
         """Submitting an application should notify the adopter and staff."""
         self.authenticate(self.adopter)
+        from django.core.files.uploadedfile import SimpleUploadedFile
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id),
             "why_adopt": "I love pets",
             "experience_with_pets": "Some",
             "living_situation": "House",
             "has_other_pets": False,
-        })
+            # Required documents are part of the submission itself.
+            "documents": [
+                SimpleUploadedFile("id.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+                SimpleUploadedFile("address.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+            ],
+            "document_types": ["identification", "proof_of_address"],
+        }, format="multipart")
         self.assertEqual(resp.status_code, 201)
         # Adopter got an "Application Submitted" notification
         self.assertTrue(Notification.objects.filter(user=self.adopter, title="Application Submitted").exists())

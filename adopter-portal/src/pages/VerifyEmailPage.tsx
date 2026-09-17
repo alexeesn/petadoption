@@ -21,10 +21,10 @@ export default function VerifyEmailPage() {
     try {
       await verifyEmail(email, otp)
       // Auto-login: token was stored by verifyEmail, go straight to the
-      // dashboard (preserving any pet the user was about to adopt).
+      // pet browsing (preserving any pet the user was about to adopt).
       const petParam = searchParams.get('pet')
       setSuccess('Email verified successfully! Logging you in...')
-      setTimeout(() => navigate(petParam ? `/pets/${petParam}` : '/dashboard'), 1200)
+      setTimeout(() => navigate(petParam ? `/pets/${petParam}` : '/pets'), 1200)
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: { error?: string } } }
       setError(anyErr?.response?.data?.error || 'Verification failed. Please check your code.')

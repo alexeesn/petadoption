@@ -98,7 +98,14 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         # New adopter can submit an application for the returned pet.
         new_adopter = self.create_user(email="newadopter@example.com")
         self.authenticate(new_adopter)
+        # Applications are submitted together with their required documents.
+        from django.core.files.uploadedfile import SimpleUploadedFile
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id), "why_adopt": "New family",
-        })
+            "documents": [
+                SimpleUploadedFile("id.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+                SimpleUploadedFile("address.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+            ],
+            "document_types": ["identification", "proof_of_address"],
+        }, format="multipart")
         self.assertEqual(resp.status_code, 201)

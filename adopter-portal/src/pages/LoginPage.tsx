@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
-      navigate('/dashboard')
+      navigate('/applications')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: { error?: string } } }
       setError(anyErr?.response?.data?.error || 'Login failed. Please try again.')
@@ -32,7 +32,7 @@ export default function LoginPage() {
     setGoogleLoading(true)
     try {
       await loginWithGoogle(credential)
-      navigate('/dashboard')
+      navigate('/applications')
     } finally {
       setGoogleLoading(false)
     }

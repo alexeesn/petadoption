@@ -13,6 +13,39 @@ ALLOWED_MIME_TYPES = {
     "text/plain",
 }
 
+# Document types an adopter must upload as part of the adoption application
+# *before* it can be submitted.  Keep this list as the single source of truth —
+# the applications API validates against it and the adopter portal renders one
+# upload slot per entry.
+REQUIRED_DOCUMENT_TYPES = ("identification", "proof_of_address")
+REQUIRED_DOCUMENT_LABELS = {
+    "identification": "Valid ID",
+    "proof_of_address": "Proof of Address",
+}
+
+
+def validate_uploaded_file(value):
+    """Shared file validation rules (size, extension, MIME match).
+
+    Used by DocumentSerializer.validate_file and by the applications API when
+    documents are uploaded together with the application, so both paths apply
+    exactly the same rules.
+    """
+    if value.size > MAX_FILE_SIZE:
+        raise serializers.ValidationError("File size exceeds 10MB limit.")
+    ext = os.path.splitext(value.name)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise serializers.ValidationError(f"File type '{ext}' is not allowed.")
+    allowed = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+               "png": "image/png", "doc": "application/msword",
+               "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+               "txt": "text/plain"}
+    expected_mime = allowed.get(ext.lstrip("."))
+    content_type = getattr(value, "content_type", None)
+    if content_type and expected_mime and content_type != expected_mime:
+        raise serializers.ValidationError(f"MIME type '{content_type}' does not match file extension.")
+    return value
+
 
 class DocumentSerializer(serializers.ModelSerializer):
     application_pet = serializers.CharField(source="application.pet.name", read_only=True)
@@ -38,17 +71,4 @@ class DocumentSerializer(serializers.ModelSerializer):
         return request.build_absolute_uri(f"/api/documents/{obj.id}/download/")
 
     def validate_file(self, value):
-        if value.size > MAX_FILE_SIZE:
-            raise serializers.ValidationError("File size exceeds 10MB limit.")
-        ext = os.path.splitext(value.name)[1].lower()
-        if ext not in ALLOWED_EXTENSIONS:
-            raise serializers.ValidationError(f"File type '{ext}' is not allowed.")
-        allowed = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg",
-                   "png": "image/png", "doc": "application/msword",
-                   "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                   "txt": "text/plain"}
-        expected_mime = allowed.get(ext.lstrip("."))
-        content_type = getattr(value, "content_type", None)
-        if content_type and expected_mime and content_type != expected_mime:
-            raise serializers.ValidationError(f"MIME type '{content_type}' does not match file extension.")
-        return value
+        return validate_uploaded_file(value)

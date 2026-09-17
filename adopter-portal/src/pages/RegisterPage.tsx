@@ -44,7 +44,7 @@ export default function RegisterPage() {
     setGoogleLoading(true)
     try {
       await loginWithGoogle(credential)
-      navigate(petParam ? `/pets/${petParam}` : '/dashboard')
+      navigate(petParam ? `/pets/${petParam}` : '/pets')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: { error?: string } } }
       setError(anyErr?.response?.data?.error || 'Google sign-up failed. Please try again.')

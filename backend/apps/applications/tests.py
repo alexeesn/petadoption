@@ -31,12 +31,22 @@ class ApplicationTests(BaseAPITestCase):
             app.refresh_from_db()
         return app
 
+    def required_documents(self):
+        """The documents an adopter must upload with the application itself."""
+        return {
+            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
+            "document_types": ["identification", "proof_of_address"],
+        }
+
+    def submit_application(self, pet=None, **fields):
+        """POST a complete application (fields + required documents)."""
+        payload = {"pet": str((pet or self.pet).id), **fields}
+        payload.update(self.required_documents())
+        return self.client.post("/api/applications/", payload, format="multipart")
+
     def test_adopter_can_create_application(self):
         self.authenticate(self.adopter)
-        resp = self.client.post("/api/applications/", {
-            "pet": str(self.pet.id),
-            "why_adopt": "I love dogs",
-        })
+        resp = self.submit_application(why_adopt="I love dogs")
         self.assertEqual(resp.status_code, 201)
 
     def test_create_application_leaves_draft_and_becomes_submitted(self):
@@ -44,10 +54,7 @@ class ApplicationTests(BaseAPITestCase):
         # submission must not remain stuck in "draft" with no way for the
         # adopter to advance it. Hit the real endpoint, not the model layer.
         self.authenticate(self.adopter)
-        resp = self.client.post("/api/applications/", {
-            "pet": str(self.pet.id),
-            "why_adopt": "I love dogs",
-        })
+        resp = self.submit_application(why_adopt="I love dogs")
         self.assertEqual(resp.status_code, 201)
         app = Application.objects.get(adopter=self.adopter, pet=self.pet)
         self.assertEqual(app.status, "submitted")
@@ -67,10 +74,7 @@ class ApplicationTests(BaseAPITestCase):
         # response must use the read serializer so clients learn the new
         # application's id and status from the response body.
         self.authenticate(self.adopter)
-        resp = self.client.post("/api/applications/", {
-            "pet": str(self.pet.id),
-            "why_adopt": "I love dogs",
-        })
+        resp = self.submit_application(why_adopt="I love dogs")
         self.assertEqual(resp.status_code, 201)
         self.assertIn("id", resp.data)
         self.assertIn("status", resp.data)
@@ -90,10 +94,7 @@ class ApplicationTests(BaseAPITestCase):
         # Unique constraint on (adopter, pet) for active applications
         Application.objects.create(adopter=self.adopter, pet=self.pet, status="submitted")
         self.authenticate(self.adopter)
-        resp = self.client.post("/api/applications/", {
-            "pet": str(self.pet.id),
-            "why_adopt": "again",
-        })
+        resp = self.submit_application(why_adopt="again")
         self.assertEqual(resp.status_code, 400)
 
     def test_staff_can_view_all_applications(self):
@@ -157,9 +158,7 @@ class ApplicationTests(BaseAPITestCase):
         self.assertEqual(resp.data["status"], "rejected")
         self.assertEqual(resp.data["rejection_reason"], "Fencing requirement not met")
         # Re-application for the same pet is allowed (rejected is not active).
-        resp = self.client.post("/api/applications/", {
-            "pet": str(self.pet.id), "why_adopt": "Fence fixed",
-        })
+        resp = self.submit_application(why_adopt="Fence fixed")
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["status"], "submitted")
 
@@ -277,3 +276,84 @@ class ApplicationTests(BaseAPITestCase):
                 new_value="submitted",
             ).exists()
         )
+
+    # ------------------------------------------------------------------
+    # Documents are part of the application submission itself: they must be
+    # validated before submission and stored with the application.
+    # ------------------------------------------------------------------
+
+    def test_submitted_application_has_its_documents_attached(self):
+        self.authenticate(self.adopter)
+        resp = self.submit_application(why_adopt="I love dogs")
+        self.assertEqual(resp.status_code, 201)
+        app = Application.objects.get(pk=resp.data["id"])
+        self.assertEqual(app.status, "submitted")
+        self.assertEqual(Document.objects.filter(application=app).count(), 2)
+        types = set(Document.objects.filter(application=app).values_list("document_type", flat=True))
+        self.assertEqual(types, {"identification", "proof_of_address"})
+        # The create response already carries the documents.
+        self.assertEqual(len(resp.data["documents"]), 2)
+
+    def test_application_rejected_when_required_documents_missing(self):
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I love dogs",
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("documents", resp.data)
+        self.assertEqual(Application.objects.filter(adopter=self.adopter).count(), 0)
+
+    def test_application_rejected_when_one_required_document_missing(self):
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I love dogs",
+            "documents": [self.make_pdf("id.pdf")],
+            "document_types": ["identification"],
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("proof_of_address", resp.data["documents"])
+        self.assertEqual(Application.objects.filter(adopter=self.adopter).count(), 0)
+
+    def test_invalid_document_blocks_submission_and_rolls_back(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I love dogs",
+            "documents": [
+                self.make_pdf("id.pdf"),
+                SimpleUploadedFile("proof.exe", b"MZ", content_type="application/x-msdownload"),
+            ],
+            "document_types": ["identification", "proof_of_address"],
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("proof_of_address", resp.data["documents"])
+        self.assertEqual(Application.objects.filter(adopter=self.adopter).count(), 0)
+        self.assertEqual(Document.objects.count(), 0)
+
+    def test_optional_extra_document_is_accepted(self):
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I love dogs",
+            "documents": [
+                self.make_pdf("id.pdf"),
+                self.make_pdf("address.pdf"),
+                self.make_pdf("vet.pdf"),
+            ],
+            "document_types": ["identification", "proof_of_address", "vet_reference"],
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(resp.data["documents"]), 3)
+
+    def test_staff_retrieves_application_with_documents(self):
+        self.authenticate(self.adopter)
+        created = self.submit_application(why_adopt="I love dogs")
+        self.assertEqual(created.status_code, 201)
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/applications/{created.data['id']}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data["documents"]), 2)
+        self.assertTrue(all(d["download_url"] for d in resp.data["documents"]))

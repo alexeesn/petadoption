@@ -2,11 +2,11 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 
+// Adopter-facing navigation: browsing, applications, profile. Deliberately
+// no dashboard — this is a pet adoption site, not an admin panel.
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
+  { to: '/pets', label: 'Browse Pets', icon: '🐶' },
   { to: '/applications', label: 'My Applications', icon: '📋' },
-  { to: '/documents', label: 'Documents', icon: '📁' },
-  { to: '/notifications', label: 'Notifications', icon: '🔔' },
   { to: '/profile', label: 'My Profile', icon: '👤' },
 ]
 
@@ -32,6 +32,18 @@ export default function DashboardLayout() {
             <span className="text-sm text-stone-500 hidden sm:block">
               Hi, {user?.first_name || user?.email}
             </span>
+            <Link
+              to="/notifications"
+              className="relative text-lg text-stone-600 hover:text-orange-600"
+              aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
+            >
+              <span aria-hidden="true">🔔</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-4 h-4 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                  {unreadCount}
+                </span>
+              )}
+            </Link>
             <button
               onClick={handleLogout}
               className="text-sm font-medium text-stone-600 hover:text-orange-600"
@@ -43,13 +55,13 @@ export default function DashboardLayout() {
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 gap-6">
-        <nav className="md:w-56 shrink-0" aria-label="Dashboard">
+        <nav className="md:w-56 shrink-0" aria-label="Adopter navigation">
           <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-2 flex md:flex-col gap-1">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/dashboard'}
+                end={item.to === '/pets'}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive ? 'bg-orange-100 text-orange-700' : 'text-stone-600 hover:bg-stone-50'
@@ -58,11 +70,6 @@ export default function DashboardLayout() {
               >
                 <span aria-hidden="true">{item.icon}</span>
                 <span>{item.label}</span>
-                {item.to === '/notifications' && unreadCount > 0 && (
-                  <span className="ml-auto inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-red-500 text-white rounded-full">
-                    {unreadCount}
-                  </span>
-                )}
               </NavLink>
             ))}
           </div>

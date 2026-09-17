@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
@@ -13,11 +13,9 @@ import VerifyEmailPage from './pages/VerifyEmailPage'
 import ResendOtpPage from './pages/ResendOtpPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
-import DashboardPage from './pages/DashboardPage'
 import ApplicationsPage from './pages/ApplicationsPage'
 import ApplicationDetailPage from './pages/ApplicationDetailPage'
 import NewApplicationPage from './pages/NewApplicationPage'
-import DocumentsPage from './pages/DocumentsPage'
 import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdoptionRecordPage from './pages/AdoptionRecordPage'
@@ -56,11 +54,13 @@ function AppRoutes() {
       {/* Protected adopter routes */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<DashboardPage />} />
+          {/* The adopter dashboard was removed: My Applications is the landing page. */}
+          <Route path="/dashboard" element={<Navigate to="/applications" replace />} />
           <Route path="/applications" element={<ApplicationsPage />} />
           <Route path="/applications/new" element={<NewApplicationPage />} />
           <Route path="/applications/:id" element={<ApplicationDetailPage />} />
-          <Route path="/documents" element={<DocumentsPage />} />
+          {/* Documents are uploaded inside the application flow, so there is no separate documents page. */}
+          <Route path="/documents" element={<Navigate to="/applications" replace />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/adoption/:id" element={<AdoptionRecordPage />} />

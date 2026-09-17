@@ -1,6 +1,8 @@
-from rest_framework import viewsets, generics, permissions, status
+from rest_framework import viewsets, generics, permissions, status, serializers as drf_serializers
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
+from django.db import transaction
 from django.utils import timezone
 from django.db.models import Q
 from .models import Application
@@ -9,12 +11,19 @@ from .serializers import (
     ApplicationStatusUpdateSerializer,
 )
 from apps.accounts.permissions import IsAdopter, IsStaff
+from apps.documents.models import Document
+from apps.documents.serializers import (
+    REQUIRED_DOCUMENT_LABELS, REQUIRED_DOCUMENT_TYPES, validate_uploaded_file,
+)
 from apps.notifications.models import create_notification
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
-    queryset = Application.objects.select_related("adopter", "pet", "reviewed_by").all()
+    queryset = Application.objects.select_related("adopter", "pet", "reviewed_by").prefetch_related("documents").all()
     permission_classes = [permissions.IsAuthenticated]
+    # Applications are submitted together with their required documents, so the
+    # endpoint has to accept multipart in addition to JSON.
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_permissions(self):
         # Write access to an application (status, staff_notes, etc.) is
@@ -44,14 +53,73 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return qs
         return self.queryset.filter(adopter=user)
 
+    def _collect_documents(self, request):
+        """Pull the documents submitted alongside the application.
+
+        The adopter portal posts the whole application as one multipart
+        request: repeated ``documents`` files paired positionally with
+        repeated ``document_types`` values.  Everything is validated *before*
+        anything is written, so an application is never created without the
+        documents that belong to it.
+        """
+        data = request.data
+        files = data.getlist("documents") if hasattr(data, "getlist") else []
+        types = data.getlist("document_types") if hasattr(data, "getlist") else []
+        errors = {}
+
+        if len(files) != len(types):
+            raise drf_serializers.ValidationError({
+                "documents": "Each uploaded document must have a document type."
+            })
+
+        valid_types = {choice[0] for choice in Document._meta.get_field("document_type").choices}
+        pairs = []
+        for doc_type, file_obj in zip(types, files):
+            if doc_type not in valid_types:
+                errors[doc_type or "documents"] = f"'{doc_type}' is not a valid document type."
+                continue
+            try:
+                validate_uploaded_file(file_obj)
+            except drf_serializers.ValidationError as exc:
+                errors[doc_type] = exc.detail[0] if isinstance(exc.detail, list) else exc.detail
+                continue
+            pairs.append((doc_type, file_obj))
+
+        uploaded_types = {doc_type for doc_type, _ in pairs}
+        for required in REQUIRED_DOCUMENT_TYPES:
+            if required not in uploaded_types and required not in errors:
+                label = REQUIRED_DOCUMENT_LABELS.get(required, required)
+                errors[required] = f"{label} is required before the application can be submitted."
+
+        if errors:
+            raise drf_serializers.ValidationError({"documents": errors})
+        return pairs
+
     def create(self, request, *args, **kwargs):
         # Validate with the write serializer, then respond with the read
         # serializer so the client receives id/status/created_at etc.
         # (see docs/QA-REPORT-2026-09-09.md section 3).
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        documents = self._collect_documents(request)
+        # The application and its documents are written together: if a
+        # document fails to save, the application is rolled back too, so the
+        # adopter never ends up with a submitted application missing its
+        # paperwork.
+        with transaction.atomic():
+            self.perform_create(serializer)
+            for doc_type, file_obj in documents:
+                Document.objects.create(
+                    application=serializer.instance,
+                    document_type=doc_type,
+                    file=file_obj,
+                    original_filename=file_obj.name,
+                    content_type=getattr(file_obj, "content_type", "") or "",
+                    file_size=file_obj.size,
+                    uploaded_by=request.user,
+                )
         headers = self.get_success_headers(serializer.data)
+        serializer.instance.refresh_from_db()
         read_serializer = ApplicationSerializer(
             serializer.instance, context=self.get_serializer_context()
         )
@@ -152,7 +220,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             app.pet.status = "adopted"
             app.pet.save(update_fields=["status"])
 
-        return Response(ApplicationSerializer(app).data)
+        return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
 
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
@@ -179,4 +247,4 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             notification_type="application",
             link=f"/applications/{app.id}",
         )
-        return Response(ApplicationSerializer(app).data)
+        return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)

@@ -39,8 +39,8 @@ export default function AdoptionRecordPage() {
 
   return (
     <div>
-      <Link to="/dashboard" className="text-sm text-orange-600 hover:text-orange-700 mb-4 inline-block">
-        ← Back to Dashboard
+      <Link to="/applications" className="text-sm text-orange-600 hover:text-orange-700 mb-4 inline-block">
+        ← Back to My Applications
       </Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Adoption Record</h1>
       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}>

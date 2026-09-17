@@ -33,10 +33,10 @@ export default function PublicLayout() {
             {user ? (
               <div className="flex items-center gap-4">
                 <Link
-                  to="/dashboard"
+                  to="/applications"
                   className="text-sm font-medium text-stone-600 hover:text-orange-600"
                 >
-                  Dashboard
+                  My Applications
                 </Link>
                 <button
                   onClick={() => logout()}

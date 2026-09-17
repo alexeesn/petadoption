@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.documents.serializers import DocumentSerializer
 from .models import Application
 
 
@@ -6,6 +7,9 @@ class ApplicationSerializer(serializers.ModelSerializer):
     adopter_email = serializers.EmailField(source="adopter.email", read_only=True)
     pet_name = serializers.CharField(source="pet.name", read_only=True)
     reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, default=None)
+    # Documents are uploaded as part of the application, so they travel with it
+    # for both the adopter's confirmation view and the staff review view.
+    documents = DocumentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Application
@@ -14,11 +18,11 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "why_adopt", "experience_with_pets", "living_situation",
             "has_other_pets", "other_pets_description", "references",
             "additional_notes", "staff_notes", "reviewed_by", "reviewed_by_email",
-            "reviewed_at", "rejection_reason", "created_at", "updated_at",
+            "reviewed_at", "rejection_reason", "documents", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "adopter", "adopter_email", "pet_name", "reviewed_by",
-            "reviewed_by_email", "reviewed_at", "created_at", "updated_at",
+            "reviewed_by_email", "reviewed_at", "documents", "created_at", "updated_at",
         ]
 
     def validate(self, attrs):

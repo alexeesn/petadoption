@@ -56,6 +56,7 @@ export interface Application {
   references: string
   additional_notes: string
   rejection_reason?: string
+  documents?: Document[]
   created_at: string
   updated_at: string
 }

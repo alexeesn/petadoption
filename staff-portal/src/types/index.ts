@@ -75,6 +75,7 @@ export interface Application {
   reviewed_by_email?: string;
   reviewed_at?: string;
   rejection_reason: string;
+  documents?: Document[];
   created_at: string;
   updated_at: string;
 }
@@ -89,6 +90,7 @@ export interface Document {
   file_size: number;
   notes: string;
   uploaded_by?: string;
+  download_url?: string;
   created_at: string;
 }
 

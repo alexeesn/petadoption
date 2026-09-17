@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, Loading, ErrorMessage, Button } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
-import { applicationService } from '../services/apiService';
+import { applicationService, documentService } from '../services/apiService';
 import type { Application } from '../types';
 
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -121,6 +121,32 @@ export default function ApplicationDetailPage() {
             )}
           </div>
         </div>
+      </Card>
+
+      <Card className="p-6 mb-6">
+        <h3 className="font-semibold text-slate-900 mb-2">Uploaded Documents</h3>
+        {(app.documents ?? []).length === 0 ? (
+          <p className="text-slate-500 text-sm">No documents were submitted with this application.</p>
+        ) : (
+          <ul className="space-y-2">
+            {(app.documents ?? []).map((doc) => (
+              <li key={doc.id} className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                <span className="text-green-600" aria-hidden="true">
+                  &#10003;
+                </span>
+                <span className="font-medium text-slate-900">{doc.document_type.replace(/_/g, ' ')}</span>
+                <span>&mdash; {doc.original_filename}</span>
+                <span className="text-slate-400">({(doc.file_size / 1024).toFixed(1)} KB)</span>
+                <a
+                  href={doc.download_url || documentService.downloadUrl(doc.id)}
+                  className="text-indigo-600 hover:text-indigo-700"
+                >
+                  Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
 
       <Card className="p-6 mb-6">
