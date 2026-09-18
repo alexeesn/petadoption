@@ -11,6 +11,7 @@ const navItems = [
   { to: '/reviews', label: 'Reviews', icon: '✅' },
   { to: '/health', label: 'Health Records', icon: '🩺' },
   { to: '/adoptions', label: 'Adoption Records', icon: '🏠' },
+  { to: '/appointments', label: 'Appointments', icon: '📅' },
   { to: '/packages', label: 'Packages', icon: '📦' },
   { to: '/payments', label: 'Payments', icon: '💳' },
   { to: '/reports', label: 'Reports', icon: '📈' },

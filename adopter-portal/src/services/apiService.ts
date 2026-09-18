@@ -92,6 +92,24 @@ export async function fetchAdoptionRecords() {
   return data
 }
 
+/**
+ * Appointments for one application. The API already scopes the result to the
+ * signed-in adopter's own appointments.
+ */
+export async function fetchAppointments(applicationId: string) {
+  const { data } = await api.get('/appointments/', { params: { application: applicationId } })
+  const results = Array.isArray(data) ? data : data.results || []
+  return results
+}
+
+export async function createAppointment(applicationId: string, requestedDate: string) {
+  const { data } = await api.post('/appointments/', {
+    application_id: applicationId,
+    requested_date: requestedDate,
+  })
+  return data
+}
+
 export async function fetchAdoptionRecord(id: string) {
   const { data } = await api.get(`/adoptions/${id}/`)
   return data

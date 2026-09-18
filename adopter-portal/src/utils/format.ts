@@ -30,6 +30,8 @@ export function getStatusColor(status: string): string {
     scheduled: 'bg-blue-100 text-blue-800',
     completed: 'bg-green-100 text-green-800',
     returned: 'bg-gray-100 text-gray-800',
+    pending_confirmation: 'bg-amber-100 text-amber-800',
+    confirmed: 'bg-green-100 text-green-800',
   }
   return map[status] || 'bg-gray-100 text-gray-800'
 }

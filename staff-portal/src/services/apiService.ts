@@ -141,6 +141,16 @@ export const adoptionService = {
   retrieve: (id: string) => api.get(`/adoptions/${id}/`),
 };
 
+// ----- Appointments (onsite visit dates) -----
+export const appointmentService = {
+  list: (params?: Record<string, unknown>) => api.get('/appointments/', { params }),
+  retrieve: (id: string) => api.get(`/appointments/${id}/`),
+  // Confirm or reject the requested date. These are the only ways an
+  // appointment status changes (the API does not accept PATCH).
+  approve: (id: string) => api.post(`/appointments/${id}/approve/`),
+  reject: (id: string, reason: string) => api.post(`/appointments/${id}/reject/`, { reason }),
+};
+
 // ----- Packages -----
 export const packageService = {
   list: (params?: Record<string, unknown>) => api.get('/packages/', { params }),

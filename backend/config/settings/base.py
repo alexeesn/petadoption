@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "apps.packages",
     "apps.health",
     "apps.adoptions",
+    "apps.appointments",
     "apps.payments",
     "apps.reports",
     "apps.notifications",

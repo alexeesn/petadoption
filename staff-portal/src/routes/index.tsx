@@ -13,6 +13,7 @@ import DocumentsPage from '../pages/DocumentsPage';
 import ReviewsPage from '../pages/ReviewsPage';
 import HealthRecordsPage from '../pages/HealthRecordsPage';
 import AdoptionsPage from '../pages/AdoptionsPage';
+import AppointmentsPage from '../pages/AppointmentsPage';
 import PackagesPage from '../pages/PackagesPage';
 import PaymentsPage from '../pages/PaymentsPage';
 import ReportsPage from '../pages/ReportsPage';
@@ -51,6 +52,7 @@ export default function AppRoutes() {
           <Route path="/reviews" element={<ReviewsPage />} />
           <Route path="/health" element={<HealthRecordsPage />} />
           <Route path="/adoptions" element={<AdoptionsPage />} />
+          <Route path="/appointments" element={<AppointmentsPage />} />
           <Route path="/packages" element={<PackagesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/reports" element={<ReportsPage />} />

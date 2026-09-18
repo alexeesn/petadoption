@@ -70,7 +70,7 @@ export default function ApplicationsPage() {
                   <div className="col-span-2 text-sm text-stone-500 hidden md:block">{formatDate(app.updated_at)}</div>
                   <div className="col-span-2 text-right">
                     <Link to={`/applications/${app.id}`} className="text-sm text-orange-600 hover:underline font-medium">
-                      View details
+                      {app.status === 'approved' ? 'Choose appointment date' : 'View details'}
                     </Link>
                   </div>
                 </div>

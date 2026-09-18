@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchApplication, cancelApplication, uploadDocument } from '../services/apiService'
-import type { Application } from '../types'
+import { fetchApplication, cancelApplication, uploadDocument, fetchAppointments, createAppointment } from '../services/apiService'
+import type { Application, Appointment } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
 import { formatDate, getStatusColor, capitalize } from '../utils/format'
 
@@ -10,6 +10,21 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 /** Statuses where staff have explicitly asked the adopter for more paperwork. */
 const DOCUMENTS_REQUESTED = ['pending_documents', 'additional_info_requested']
+
+/** Center operating schedule: Monday-Friday, 8:00 AM-5:00 PM. */
+const CENTER_SCHEDULE_TEXT = 'Monday to Friday, 8:00 AM - 5:00 PM'
+
+function todayISO(): string {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+
+/** Saturday/Sunday are not selectable; the API enforces this too. */
+function isWeekday(dateStr: string): boolean {
+  const day = new Date(`${dateStr}T00:00:00`).getDay()
+  return day !== 0 && day !== 6
+}
 
 export default function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -22,14 +37,60 @@ export default function ApplicationDetailPage() {
   const [extraFile, setExtraFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [visitDate, setVisitDate] = useState('')
+  const [apptError, setApptError] = useState('')
+  const [apptSubmitting, setApptSubmitting] = useState(false)
 
   useEffect(() => {
     if (!id) return
-    fetchApplication(id)
-      .then(setApp)
+    Promise.all([
+      fetchApplication(id),
+      // Appointment history for this application (own appointments only).
+      fetchAppointments(id).catch(() => [] as Appointment[]),
+    ])
+      .then(([application, appointments]) => {
+        setApp(application)
+        setAppointments(appointments as Appointment[])
+      })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [id])
+
+  const handleRequestAppointment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!id) return
+    if (!visitDate) {
+      setApptError('Please choose a visit date.')
+      return
+    }
+    if (visitDate < todayISO()) {
+      setApptError('The visit date cannot be in the past.')
+      return
+    }
+    if (!isWeekday(visitDate)) {
+      setApptError('The center only accepts visits Monday to Friday. Please choose a weekday.')
+      return
+    }
+    setApptSubmitting(true)
+    setApptError('')
+    setNotice('')
+    try {
+      const appointment = (await createAppointment(id, visitDate)) as Appointment
+      setAppointments((prev) => [appointment, ...prev])
+      setVisitDate('')
+      setNotice('Appointment request submitted. Staff will review your requested date.')
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: Record<string, string[] | string> } }
+      const data = anyErr?.response?.data
+      const detail = data?.requested_date ?? data?.application_id ?? data?.error
+      setApptError(
+        Array.isArray(detail) ? detail[0] : typeof detail === 'string' ? detail : 'Could not submit the appointment request.'
+      )
+    } finally {
+      setApptSubmitting(false)
+    }
+  }
 
   const handleCancel = async () => {
     if (!id || !window.confirm('Are you sure you want to cancel this application?')) return
@@ -89,6 +150,13 @@ export default function ApplicationDetailPage() {
   const canRequestChanges = ['draft', 'submitted', 'pending_documents', 'additional_info_requested'].includes(
     app.status
   )
+  // Only one active appointment request may exist per application; a rejected
+  // date does not block choosing another one.
+  const activeAppointment = appointments.find(
+    (a) => a.status === 'pending_confirmation' || a.status === 'confirmed'
+  )
+  const lastRejectedAppointment = appointments.find((a) => a.status === 'rejected')
+  const canChooseVisitDate = app.status === 'approved' && !activeAppointment
 
   return (
     <div className="max-w-3xl">
@@ -164,6 +232,98 @@ export default function ApplicationDetailPage() {
             )}
           </Section>
         </div>
+
+        {app.status === 'approved' && (
+          <div className="mt-6 rounded-md border border-orange-200 bg-orange-50 p-4">
+            <h3 className="text-sm font-semibold text-stone-800">Onsite visit appointment</h3>
+
+            {activeAppointment && (
+              <div className="mt-2 space-y-2">
+                <p className="text-sm text-stone-700">
+                  Requested date:{' '}
+                  <span className="font-medium">{formatDate(activeAppointment.requested_date)}</span>
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(
+                    activeAppointment.status
+                  )}`}
+                >
+                  <span aria-hidden="true">
+                    {activeAppointment.status === 'confirmed' ? '✓' : ''}
+                  </span>
+                  {capitalize(activeAppointment.status)}
+                </span>
+                <p className="text-sm text-stone-600">
+                  {activeAppointment.status === 'pending_confirmation'
+                    ? 'Waiting for staff to confirm this date. You will be notified once it has been reviewed.'
+                    : 'Confirmed — you may walk in on this date between 8:00 AM and 5:00 PM for your onsite visit.'}
+                </p>
+              </div>
+            )}
+
+            {!activeAppointment && lastRejectedAppointment && (
+              <div className="mt-3">
+                <Alert type="error">
+                  <strong>
+                    Requested date not confirmed ({formatDate(lastRejectedAppointment.requested_date)}):
+                  </strong>{' '}
+                  {lastRejectedAppointment.rejection_reason || 'No reason provided.'}
+                </Alert>
+                <p className="mt-2 text-sm text-stone-600">
+                  Your adoption application is still approved — choose another visit date below.
+                </p>
+              </div>
+            )}
+
+            {canChooseVisitDate && (
+              <form onSubmit={handleRequestAppointment} className="mt-3 space-y-3">
+                <div>
+                  <label htmlFor="visitDate" className="block text-sm font-medium text-stone-700 mb-1">
+                    Choose appointment date
+                  </label>
+                  <input
+                    id="visitDate"
+                    type="date"
+                    min={todayISO()}
+                    value={visitDate}
+                    onChange={(e) => {
+                      setVisitDate(e.target.value)
+                      setApptError('')
+                    }}
+                    aria-describedby="visitDateHint"
+                    aria-invalid={apptError ? true : undefined}
+                    className="w-full sm:w-64 rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                  <p id="visitDateHint" className="mt-1 text-xs text-stone-500">
+                    Visits are available {CENTER_SCHEDULE_TEXT}. Weekends and past dates cannot be
+                    selected, and the center is closed on holidays and work suspensions.
+                  </p>
+                </div>
+                <FieldError message={apptError} />
+                <button
+                  type="submit"
+                  disabled={!visitDate || apptSubmitting}
+                  className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
+                >
+                  {apptSubmitting ? 'Submitting...' : 'Submit appointment request'}
+                </button>
+              </form>
+            )}
+
+            {appointments.length > 0 && (
+              <ul className="mt-4 space-y-1 border-t border-orange-200 pt-3 text-xs text-stone-600">
+                {appointments.map((appointment) => (
+                  <li key={appointment.id}>
+                    {formatDate(appointment.requested_date)} — {capitalize(appointment.status)}
+                    {appointment.status === 'rejected' && appointment.rejection_reason
+                      ? `: ${appointment.rejection_reason}`
+                      : ''}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {DOCUMENTS_REQUESTED.includes(app.status) && (
           <div className="mt-6 rounded-md border border-orange-200 bg-orange-50 p-4">

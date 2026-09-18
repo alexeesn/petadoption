@@ -153,6 +153,24 @@ export interface AdoptionRecord {
   created_at: string;
 }
 
+export interface Appointment {
+  id: string;
+  application: string;
+  adopter: string;
+  adopter_email: string;
+  adopter_name?: string;
+  pet: string;
+  pet_name: string;
+  requested_date: string;
+  status: 'pending_confirmation' | 'confirmed' | 'rejected';
+  reviewed_by?: string | null;
+  reviewed_by_email?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Payment {
   id: string;
   application: string;
