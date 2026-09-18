@@ -151,6 +151,14 @@ EMAIL_HOST_USER = os.environ.get("SMTP_USERNAME", os.environ.get("EMAIL_HOST_USE
 EMAIL_HOST_PASSWORD = os.environ.get("SMTP_PASSWORD", os.environ.get("EMAIL_HOST_PASSWORD", ""))
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "noreply@petadopt.example.com")
+# Display name mail clients show as the sender. Applied to bare addresses only,
+# so an explicit "Name <address>" value is left untouched.
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "PawConnect")
+if "<" not in DEFAULT_FROM_EMAIL:
+    DEFAULT_FROM_EMAIL = f"{EMAIL_FROM_NAME} <{DEFAULT_FROM_EMAIL}>"
+
+# Adopter portal base URL, used for links inside adopter-facing emails
+ADOPTER_PORTAL_URL = os.environ.get("ADOPTER_PORTAL_URL", "http://localhost:5173").rstrip("/")
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = False

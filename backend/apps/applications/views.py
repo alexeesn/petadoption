@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.db.models import Q
 from .models import Application
+from .emails import send_application_approval_email
 from .serializers import (
     ApplicationSerializer, ApplicationCreateSerializer,
     ApplicationStatusUpdateSerializer,
@@ -226,6 +227,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if new_status == "approved":
             app.pet.status = "pending"
             app.pet.save(update_fields=["status"])
+            # A real transition into "approved" (the invalid
+            # approved -> approved repeat is rejected with 400 above), so
+            # notify the adopter by email exactly once.
+            send_application_approval_email(app)
         elif new_status == "adoption_completed":
             app.pet.status = "adopted"
             app.pet.save(update_fields=["status"])

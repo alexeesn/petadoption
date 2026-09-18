@@ -4,6 +4,7 @@ from django.utils import timezone
 from .models import Review
 from .serializers import ReviewSerializer, ReviewCreateSerializer
 from apps.accounts.permissions import IsStaff
+from apps.applications.emails import send_application_approval_email
 from apps.notifications.models import create_notification
 
 
@@ -48,12 +49,14 @@ class ReviewListCreateView(generics.ListCreateAPIView):
                 and app.can_transition_to("under_review"):
             app.status = "under_review"
 
+        approved_now = False
         if decision == "approve" and app.can_transition_to("approved"):
             app.status = "approved"
             app.reviewed_by = request.user
             app.reviewed_at = timezone.now()
             app.pet.status = "pending"
             app.pet.save(update_fields=["status"])
+            approved_now = True
         elif decision == "reject" and app.can_transition_to("rejected"):
             app.status = "rejected"
             app.reviewed_by = request.user
@@ -69,6 +72,13 @@ class ReviewListCreateView(generics.ListCreateAPIView):
             user=request.user, action="review_decision", model_name="Review",
             object_id=str(review.id), previous_value="", new_value=decision,
         )
+
+        # Email the adopter only on a real transition into "approved".
+        # A repeated approve decision on an already-approved application does
+        # not transition (approved -> approved is not a valid transition), so
+        # no duplicate email is sent.
+        if approved_now:
+            send_application_approval_email(app)
 
         # Notify the adopter about the review decision
         decision_notifications = {

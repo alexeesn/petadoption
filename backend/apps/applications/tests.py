@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core import mail
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
@@ -487,3 +489,101 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 403)
         app.refresh_from_db()
         self.assertEqual(app.status, "submitted")
+
+
+class ApprovalEmailTests(BaseAPITestCase):
+    """The approval email must fire exactly once, only on a real transition
+    into "approved", and never for other statuses or repeated approvals.
+    All assertions go through the real HTTP endpoints."""
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Rex", species="dog", age_months=24, status="available")
+        self.adopter = self.create_user(
+            email="adopter@example.com", first_name="Ada", last_name="Lovelace"
+        )
+        self.staff = self.create_staff(email="approver@example.com")
+
+    def make_pdf(self, name="doc.pdf"):
+        return SimpleUploadedFile(name, b"%PDF-1.4 test", content_type="application/pdf")
+
+    def submit_with_documents(self):
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I have a fenced yard.",
+            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
+            "document_types": ["identification", "proof_of_address"],
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        return Application.objects.get(pk=resp.data["id"])
+
+    def test_approval_sends_exactly_one_email_with_correct_content(self):
+        app = self.submit_with_documents()
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{app.id}/update-status/", {"status": "approved"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        # Sent to the adopter's registered email address.
+        self.assertEqual(msg.to, ["adopter@example.com"])
+        # Sender carries the PawConnect display name, not the bare SMTP address.
+        self.assertTrue(msg.from_email.startswith("PawConnect <"), msg.from_email)
+        self.assertEqual(msg.subject, "Your PawConnect adoption application has been approved")
+        # Body uses the real adopter/pet data plus both required instructions.
+        self.assertIn("Hello Ada Lovelace", msg.body)
+        self.assertIn("Rex", msg.body)
+        self.assertIn("has been approved", msg.body)
+        self.assertIn("log in", msg.body.lower())
+        self.assertIn("appointment", msg.body.lower())
+        # Branded HTML alternative is attached like the other system emails.
+        self.assertTrue(len(msg.alternatives) > 0)
+        html_content, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn("Rex", html_content)
+        # Both bodies link to this application inside the adopter portal.
+        application_url = f"{settings.ADOPTER_PORTAL_URL}/applications/{app.id}"
+        self.assertIn(application_url, msg.body)
+        self.assertIn(f'href="{application_url}"', html_content)
+
+    def test_repeated_approval_does_not_send_second_email(self):
+        app = self.submit_with_documents()
+        self.authenticate(self.staff)
+        first = self.client.post(
+            f"/api/applications/{app.id}/update-status/", {"status": "approved"}
+        )
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        # A duplicate/retry approve request (page refresh) must not re-email.
+        repeat = self.client.post(
+            f"/api/applications/{app.id}/update-status/", {"status": "approved"}
+        )
+        self.assertEqual(repeat.status_code, 400)
+        self.assertEqual(len(mail.outbox), 1)
+        # A duplicate approve decision via the reviews endpoint as well.
+        resp = self.client.post("/api/reviews/", {
+            "application": str(app.id),
+            "decision": "approve",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_other_statuses_do_not_send_approval_email(self):
+        app = self.submit_with_documents()
+        self.authenticate(self.staff)
+        self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "pending_documents"})
+        self.client.post(f"/api/applications/{app.id}/update-status/", {"status": "under_review"})
+        self.client.post(f"/api/applications/{app.id}/update-status/", {
+            "status": "rejected", "rejection_reason": "Yard is not fenced.",
+        })
+        app.refresh_from_db()
+        self.assertEqual(app.status, "rejected")
+        self.assertEqual(len(mail.outbox), 0)
+        # A cancelled application never triggers the approval email either.
+        app2 = self.submit_with_documents()
+        self.authenticate(self.adopter)
+        self.client.post(f"/api/applications/{app2.id}/cancel/")
+        self.assertEqual(len(mail.outbox), 0)

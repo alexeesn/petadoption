@@ -1,3 +1,4 @@
+from django.core import mail
 from django.test import TestCase
 from apps.accounts.tests import BaseAPITestCase
 from apps.pets.models import Pet
@@ -84,3 +85,54 @@ class ReviewTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 403)
         resp = self.client.get("/api/reviews/")
         self.assertEqual(resp.status_code, 403)
+
+
+class ReviewApprovalEmailTests(BaseAPITestCase):
+    """Approving through the reviews endpoint must send exactly one approval
+    email, and only on a real transition into "approved"."""
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.adopter = self.create_user(
+            email="adopter@example.com", first_name="Ada", last_name="Lovelace"
+        )
+        self.staff = self.create_staff(email="staff1@example.com")
+        self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="submitted")
+
+    def test_review_approval_sends_one_email(self):
+        self.authenticate(self.staff)
+        resp = self.client.post("/api/reviews/", {
+            "application": str(self.app.id),
+            "decision": "approve",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, "approved")
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["adopter@example.com"])
+        self.assertEqual(msg.subject, "Your PawConnect adoption application has been approved")
+        self.assertIn("Hello Ada Lovelace", msg.body)
+        self.assertIn("Buddy", msg.body)
+        self.assertIn("appointment", msg.body.lower())
+
+    def test_repeated_review_approval_sends_no_second_email(self):
+        self.authenticate(self.staff)
+        self.client.post("/api/reviews/", {
+            "application": str(self.app.id), "decision": "approve",
+        })
+        self.assertEqual(len(mail.outbox), 1)
+        resp = self.client.post("/api/reviews/", {
+            "application": str(self.app.id), "decision": "approve",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_non_approve_decisions_send_no_email(self):
+        self.authenticate(self.staff)
+        self.client.post("/api/reviews/", {
+            "application": str(self.app.id), "decision": "reject",
+            "adopter_visible_notes": "Not approved at this time.",
+        })
+        self.assertEqual(len(mail.outbox), 0)
