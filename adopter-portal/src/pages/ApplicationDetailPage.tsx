@@ -14,6 +14,22 @@ const DOCUMENTS_REQUESTED = ['pending_documents', 'additional_info_requested']
 /** Center operating schedule: Monday-Friday, 8:00 AM-5:00 PM. */
 const CENTER_SCHEDULE_TEXT = 'Monday to Friday, 8:00 AM - 5:00 PM'
 
+/** Center hours reminder shown with the confirmed-visit preparation list. */
+const CENTER_HOURS_TEXT = 'Monday-Friday, 8:00 AM-5:00 PM (except holidays and work suspensions)'
+
+/**
+ * Onsite visit guidance shown once the requested visit date is confirmed.
+ * These items are brought to the center in person — they are NOT online
+ * upload requirements, so the online document workflow is unchanged.
+ */
+const VISIT_PREPARATION_ITEMS = [
+  '1x1 picture',
+  'Q.C. ID or valid ID',
+  'Photo of your home / space prepared for the pet',
+  'Your completed online Adoption Form',
+  'Adoption Agreement Form — provided onsite',
+]
+
 function todayISO(): string {
   const now = new Date()
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
@@ -258,6 +274,24 @@ export default function ApplicationDetailPage() {
                     ? 'Waiting for staff to confirm this date. You will be notified once it has been reviewed.'
                     : 'Confirmed — you may walk in on this date between 8:00 AM and 5:00 PM for your onsite visit.'}
                 </p>
+
+                {/* Onsite visit guidance, shown only for a confirmed date.
+                    These items are brought in person; they are not additional
+                    online upload requirements. */}
+                {activeAppointment.status === 'confirmed' && (
+                  <div className="mt-3 rounded-md border border-green-200 bg-green-50 p-4">
+                    <h4 className="text-sm font-semibold text-stone-800">What to Prepare for Your Visit</h4>
+                    <p className="mt-1 text-sm text-stone-600">
+                      Please prepare or bring the following for your visit to {app.pet_name}:
+                    </p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-600">
+                      {VISIT_PREPARATION_ITEMS.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 text-xs text-stone-500">Center Hours: {CENTER_HOURS_TEXT}</p>
+                  </div>
+                )}
               </div>
             )}
 
