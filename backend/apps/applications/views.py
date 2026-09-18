@@ -169,6 +169,12 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 {"error": f"Cannot transition from '{app.status}' to '{new_status}'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if new_status == Application.Status.ADOPTION_COMPLETED:
+            # Completing an adoption requires the confirmed onsite visit and a
+            # recorded onsite payment, and has adoption-specific side effects,
+            # so it goes through the same guarded path as the
+            # "complete-adoption" action instead of the generic status update.
+            return self._complete_adoption(app, request)
         rejection_reason = serializer.validated_data.get("rejection_reason", "").strip()
         if new_status == "rejected" and not rejection_reason:
             # The staff portal already disables Reject until a reason is typed;
@@ -204,7 +210,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "rejected": f"Your application for {app.pet.name} has been rejected.",
             "pending_documents": f"Your application for {app.pet.name} requires additional documents.",
             "under_review": f"Your application for {app.pet.name} is now under review.",
-            "adoption_completed": f"Congratulations! Your adoption of {app.pet.name} has been completed.",
             "additional_info_requested": f"Additional information is required for your application for {app.pet.name}.",
         }
         title_messages = {
@@ -212,7 +217,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "rejected": "Application Rejected",
             "pending_documents": "Documents Required",
             "under_review": "Application Under Review",
-            "adoption_completed": "Adoption Completed",
             "additional_info_requested": "Additional Information Required",
         }
         create_notification(
@@ -223,7 +227,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             link=f"/applications/{app.id}",
         )
 
-        # Sync pet status on approval/completion
+        # Sync pet status on approval.  (adoption_completed is handled by
+        # _complete_adoption above, which owns the adoption side effects.)
         if new_status == "approved":
             app.pet.status = "pending"
             app.pet.save(update_fields=["status"])
@@ -231,11 +236,72 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             # approved -> approved repeat is rejected with 400 above), so
             # notify the adopter by email exactly once.
             send_application_approval_email(app)
-        elif new_status == "adoption_completed":
-            app.pet.status = "adopted"
-            app.pet.save(update_fields=["status"])
 
         return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
+
+    def _complete_adoption(self, app, request):
+        """Complete the onsite adoption for *app*.
+
+        Shared by the ``complete-adoption`` action and the generic
+        ``update-status`` endpoint so ``adoption_completed`` cannot be reached
+        without the onsite requirements being satisfied:
+
+        * the application is approved,
+        * the onsite visit date has been confirmed by staff, and
+        * the onsite payment has been recorded.
+
+        Recording the payment and completing the adoption are deliberately two
+        separate staff actions: this method is only reached when staff ask for
+        completion.
+        """
+        if not (request.user.is_staff_role or request.user.is_admin_role):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        if app.status != Application.Status.APPROVED:
+            return Response(
+                {"error": "Only an approved application can be completed as an adoption."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.appointments.models import Appointment
+
+        if not app.appointments.filter(status=Appointment.Status.CONFIRMED).exists():
+            return Response(
+                {
+                    "error": (
+                        "The onsite visit date must be confirmed before the "
+                        "adoption can be completed."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not app.payments.exists():
+            return Response(
+                {"error": "Record the onsite payment before completing the adoption."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.adoptions.services import complete_application_adoption
+
+        notes = (request.data.get("notes") or "").strip()
+        if notes:
+            # Reuse the existing internal staff-notes field for the onsite
+            # transaction note.  ApplicationSerializer strips staff_notes from
+            # adopter-facing responses, so the note stays staff-only.
+            app.staff_notes = notes
+            app.save(update_fields=["staff_notes"])
+
+        with transaction.atomic():
+            complete_application_adoption(app, request.user, notes=notes)
+
+        return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="complete-adoption")
+    def complete_adoption(self, request, pk=None):
+        """Staff/admin completes the onsite adoption from the application page."""
+        app = self.get_object()
+        return self._complete_adoption(app, request)
 
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):

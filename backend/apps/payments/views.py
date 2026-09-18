@@ -13,12 +13,18 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_adopter:
-            return Payment.objects.filter(application__adopter=user).select_related(
-                "application", "application__adopter", "package", "processed_by"
-            )
-        return Payment.objects.select_related(
+            qs = Payment.objects.filter(application__adopter=user)
+        else:
+            qs = Payment.objects.all()
+        qs = qs.select_related(
             "application", "application__adopter", "package", "processed_by"
-        ).all()
+        )
+        # Optional filter so the onsite transaction for a single application can
+        # be loaded from the staff application detail page.
+        application_id = self.request.query_params.get("application")
+        if application_id:
+            qs = qs.filter(application_id=application_id)
+        return qs
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:

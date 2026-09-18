@@ -36,6 +36,13 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=20, choices=Method.choices, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    # The date the payment actually happened onsite.  It is entered by the
+    # staff member recording the transaction and is deliberately separate from
+    # ``created_at`` (when the row was saved) and from the appointment date
+    # (the payment may be made on a different day).
+    payment_date = models.DateField(
+        null=True, blank=True, help_text="Actual date the onsite payment was made"
+    )
     receipt_number = models.CharField(max_length=100, blank=True)
     reference_number = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)

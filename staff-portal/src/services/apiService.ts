@@ -70,6 +70,11 @@ export const applicationService = {
     api.post(`/applications/${id}/update-status/`, data),
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/applications/${id}/`, data),
+  // Completes the onsite adoption. The API only accepts this when the
+  // application is approved, the appointment is confirmed and the onsite
+  // payment has been recorded.
+  completeAdoption: (id: string, notes = '') =>
+    api.post(`/applications/${id}/complete-adoption/`, { notes }),
 };
 
 // ----- Pets -----

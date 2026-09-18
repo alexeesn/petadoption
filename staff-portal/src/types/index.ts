@@ -174,13 +174,19 @@ export interface Appointment {
 export interface Payment {
   id: string;
   application: string;
+  application_id?: string;
+  adoption?: string | null;
   package?: string;
   amount: string;
   method: string;
   status: string;
+  payment_date?: string | null;
   receipt_number?: string;
+  reference_number?: string;
+  notes?: string;
   paid_at?: string;
   processed_by?: string;
+  processed_by_email?: string | null;
   created_at: string;
 }
 

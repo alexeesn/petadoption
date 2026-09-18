@@ -1,15 +1,26 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Card, Loading, ErrorMessage, Button, StatusBadge } from '../components/UI';
+import {
+  Card,
+  Loading,
+  ErrorMessage,
+  Button,
+  StatusBadge,
+  Input,
+  Select,
+  Textarea,
+} from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import {
   applicationService,
+  appointmentService,
   openDocument,
+  paymentService,
   petService,
   saveDocument,
 } from '../services/apiService';
-import type { Application, Document, Pet } from '../types';
-import { formatDateTime, formatFileSize } from '../utils/format';
+import type { Application, Appointment, Document, Payment, Pet } from '../types';
+import { formatDate, formatDateTime, formatFileSize } from '../utils/format';
 
 /**
  * Mirrors Application.VALID_TRANSITIONS in
@@ -35,6 +46,42 @@ const REQUIRED_DOCUMENTS = [
   { type: 'identification', label: 'Valid ID' },
   { type: 'proof_of_address', label: 'Proof of Address' },
 ];
+
+/**
+ * Onsite adoption transaction.
+ *
+ * There is no online package selection in PawConnect: the adopter visits the
+ * center, the physical verification and paperwork happen onsite, and staff
+ * record the flat adoption fee here.  Payment recording and adoption
+ * completion stay two separate staff actions — the API refuses completion
+ * until the visit is confirmed and the payment has been recorded.
+ */
+const ADOPTION_FEE = '500.00';
+
+/** Reuses the existing Payment.Method choices in backend/apps/payments/models.py. */
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'gcash', label: 'GCash' },
+  { value: 'paymaya', label: 'PayMaya' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'online', label: 'Online' },
+];
+
+/** Reuses the existing Payment.Status choices in backend/apps/payments/models.py. */
+const PAYMENT_STATUSES = [
+  { value: 'pending', label: 'Pending (not paid yet)' },
+  { value: 'completed', label: 'Completed (paid)' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'refunded', label: 'Refunded' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+function todayISO(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
 
 function humanise(value: string) {
   return value.replace(/_/g, ' ');
@@ -81,6 +128,25 @@ export default function ApplicationDetailPage() {
   const [busyDocument, setBusyDocument] = useState('');
   const [notice, setNotice] = useState('');
   const [actionError, setActionError] = useState('');
+  // Onsite adoption transaction (appointment + payment + completion).
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [payMethod, setPayMethod] = useState('cash');
+  const [payStatus, setPayStatus] = useState('');
+  const [payDate, setPayDate] = useState(todayISO());
+  const [payReference, setPayReference] = useState('');
+  const [onsiteNotes, setOnsiteNotes] = useState('');
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [completionBusy, setCompletionBusy] = useState(false);
+  const [onsiteNotice, setOnsiteNotice] = useState('');
+  const [onsiteError, setOnsiteError] = useState('');
+
+  const loadPayments = (applicationId: string) => {
+    paymentService
+      .list({ application: applicationId })
+      .then((res) => setPayments(res.data.results))
+      .catch(() => setPayments([]));
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -98,6 +164,12 @@ export default function ApplicationDetailPage() {
           .retrieve(res.data.pet)
           .then((petRes) => setPet(petRes.data))
           .catch(() => setPet(null));
+        // Onsite visit dates and recorded payments for this application.
+        appointmentService
+          .list({ application: id })
+          .then((apptRes) => setAppointments(apptRes.data.results))
+          .catch(() => setAppointments([]));
+        loadPayments(id);
       })
       .catch(() => setLoadError('Failed to load this application.'))
       .finally(() => setLoading(false));
@@ -139,6 +211,79 @@ export default function ApplicationDetailPage() {
       .finally(() => setBusy(false));
   };
 
+  /** Persists the onsite transaction note in the internal staff-notes field. */
+  const saveOnsiteNotes = () => {
+    if (!app || !onsiteNotes.trim()) return Promise.resolve();
+    return applicationService
+      .update(app.id, { staff_notes: onsiteNotes.trim() })
+      .then((res) => {
+        setApp(res.data);
+        setNotes(res.data.staff_notes || '');
+      });
+  };
+
+  const recordPayment = () => {
+    if (!app) return;
+    if (!payStatus) {
+      setOnsiteError('Select the payment status that was recorded onsite.');
+      return;
+    }
+    if (!payDate) {
+      setOnsiteError('Enter the date the payment was made.');
+      return;
+    }
+    setPaymentBusy(true);
+    setOnsiteError('');
+    setOnsiteNotice('');
+    saveOnsiteNotes()
+      .then(() =>
+        paymentService.create({
+          application: app.id,
+          amount: ADOPTION_FEE,
+          method: payMethod,
+          status: payStatus,
+          payment_date: payDate,
+          reference_number: payReference.trim(),
+        }),
+      )
+      .then(() => {
+        setOnsiteNotice(
+          'Payment recorded. Recording the payment does not complete the adoption.',
+        );
+        setOnsiteNotes('');
+        setPayReference('');
+        loadPayments(app.id);
+      })
+      .catch((e) => setOnsiteError(e.response?.data?.error || 'Failed to record the payment.'))
+      .finally(() => setPaymentBusy(false));
+  };
+
+  const completeAdoption = () => {
+    if (!app) return;
+    setCompletionBusy(true);
+    setOnsiteError('');
+    setOnsiteNotice('');
+    applicationService
+      .completeAdoption(app.id, onsiteNotes.trim())
+      .then((res) => {
+        setApp(res.data);
+        setNotes(res.data.staff_notes || '');
+        setOnsiteNotes('');
+        setOnsiteNotice(
+          'Adoption completed. The pet is now marked as adopted and is no longer available.',
+        );
+        petService
+          .retrieve(res.data.pet)
+          .then((petRes) => setPet(petRes.data))
+          .catch(() => undefined);
+        loadPayments(res.data.id);
+      })
+      .catch((e) =>
+        setOnsiteError(e.response?.data?.error || 'Failed to complete the adoption.'),
+      )
+      .finally(() => setCompletionBusy(false));
+  };
+
   const viewDocument = async (doc: Document) => {
     setBusyDocument(doc.id);
     setActionError('');
@@ -171,6 +316,9 @@ export default function ApplicationDetailPage() {
   const allowed = VALID_STATUS_TRANSITIONS[app.status] || [];
   const documents = app.documents ?? [];
   const uploadedTypes = new Set(documents.map((doc) => doc.document_type));
+  const confirmedAppointment = appointments.find((a) => a.status === 'confirmed');
+  const isOnsiteFlow =
+    app.status === 'approved' || app.status === 'adoption_completed';
   const profile = app.adopter_profile;
   const primaryImage =
     pet?.images?.find((image) => image.is_primary) ?? pet?.images?.[0] ?? null;
@@ -374,6 +522,155 @@ export default function ApplicationDetailPage() {
           </ul>
         )}
       </SectionCard>
+
+      {isOnsiteFlow && (
+        <SectionCard title="Onsite Adoption Transaction">
+          {!confirmedAppointment ? (
+            <p className="text-sm text-slate-600">
+              The onsite visit date has not been confirmed yet. Confirm the appointment
+              date before recording the onsite transaction.
+            </p>
+          ) : (
+            <>
+              <dl className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                <Detail label="Adopter" value={app.adopter_name || app.adopter_email} />
+                <Detail label="Pet" value={app.pet_name} />
+                <Detail
+                  label="Confirmed appointment"
+                  value={formatDate(confirmedAppointment.requested_date)}
+                />
+              </dl>
+
+              <p className="mb-5 text-sm text-slate-700">
+                Adoption Fee{' '}
+                <span className="font-semibold text-slate-900">₱{ADOPTION_FEE}</span>
+              </p>
+
+              {app.status === 'approved' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+                    <Select
+                      label="Payment Method"
+                      value={payMethod}
+                      onChange={(e) => setPayMethod(e.target.value)}
+                      options={PAYMENT_METHODS}
+                    />
+                    <Select
+                      label="Payment Status"
+                      value={payStatus}
+                      onChange={(e) => setPayStatus(e.target.value)}
+                      options={[
+                        { value: '', label: 'Select the recorded status' },
+                        ...PAYMENT_STATUSES,
+                      ]}
+                    />
+                    <Input
+                      label="Payment Date"
+                      type="date"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                    />
+                    <Input
+                      label="Reference / OR No. (optional)"
+                      value={payReference}
+                      onChange={(e) => setPayReference(e.target.value)}
+                      placeholder="e.g. OR-2026-0001"
+                    />
+                  </div>
+                  <div className="mt-4 max-w-2xl">
+                    <Textarea
+                      label="Staff Notes (optional)"
+                      value={onsiteNotes}
+                      onChange={(e) => setOnsiteNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Internal notes about the onsite transaction (not visible to the adopter)"
+                    />
+                  </div>
+                </>
+              )}
+
+              {onsiteError && (
+                <p role="alert" className="mt-4 text-sm text-red-600">
+                  {onsiteError}
+                </p>
+              )}
+              {onsiteNotice && (
+                <div
+                  role="status"
+                  className="mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+                >
+                  {onsiteNotice}
+                </div>
+              )}
+
+              {app.status === 'approved' && (
+                <div className="mt-5 flex flex-wrap items-center gap-3">
+                  <Button onClick={recordPayment} disabled={paymentBusy || completionBusy}>
+                    {paymentBusy ? 'Saving…' : 'Record Payment'}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={completeAdoption}
+                    disabled={completionBusy || paymentBusy || payments.length === 0}
+                  >
+                    {completionBusy ? 'Completing…' : 'Complete Adoption'}
+                  </Button>
+                  {payments.length === 0 && (
+                    <span className="text-xs text-slate-500">
+                      Record the onsite payment before completing the adoption.
+                    </span>
+                  )}
+                </div>
+              )}
+              {app.status === 'approved' && (
+                <p className="mt-3 text-xs text-slate-500">
+                  Recording the payment and completing the adoption are separate steps.
+                  Use Complete Adoption only once the onsite process is finished.
+                </p>
+              )}
+
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-slate-700 mb-2">
+                  Recorded onsite payments
+                </h4>
+                {payments.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    No onsite payment has been recorded for this application yet.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-slate-200 border-t border-slate-200">
+                    {payments.map((payment) => (
+                      <li
+                        key={payment.id}
+                        className="py-3 flex flex-wrap items-center justify-between gap-2"
+                      >
+                        <span className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
+                          <span className="font-medium">
+                            ₱
+                            {parseFloat(payment.amount).toLocaleString('en-PH', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                          <span className="text-slate-600">{humanise(payment.method)}</span>
+                          <StatusBadge status={payment.status} />
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {payment.payment_date
+                            ? `Paid ${formatDate(payment.payment_date)}`
+                            : `Recorded ${formatDateTime(payment.created_at)}`}
+                          {payment.reference_number
+                            ? ` · Ref ${payment.reference_number}`
+                            : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+        </SectionCard>
+      )}
 
       <SectionCard title="Internal staff notes">
         <div className="flex items-center justify-between mb-2">

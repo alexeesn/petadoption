@@ -13,7 +13,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         fields = [
             "id", "application", "application_id", "adopter_email", "adoption",
             "package", "package_name", "amount", "method", "status",
-            "receipt_number", "reference_number", "notes", "processed_by",
+            "payment_date", "receipt_number", "reference_number", "notes", "processed_by",
             "processed_by_email", "created_at", "updated_at",
         ]
         read_only_fields = [
