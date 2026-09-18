@@ -12,9 +12,13 @@ export default function PetDetailPage() {
   const [pet, setPet] = useState<Pet | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  // Index of the photo shown in the main gallery frame. Lets the adopter
+  // view EVERY photo of the pet, not just the first one.
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
 
   useEffect(() => {
     if (!id) return
+    setActiveImageIndex(0)
     fetchPet(id)
       .then(setPet)
       .catch(() => setError(true))
@@ -25,7 +29,11 @@ export default function PetDetailPage() {
   if (error) return <ErrorState message="Could not load this pet." />
   if (!pet) return null
 
-  const mainImage = pet.images?.find((i) => i.is_primary) || pet.images?.[0]
+  const images = pet.images ?? []
+  // Guard against an out-of-range index so a stale index can never blank the gallery.
+  const activeIndex = Math.min(activeImageIndex, Math.max(images.length - 1, 0))
+  const activeImage = images[activeIndex]
+  const hasMultiple = images.length > 1
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -34,18 +42,56 @@ export default function PetDetailPage() {
       </Link>
 
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div>
-          <div className="bg-stone-100 rounded-lg overflow-hidden aspect-square">
-            {mainImage?.image ? (
-              <img src={mainImage.image} alt={pet.name} className="w-full h-full object-cover" />
+        <div data-testid="pet-gallery">
+          <div data-testid="pet-gallery-main" className="relative bg-stone-100 rounded-lg overflow-hidden aspect-square">
+            {activeImage?.image ? (
+              <img
+                src={activeImage.image}
+                alt={activeImage.caption || pet.name}
+                className="w-full h-full object-cover"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-7xl" aria-hidden="true">🐾</div>
             )}
+            {hasMultiple && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveImageIndex((activeIndex - 1 + images.length) % images.length)}
+                  aria-label="Previous photo"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 text-stone-700 shadow flex items-center justify-center hover:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveImageIndex((activeIndex + 1) % images.length)}
+                  aria-label="Next photo"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 text-stone-700 shadow flex items-center justify-center hover:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                >
+                  ›
+                </button>
+                <span data-testid="pet-gallery-counter" className="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-stone-900/70 text-white text-xs">
+                  {activeIndex + 1} / {images.length}
+                </span>
+              </>
+            )}
           </div>
-          {pet.images && pet.images.length > 1 && (
-            <div className="mt-3 grid grid-cols-4 gap-2">
-              {pet.images.map((img) => (
-                <img key={img.id} src={img.image} alt={img.caption || pet.name} className="h-20 w-full object-cover rounded-md" />
+          {hasMultiple && (
+            <div data-testid="pet-gallery-thumbs" className="mt-3 grid grid-cols-4 sm:grid-cols-5 gap-2">
+              {images.map((img, idx) => (
+                <button
+                  key={img.id}
+                  type="button"
+                  onClick={() => setActiveImageIndex(idx)}
+                  aria-label={`View photo ${idx + 1} of ${pet.name}`}
+                  aria-current={idx === activeIndex}
+                  className={`h-20 w-full object-cover rounded-md border-2 transition-opacity focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                    idx === activeIndex ? 'border-orange-500 opacity-100' : 'border-transparent opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  <img src={img.image} alt={img.caption || `${pet.name} photo ${idx + 1}`} className="h-full w-full object-cover rounded-md pointer-events-none" />
+                </button>
               ))}
             </div>
           )}

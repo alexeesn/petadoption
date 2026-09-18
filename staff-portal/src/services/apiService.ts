@@ -81,7 +81,10 @@ export const applicationService = {
 export const petService = {
   list: (params?: Record<string, unknown>) => api.get('/pets/', { params }),
   retrieve: (id: string) => api.get(`/pets/${id}/`),
-  create: (data: Record<string, unknown>) => api.post('/pets/', data),
+  // FormData uploads must send multipart; the shared axios instance defaults
+  // to application/json, which would JSON-stringify the FormData in axios 1.x.
+  create: (data: Record<string, unknown> | FormData) =>
+    api.post('/pets/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
   update: (id: string, data: Record<string, unknown>) => api.put(`/pets/${id}/`, data),
   remove: (id: string) => api.delete(`/pets/${id}/`),
 };

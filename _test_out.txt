@@ -1,0 +1,2 @@
+Found 328 test(s).
+Type 'yes' if you would like to try deleting the test database 'test_pam_db', or 'no' to cancel: 
