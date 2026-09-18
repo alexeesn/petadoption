@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchPet } from '../services/apiService'
 import type { Pet } from '../types'
-import { formatCurrency, capitalize } from '../utils/format'
+import { formatCurrency, capitalize, formatPetAge, formatDate } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
 import { useAuth } from '../context/AuthContext'
 
@@ -105,7 +105,7 @@ export default function PetDetailPage() {
             </span>
           </div>
           <p className="mt-2 text-stone-500">
-            {capitalize(pet.species)} · {pet.breed || 'Mixed'} · {pet.age_months} months
+            {capitalize(pet.species)} · {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years)}
           </p>
 
           <div className="mt-6 space-y-3 border-t border-stone-100 pt-6">
@@ -113,6 +113,7 @@ export default function PetDetailPage() {
             <InfoRow label="Size" value={pet.size ? capitalize(pet.size) : '—'} />
             {pet.weight_kg && <InfoRow label="Weight" value={`${pet.weight_kg} kg`} />}
             <InfoRow label="Color" value={pet.color || '—'} />
+            <InfoRow label="At the center since" value={pet.arrival_date ? formatDate(pet.arrival_date) : '—'} />
             <InfoRow label="Vaccinated" value={pet.is_vaccinated ? 'Yes' : 'No'} />
             <InfoRow label="Neutered" value={pet.is_neutered ? 'Yes' : 'No'} />
             <InfoRow label="Adoption fee" value={pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free'} />

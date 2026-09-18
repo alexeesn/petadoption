@@ -39,7 +39,7 @@ class AppointmentWorkflowTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="pending")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="pending")
         self.adopter = self.create_user(email="adopter@example.com")
         self.staff = self.create_staff(email="staff@example.com")
         self.application = Application.objects.create(
@@ -75,7 +75,7 @@ class AppointmentWorkflowTests(BaseAPITestCase):
         )
 
     def test_unapproved_application_cannot_request_appointment(self):
-        other_pet = Pet.objects.create(name="Rex", species="dog", age_months=24)
+        other_pet = Pet.objects.create(name="Rex", species="dog", age_years=2)
         submitted = Application.objects.create(
             adopter=self.adopter, pet=other_pet, status="submitted"
         )
@@ -85,7 +85,7 @@ class AppointmentWorkflowTests(BaseAPITestCase):
 
     def test_adopter_cannot_request_for_another_adopters_application(self):
         other_adopter = self.create_user(email="other@example.com")
-        other_pet = Pet.objects.create(name="Milo", species="cat", age_months=8)
+        other_pet = Pet.objects.create(name="Milo", species="cat", age_years=0)
         other_application = Application.objects.create(
             adopter=other_adopter, pet=other_pet, status="approved"
         )
@@ -242,7 +242,7 @@ class AppointmentWorkflowTests(BaseAPITestCase):
 
     def test_adopter_only_sees_own_appointments(self):
         other_adopter = self.create_user(email="other@example.com")
-        other_pet = Pet.objects.create(name="Milo", species="cat", age_months=8)
+        other_pet = Pet.objects.create(name="Milo", species="cat", age_years=0)
         other_application = Application.objects.create(
             adopter=other_adopter, pet=other_pet, status="approved"
         )
@@ -285,7 +285,7 @@ class AppointmentWorkflowTests(BaseAPITestCase):
     # ----- application approval is a separate decision --------------------
 
     def test_approving_an_application_does_not_create_an_appointment(self):
-        pet = Pet.objects.create(name="Luna", species="cat", age_months=18, status="available")
+        pet = Pet.objects.create(name="Luna", species="cat", age_years=1, status="available")
         application = Application.objects.create(
             adopter=self.adopter, pet=pet, status="submitted"
         )
@@ -303,7 +303,7 @@ class AppointmentDecisionEmailTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Coco", species="dog", age_months=10, status="pending")
+        self.pet = Pet.objects.create(name="Coco", species="dog", age_years=0, status="pending")
         self.adopter = self.create_user(email="emailer@example.com")
         self.staff = self.create_staff(email="reviewer@example.com")
         self.application = Application.objects.create(
@@ -372,7 +372,7 @@ class AppointmentDecisionEmailTests(BaseAPITestCase):
 
         # A different requested date must produce a different body (proves the
         # date is read from the appointment row, not hardcoded).
-        other_pet = Pet.objects.create(name="Nala", species="cat", age_months=20, status="pending")
+        other_pet = Pet.objects.create(name="Nala", species="cat", age_years=1, status="pending")
         other_application = Application.objects.create(
             adopter=self.adopter, pet=other_pet, status="approved"
         )
@@ -472,7 +472,7 @@ class AppointmentDecisionEmailTests(BaseAPITestCase):
     # ----- unrelated statuses do not trigger appointment emails -----------
 
     def test_application_status_change_does_not_send_appointment_email(self):
-        pet = Pet.objects.create(name="Nala", species="cat", age_months=20, status="available")
+        pet = Pet.objects.create(name="Nala", species="cat", age_years=1, status="available")
         application = Application.objects.create(
             adopter=self.adopter, pet=pet, status="submitted"
         )

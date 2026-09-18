@@ -18,7 +18,7 @@ class PaymentRulesTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.adopter = self.create_user(email="adopter@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
         self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="approved")
@@ -78,7 +78,7 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
     def setUp(self):
         super().setUp()
         self.pet = Pet.objects.create(
-            name="Buddy", species="dog", age_months=12, status="pending"
+            name="Buddy", species="dog", age_years=1, status="pending"
         )
         self.adopter = self.create_user(email="adopter@example.com")
         self.staff = self.create_staff(email="staff@example.com")
@@ -147,7 +147,7 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.assertEqual(AdoptionRecord.objects.count(), 0)
 
     def test_payment_list_can_be_filtered_by_application(self):
-        other_pet = Pet.objects.create(name="Rex", species="dog", age_months=24)
+        other_pet = Pet.objects.create(name="Rex", species="dog", age_years=2)
         other_app = Application.objects.create(
             adopter=self.adopter, pet=other_pet, status="approved"
         )
@@ -196,7 +196,7 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.assertEqual(AdoptionRecord.objects.count(), 0)
 
     def test_unapproved_application_cannot_be_completed(self):
-        other_pet = Pet.objects.create(name="Nala", species="cat", age_months=20)
+        other_pet = Pet.objects.create(name="Nala", species="cat", age_years=1)
         submitted = Application.objects.create(
             adopter=self.adopter, pet=other_pet, status="submitted"
         )

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { createApplication, fetchAdopterProfile, fetchPet } from '../services/apiService'
 import type { Application, AdopterProfile, Pet } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
-import { capitalize, getStatusColor } from '../utils/format'
+import { capitalize, getStatusColor, formatPetAge } from '../utils/format'
 
 interface ApplicationForm {
   why_adopt: string
@@ -356,8 +356,7 @@ export default function NewApplicationPage() {
           <div>
             <p className="font-medium text-stone-900">{pet.name}</p>
             <p className="text-sm text-stone-600">
-              {pet.species} &middot; {pet.breed || 'Mixed breed'} &middot; {pet.age_months} month
-              {pet.age_months === 1 ? '' : 's'}
+              {pet.species} &middot; {pet.breed || 'Mixed breed'} &middot; {formatPetAge(pet.age_years)}
             </p>
           </div>
         </div>

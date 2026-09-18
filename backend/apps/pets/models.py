@@ -1,5 +1,11 @@
 import uuid
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+# A shelter pet is never realistically older than this; used to validate the
+# staff-entered age (in years) on the model and through the API serializer.
+MAX_PET_AGE_YEARS = 40
 
 
 class Pet(models.Model):
@@ -35,12 +41,18 @@ class Pet(models.Model):
     name = models.CharField(max_length=150)
     species = models.CharField(max_length=20, choices=Species.choices)
     breed = models.CharField(max_length=150, blank=True)
-    age_months = models.PositiveIntegerField(help_text="Age in months")
+    age_years = models.PositiveIntegerField(
+        help_text="Age in years",
+        validators=[MinValueValidator(0), MaxValueValidator(MAX_PET_AGE_YEARS)],
+    )
     gender = models.CharField(max_length=10, choices=Gender.choices, default=Gender.UNKNOWN)
     size = models.CharField(max_length=15, choices=Size.choices, default=Size.MEDIUM)
     weight_kg = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
     color = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
+    arrival_date = models.DateField(
+        null=True, blank=True, help_text="Date the pet arrived at the adoption center"
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.AVAILABLE)
     is_vaccinated = models.BooleanField(default=False)
     is_neutered = models.BooleanField(default=False)

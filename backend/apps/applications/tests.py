@@ -13,7 +13,7 @@ class ApplicationTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.adopter = self.create_user(email="adopter1@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
 
@@ -371,7 +371,7 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Rex", species="dog", age_months=24, status="available")
+        self.pet = Pet.objects.create(name="Rex", species="dog", age_years=2, status="available")
         self.adopter = self.create_user(
             email="review-adopter@example.com", first_name="Ada", last_name="Lovelace"
         )
@@ -498,7 +498,7 @@ class ApprovalEmailTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Rex", species="dog", age_months=24, status="available")
+        self.pet = Pet.objects.create(name="Rex", species="dog", age_years=2, status="available")
         self.adopter = self.create_user(
             email="adopter@example.com", first_name="Ada", last_name="Lovelace"
         )
@@ -594,7 +594,7 @@ class ProfileCompletenessTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.adopter = self.create_user(email="profile-gate@example.com")
 
     def incomplete_profile(self):

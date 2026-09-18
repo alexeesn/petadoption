@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { fetchPets } from '../services/apiService'
 import type { Pet } from '../types'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, formatPetAge } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
 
 export default function HomePage() {
@@ -91,7 +91,7 @@ export default function HomePage() {
                   <span className="text-xs text-orange-600">{pet.species}</span>
                 </div>
                 <p className="mt-1 text-sm text-stone-500">
-                  {pet.breed || 'Mixed breed'} · {pet.age_months} mo
+                  {pet.breed || 'Mixed breed'} · {formatPetAge(pet.age_years)}
                 </p>
                 <div className="mt-3 pt-3 border-t border-stone-100 flex items-center justify-between">
                   <span className="text-sm font-medium text-orange-600">

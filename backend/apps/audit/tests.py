@@ -12,7 +12,7 @@ class AuditTests(BaseAPITestCase):
         self.admin = self.create_admin(email="admin@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
         self.adopter = self.create_user(email="adopter@example.com")
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="submitted")
 
     def test_admin_can_list_audit_logs(self):

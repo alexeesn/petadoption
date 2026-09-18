@@ -58,7 +58,7 @@ SAMPLE_PETS_1 = [
         "name": "Max",
         "species": Pet.Species.DOG,
         "breed": "Golden Retriever",
-        "age_months": 14,
+        "age_years": 1,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.LARGE,
         "weight_kg": 28.5,
@@ -74,7 +74,7 @@ SAMPLE_PETS_1 = [
         "name": "Luna",
         "species": Pet.Species.CAT,
         "breed": "Persian Longhair",
-        "age_months": 8,
+        "age_years": 0,
         "gender": Pet.Gender.FEMALE,
         "size": Pet.Size.SMALL,
         "weight_kg": 3.2,
@@ -90,7 +90,7 @@ SAMPLE_PETS_1 = [
         "name": "Milo",
         "species": Pet.Species.DOG,
         "breed": "Beagle",
-        "age_months": 24,
+        "age_years": 2,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.MEDIUM,
         "weight_kg": 11.0,
@@ -106,7 +106,7 @@ SAMPLE_PETS_1 = [
         "name": "Bella",
         "species": Pet.Species.DOG,
         "breed": "Siberian Husky",
-        "age_months": 18,
+        "age_years": 1,
         "gender": Pet.Gender.FEMALE,
         "size": Pet.Size.LARGE,
         "weight_kg": 22.0,
@@ -122,7 +122,7 @@ SAMPLE_PETS_1 = [
         "name": "Oliver",
         "species": Pet.Species.CAT,
         "breed": "Maine Coon Mix",
-        "age_months": 36,
+        "age_years": 3,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.MEDIUM,
         "weight_kg": 6.8,
@@ -138,7 +138,7 @@ SAMPLE_PETS_1 = [
         "name": "Daisy",
         "species": Pet.Species.DOG,
         "breed": "Pembroke Welsh Corgi",
-        "age_months": 12,
+        "age_years": 1,
         "gender": Pet.Gender.FEMALE,
         "size": Pet.Size.SMALL,
         "weight_kg": 10.2,
@@ -157,7 +157,7 @@ SAMPLE_PETS_2 = [
         "name": "Charlie",
         "species": Pet.Species.DOG,
         "breed": "Aspin / Native Mix",
-        "age_months": 30,
+        "age_years": 2,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.MEDIUM,
         "weight_kg": 14.5,
@@ -173,7 +173,7 @@ SAMPLE_PETS_2 = [
         "name": "Cleo",
         "species": Pet.Species.CAT,
         "breed": "Siamese",
-        "age_months": 15,
+        "age_years": 1,
         "gender": Pet.Gender.FEMALE,
         "size": Pet.Size.SMALL,
         "weight_kg": 3.6,
@@ -189,7 +189,7 @@ SAMPLE_PETS_2 = [
         "name": "Barnaby",
         "species": Pet.Species.RABBIT,
         "breed": "Holland Lop",
-        "age_months": 10,
+        "age_years": 0,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.SMALL,
         "weight_kg": 1.8,
@@ -205,7 +205,7 @@ SAMPLE_PETS_2 = [
         "name": "Pip",
         "species": Pet.Species.BIRD,
         "breed": "Cockatiel",
-        "age_months": 20,
+        "age_years": 1,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.SMALL,
         "weight_kg": 0.1,
@@ -221,7 +221,7 @@ SAMPLE_PETS_2 = [
         "name": "Rocky",
         "species": Pet.Species.DOG,
         "breed": "German Shepherd",
-        "age_months": 48,
+        "age_years": 4,
         "gender": Pet.Gender.MALE,
         "size": Pet.Size.LARGE,
         "weight_kg": 34.0,
@@ -237,7 +237,7 @@ SAMPLE_PETS_2 = [
         "name": "Coco",
         "species": Pet.Species.CAT,
         "breed": "Domestic Shorthair",
-        "age_months": 6,
+        "age_years": 0,
         "gender": Pet.Gender.FEMALE,
         "size": Pet.Size.SMALL,
         "weight_kg": 2.2,
@@ -313,10 +313,12 @@ class Command(BaseCommand):
         today = timezone.now().date()
 
         self.stdout.write(self.style.NOTICE("Seeding pets, images, and health records..."))
-        for pet_info in SAMPLE_PETS:
+        for index, pet_info in enumerate(SAMPLE_PETS):
             pet_dict = dict(pet_info)
             bg_color = pet_dict.pop("bg_color")
             name = pet_dict["name"]
+            # Give each seeded pet a believable intake date at the center.
+            pet_dict.setdefault("arrival_date", today - timedelta(days=21 + 14 * index))
 
             pet, created = Pet.objects.update_or_create(
                 name=name,

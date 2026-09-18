@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { fetchPets } from '../services/apiService'
 import type { Pet } from '../types'
-import { formatCurrency, capitalize } from '../utils/format'
+import { formatCurrency, capitalize, formatPetAge } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
 
 const speciesOptions = ['dog', 'cat', 'bird', 'rabbit', 'other']
@@ -119,7 +119,7 @@ export default function PetsPage() {
                   <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">{capitalize(pet.species)}</span>
                 </div>
                 <p className="mt-1 text-sm text-stone-500">
-                  {pet.breed || 'Mixed'} · {pet.age_months} mo · {capitalize(pet.gender)}
+                  {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years)} · {capitalize(pet.gender)}
                 </p>
                 <p className="mt-1 text-sm text-stone-500">
                   {pet.size && capitalize(pet.size)}

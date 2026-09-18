@@ -9,7 +9,7 @@ class PetImageInline(admin.TabularInline):
 
 @admin.register(Pet)
 class PetAdmin(admin.ModelAdmin):
-    list_display = ("name", "species", "breed", "status", "age_months", "created_at")
+    list_display = ("name", "species", "breed", "status", "age_years", "arrival_date", "created_at")
     list_filter = ("status", "species", "gender", "size")
     search_fields = ("name", "breed", "description")
     inlines = [PetImageInline]

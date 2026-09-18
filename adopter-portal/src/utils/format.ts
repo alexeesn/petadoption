@@ -39,3 +39,13 @@ export function getStatusColor(status: string): string {
 export function capitalize(str: string): string {
   return str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
+
+/**
+ * Pet age is stored as whole years. 0 means the pet is younger than a year,
+ * which is displayed as "Under 1 year" rather than a misleading "0 years".
+ */
+export function formatPetAge(years?: number | null): string {
+  if (years === undefined || years === null) return ''
+  if (years <= 0) return 'Under 1 year'
+  return years === 1 ? '1 year' : `${years} years`
+}

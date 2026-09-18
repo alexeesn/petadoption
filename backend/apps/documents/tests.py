@@ -14,7 +14,7 @@ class DocumentTests(BaseAPITestCase):
         self.adopter = self.create_user(email="adopter@example.com")
         self.other_adopter = self.create_user(email="other@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="submitted")
 
     def make_pdf(self, name="doc.pdf", content=b"%PDF-1.4 test"):
@@ -35,7 +35,7 @@ class DocumentTests(BaseAPITestCase):
     def test_adopter_cannot_upload_to_other_application(self):
         # Use a different pet for the other adopter's application to avoid the
         # one-active-application-per-pet constraint.
-        other_pet = Pet.objects.create(name="Rex", species="dog", age_months=24, status="available")
+        other_pet = Pet.objects.create(name="Rex", species="dog", age_years=2, status="available")
         other_app = Application.objects.create(
             adopter=self.other_adopter, pet=other_pet, status="submitted"
         )

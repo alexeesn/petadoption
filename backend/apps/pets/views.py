@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Pet, PetImage
 from .serializers import PetSerializer, PetListSerializer, PetImageSerializer
@@ -19,7 +20,7 @@ class PetViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "species", "gender", "size", "is_vaccinated", "is_neutered"]
     search_fields = ["name", "breed", "description"]
-    ordering_fields = ["name", "age_months", "created_at", "adoption_fee"]
+    ordering_fields = ["name", "age_years", "created_at", "adoption_fee"]
     ordering = ["-created_at"]
 
     def get_permissions(self):
@@ -67,13 +68,39 @@ class PetViewSet(viewsets.ModelViewSet):
 
 
 class PetImageViewSet(viewsets.ModelViewSet):
-    """CRUD for pet images. Staff only."""
+    """CRUD for the images of one pet. Staff only.
+
+    This is the existing photo architecture reused by the Staff Portal
+    "Edit Pet" screen: adding a photo POSTs a single file here, while removing
+    a photo DELETEs only that image, so untouched photos are never affected.
+
+    The first image of a pet is always its primary image, and deleting the
+    primary image promotes the next remaining photo so a pet that still has
+    photos is never left without a primary one.
+    """
     serializer_class = PetImageSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
     parser_classes = [MultiPartParser, FormParser]
+
+    def get_pet(self):
+        return get_object_or_404(Pet, pk=self.kwargs.get("pet_pk"))
 
     def get_queryset(self):
         return PetImage.objects.filter(pet_id=self.kwargs.get("pet_pk"))
 
     def perform_create(self, serializer):
-        serializer.save(pet_id=self.kwargs.get("pet_pk"))
+        pet = self.get_pet()
+        is_primary = not PetImage.objects.filter(pet=pet).exists()
+        serializer.save(pet=pet, is_primary=is_primary)
+
+    def perform_destroy(self, instance):
+        pet_id = instance.pet_id
+        was_primary = instance.is_primary
+        instance.delete()
+        if was_primary:
+            next_image = (
+                PetImage.objects.filter(pet_id=pet_id).order_by("created_at").first()
+            )
+            if next_image:
+                next_image.is_primary = True
+                next_image.save(update_fields=["is_primary"])

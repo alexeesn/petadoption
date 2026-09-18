@@ -26,11 +26,12 @@ export interface Pet {
   name: string
   species: string
   breed: string
-  age_months: number
+  age_years: number
   gender: string
   size: string
   color: string
   description: string
+  arrival_date?: string | null
   status: string
   is_vaccinated: boolean
   is_neutered: boolean

@@ -1,0 +1,99 @@
+Creating test database for alias 'default'...
+Got an error creating the test database: database "test_pam_db" already exists
+
+Found 22 test(s).
+Type 'yes' if you would like to try deleting the test database 'test_pam_db', or 'no' to cancel: Traceback (most recent call last):
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\utils.py", line 103, in _execute
+    return self.cursor.execute(sql)
+           ~~~~~~~~~~~~~~~~~~~^^^^^
+psycopg2.errors.DuplicateDatabase: database "test_pam_db" already exists
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\base\creation.py", line 229, in _create_test_db
+    self._execute_create_test_db(cursor, test_db_params, keepdb)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\postgresql\creation.py", line 46, in _execute_create_test_db
+    super()._execute_create_test_db(cursor, parameters, keepdb)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\base\creation.py", line 215, in _execute_create_test_db
+    cursor.execute("CREATE DATABASE %(dbname)s %(suffix)s" % parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\utils.py", line 94, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\utils.py", line 103, in _execute
+    return self.cursor.execute(sql)
+           ~~~~~~~~~~~~~~~~~~~^^^^^
+django.db.utils.ProgrammingError: database "test_pam_db" already exists
+
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\backend\manage.py", line 22, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\backend\manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\core\management\__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\core\management\__init__.py", line 437, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\core\management\commands\test.py", line 24, in run_from_argv
+    super().run_from_argv(argv)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\core\management\base.py", line 422, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\core\management\base.py", line 466, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\core\management\commands\test.py", line 63, in handle
+    failures = test_runner.run_tests(test_labels)
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\test\runner.py", line 1126, in run_tests
+    old_config = self.setup_databases(
+        aliases=databases,
+        serialized_aliases=suite.serialized_aliases,
+    )
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\test\runner.py", line 1025, in setup_databases
+    return _setup_databases(
+        self.verbosity,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\test\utils.py", line 220, in setup_databases
+    connection.creation.create_test_db(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        verbosity=verbosity,
+        ^^^^^^^^^^^^^^^^^^^^
+        autoclobber=not interactive,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        keepdb=keepdb,
+        ^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\base\creation.py", line 75, in create_test_db
+    self._create_test_db(verbosity, autoclobber, keepdb)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\venv\Lib\site-packages\django\db\backends\base\creation.py", line 238, in _create_test_db
+    confirm = input(
+        "Type 'yes' if you would like to try deleting the test "
+        "database '%s', or 'no' to cancel: " % test_database_name
+    )
+EOFError: EOF when reading a line

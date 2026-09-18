@@ -12,7 +12,7 @@ class ReportTests(BaseAPITestCase):
         super().setUp()
         self.adopter = self.create_user(email="adopter@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="adopted")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="adopted")
 
     def test_staff_can_access_pet_inventory_report(self):
         self.authenticate(self.staff)

@@ -85,8 +85,20 @@ export const petService = {
   // to application/json, which would JSON-stringify the FormData in axios 1.x.
   create: (data: Record<string, unknown> | FormData) =>
     api.post('/pets/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
-  update: (id: string, data: Record<string, unknown>) => api.put(`/pets/${id}/`, data),
+  // PATCH so editing only the fields sent by the Edit Pet form leaves every
+  // other pet field (status, weight, ...) untouched. Photos live on their own
+  // endpoint and are therefore never affected by a pet information update.
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/pets/${id}/`, data),
   remove: (id: string) => api.delete(`/pets/${id}/`),
+  // Existing pet photo architecture: one file per request. Adding or removing
+  // one photo never touches the pet's other photos.
+  addImage: (petId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('image', file);
+    return api.post(`/pets/${petId}/images/`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  removeImage: (petId: string, imageId: string) =>
+    api.delete(`/pets/${petId}/images/${imageId}/`),
 };
 
 // ----- Adopters -----

@@ -109,7 +109,7 @@ class ProfileCompletenessTests(BaseAPITestCase):
         # Staff/admin act on applications through this endpoint and must not
         # be blocked by the adopter profile gate.
         from apps.pets.models import Pet
-        pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         staff = self.create_staff(email="completeness-staff2@example.com")
         self.authenticate(staff)
         resp = self.client.post("/api/applications/", {

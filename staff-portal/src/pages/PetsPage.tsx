@@ -2,20 +2,54 @@ import { useEffect, useRef, useState } from 'react';
 import { Card, Loading, ErrorMessage, Empty, Button, Input, Select } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { petService } from '../services/apiService';
-import type { Pet } from '../types';
+import { formatPetAge } from '../utils/format';
+import type { Pet, PetImage } from '../types';
 
 const emptyForm = {
   name: '',
   species: 'dog',
   breed: '',
-  age_months: '',
+  age_years: '',
   gender: 'unknown',
   size: 'medium',
   color: '',
   description: '',
+  arrival_date: '',
   is_vaccinated: false,
   is_neutered: false,
 };
+
+const MAX_AGE_YEARS = 40;
+
+/** Maps a pet record to the editable form fields. */
+function petToForm(pet: Pet) {
+  return {
+    name: pet.name,
+    species: pet.species,
+    breed: pet.breed,
+    age_years: String(pet.age_years),
+    gender: pet.gender,
+    size: pet.size,
+    color: pet.color,
+    description: pet.description,
+    arrival_date: pet.arrival_date ?? '',
+    is_vaccinated: pet.is_vaccinated,
+    is_neutered: pet.is_neutered,
+  };
+}
+
+/** Extracts a readable message from a DRF validation error response. */
+function describeSaveError(err: unknown): string {
+  const data = (err as { response?: { data?: unknown } })?.response?.data;
+  if (data && typeof data === 'object') {
+    const messages = Object.values(data as Record<string, unknown>).map((value) =>
+      Array.isArray(value) ? value.map(String).join(' ') : String(value)
+    );
+    const joined = messages.join(' ').trim();
+    if (joined) return joined;
+  }
+  return 'Failed to save pet.';
+}
 
 export default function PetsPage() {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -27,8 +61,15 @@ export default function PetsPage() {
   const [adoptionFee, setAdoptionFee] = useState('');
   // Every selected image is kept, so 2, 3, 4+ files can be uploaded at once.
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
+  // Photos already saved for the pet being edited, and the ones staff explicitly
+  // marked for removal. An existing photo is only deleted through
+  // `removedPhotos`, never because it was absent from a new file selection.
+  const [existingPhotos, setExistingPhotos] = useState<PetImage[]>([]);
+  const [removedPhotos, setRemovedPhotos] = useState<PetImage[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [photoError, setPhotoError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const [saving, setSaving] = useState(false);
   const photosRef = useRef(photos);
   photosRef.current = photos;
 
@@ -62,29 +103,38 @@ export default function PetsPage() {
     setForm({ ...emptyForm });
     setAdoptionFee('');
     clearPhotos();
+    setExistingPhotos([]);
+    setRemovedPhotos([]);
     setPhotoError('');
+    setSubmitError('');
     setShowForm(true);
   };
 
+  // The list endpoint deliberately omits photos, so the full pet record is
+  // fetched here to make every existing photo visible while editing.
   const openEdit = (pet: Pet) => {
     setEditing(pet);
-    setForm({
-      name: pet.name,
-      species: pet.species,
-      breed: pet.breed,
-      age_months: String(pet.age_months),
-      gender: pet.gender,
-      size: pet.size,
-      color: pet.color,
-      description: pet.description,
-      is_vaccinated: pet.is_vaccinated,
-      is_neutered: pet.is_neutered,
-    });
-    // Edit keeps sending the existing fee so PUT behavior is unchanged.
+    setForm(petToForm(pet));
     setAdoptionFee(String(pet.adoption_fee));
     clearPhotos();
+    setExistingPhotos([]);
+    setRemovedPhotos([]);
     setPhotoError('');
+    setSubmitError('');
     setShowForm(true);
+    setLoadingPhotos(true);
+    petService
+      .retrieve(pet.id)
+      .then((res) => {
+        const detail = res.data as Pet;
+        setForm(petToForm(detail));
+        setAdoptionFee(String(detail.adoption_fee));
+        setExistingPhotos(detail.images ?? []);
+      })
+      .catch(() =>
+        setPhotoError('Existing photos could not be loaded. Close and reopen Edit Pet to retry.')
+      )
+      .finally(() => setLoadingPhotos(false));
   };
 
   // Appends the newly picked files to the existing selection instead of
@@ -115,50 +165,73 @@ export default function PetsPage() {
     setPhotos(photosRef.current.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Marks one saved photo for removal. It is deleted only when staff save, so
+  // cancelling the form leaves the pet's photos exactly as they were.
+  const markPhotoForRemoval = (photo: PetImage) => {
+    setExistingPhotos((current) => current.filter((p) => p.id !== photo.id));
+    setRemovedPhotos((current) => [...current, photo]);
+  };
+
+  const undoPhotoRemoval = (photo: PetImage) => {
+    setRemovedPhotos((current) => current.filter((p) => p.id !== photo.id));
+    setExistingPhotos((current) => [...current, photo]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError('');
-    setLoading(true);
-    let request: Promise<unknown>;
-    if (editing) {
-      const payload = {
-        ...form,
-        age_months: Number(form.age_months),
-        adoption_fee: Number(adoptionFee || 0),
-      };
-      request = petService.update(editing.id, payload);
-    } else {
-      // New pet: multipart so the backend can save the uploaded images.
-      const fd = new FormData();
-      fd.append('name', form.name);
-      fd.append('species', form.species);
-      fd.append('breed', form.breed);
-      fd.append('age_months', String(Number(form.age_months)));
-      fd.append('gender', form.gender);
-      fd.append('size', form.size);
-      fd.append('color', form.color);
-      fd.append('description', form.description);
-      fd.append('is_vaccinated', String(form.is_vaccinated));
-      fd.append('is_neutered', String(form.is_neutered));
-      // Every selected image is appended under the same field name so the
-      // backend receives ALL of them for this one pet.
-      photos.forEach(({ file }) => fd.append('images', file));
-      request = petService.create(fd);
+    const ageYears = Number(form.age_years);
+    if (!Number.isInteger(ageYears) || ageYears < 0 || ageYears > MAX_AGE_YEARS) {
+      setSubmitError(`Age must be a whole number of years between 0 and ${MAX_AGE_YEARS}.`);
+      return;
     }
-    request
-      .then(() => {
-        clearPhotos();
-        setShowForm(false);
-        load();
-      })
-      .catch((e: any) => {
-        const data = e.response?.data;
-        const firstError = data
-          ? Object.values(data).flat().map(String).join(' ')
-          : 'Failed to save pet.';
-        setSubmitError(firstError);
-      })
-      .finally(() => setLoading(false));
+    setSaving(true);
+    try {
+      if (editing) {
+        // 1. Update the pet information. Photos live on their own endpoint, so
+        //    this request can never remove a photo.
+        await petService.update(editing.id, {
+          ...form,
+          age_years: ageYears,
+          arrival_date: form.arrival_date || null,
+          adoption_fee: Number(adoptionFee || 0),
+        });
+        // 2. Delete only the photos staff explicitly marked for removal.
+        for (const photo of removedPhotos) {
+          await petService.removeImage(editing.id, photo.id);
+        }
+        // 3. Append the newly selected photos; existing photos stay attached.
+        for (const { file } of photos) {
+          await petService.addImage(editing.id, file);
+        }
+      } else {
+        // New pet: multipart so the backend can save the uploaded images.
+        const fd = new FormData();
+        fd.append('name', form.name);
+        fd.append('species', form.species);
+        fd.append('breed', form.breed);
+        fd.append('age_years', String(ageYears));
+        fd.append('gender', form.gender);
+        fd.append('size', form.size);
+        fd.append('color', form.color);
+        fd.append('description', form.description);
+        if (form.arrival_date) fd.append('arrival_date', form.arrival_date);
+        fd.append('is_vaccinated', String(form.is_vaccinated));
+        fd.append('is_neutered', String(form.is_neutered));
+        // Every selected image is appended under the same field name so the
+        // backend receives ALL of them for this one pet.
+        photos.forEach(({ file }) => fd.append('images', file));
+        await petService.create(fd);
+      }
+      clearPhotos();
+      setRemovedPhotos([]);
+      setShowForm(false);
+      load();
+    } catch (err) {
+      setSubmitError(describeSaveError(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -187,7 +260,7 @@ export default function PetsPage() {
               ]}
             />
             <Input label="Breed" value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} />
-            <Input label="Age (months)" type="number" value={form.age_months} onChange={(e) => setForm({ ...form, age_months: e.target.value })} required />
+            <Input label="Age (years)" type="number" value={form.age_years} onChange={(e) => setForm({ ...form, age_years: e.target.value })} required />
             <Select
               label="Gender"
               value={form.gender}
@@ -210,6 +283,12 @@ export default function PetsPage() {
               ]}
             />
             <Input label="Color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
+            <Input
+              label="Date arrived at the adoption center"
+              type="date"
+              value={form.arrival_date}
+              onChange={(e) => setForm({ ...form, arrival_date: e.target.value })}
+            />
             <div className="md:col-span-2 flex items-center gap-4">
               <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.is_vaccinated} onChange={(e) => setForm({ ...form, is_vaccinated: e.target.checked })} />
@@ -231,6 +310,68 @@ export default function PetsPage() {
             </div>
             <div className="md:col-span-2">
               <label htmlFor="pet-photos" className="block text-sm font-medium text-slate-700 mb-1">Pet Photos</label>
+
+              {editing && (
+                <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-sm font-medium text-slate-700">
+                    Existing photos
+                    {loadingPhotos ? ' (loading…)' : ` (${existingPhotos.length})`}
+                  </p>
+                  {!loadingPhotos && existingPhotos.length === 0 && (
+                    <p className="text-sm text-slate-500 mt-1">This pet has no saved photos.</p>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {existingPhotos.map((photo, idx) => (
+                      <div key={photo.id} className="relative">
+                        <img
+                          src={photo.image}
+                          alt={`Saved photo ${idx + 1} of ${form.name || 'this pet'}`}
+                          className="h-20 w-20 object-cover rounded-md border border-slate-200"
+                        />
+                        {photo.is_primary && (
+                          <span className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[10px] text-center rounded-b-md py-0.5">
+                            Primary
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => markPhotoForRemoval(photo)}
+                          aria-label={`Remove saved photo ${idx + 1}`}
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-slate-900/80 text-white text-xs leading-none hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {removedPhotos.length > 0 && (
+                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-2">
+                      <p className="text-sm text-red-700">
+                        {removedPhotos.length} photo{removedPhotos.length > 1 ? 's' : ''} will be deleted when you save:
+                      </p>
+                      <ul className="mt-1 flex flex-wrap gap-2">
+                        {removedPhotos.map((photo) => (
+                          <li
+                            key={photo.id}
+                            className="flex items-center gap-2 rounded border border-red-200 bg-white px-2 py-1 text-sm"
+                          >
+                            <img src={photo.image} alt="" className="h-8 w-8 object-cover rounded" />
+                            <button
+                              type="button"
+                              onClick={() => undoPhotoRemoval(photo)}
+                              className="text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              Undo
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <input
                 id="pet-photos"
                 type="file"
@@ -244,8 +385,8 @@ export default function PetsPage() {
                 {photos.length > 0 && (
                   <>
                     <p className="text-sm text-slate-600 mt-1">
-                      Selected {photos.length} photo{photos.length > 1 ? 's' : ''}: {photos.map((p) => p.file.name).join(', ')}{' '}
-                      <span className="text-slate-400">— selecting more images adds to this list; the first photo becomes the primary image.</span>
+                      New photos to upload ({photos.length}): {photos.map((p) => p.file.name).join(', ')}{' '}
+                      <span className="text-slate-400">— selecting more images adds to this list instead of replacing it. Saved photos stay attached unless you remove them above.</span>
                     </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {photos.map((p, idx) => (
@@ -255,9 +396,14 @@ export default function PetsPage() {
                           alt={`Selected pet photo ${idx + 1}: ${p.file.name}`}
                           className="h-20 w-20 object-cover rounded-md border border-slate-200"
                         />
-                        {idx === 0 && (
+                        {idx === 0 && existingPhotos.length === 0 && (
                           <span className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[10px] text-center rounded-b-md py-0.5">
                             Primary
+                          </span>
+                        )}
+                        {existingPhotos.length > 0 && (
+                          <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[10px] text-center rounded-b-md py-0.5">
+                            New
                           </span>
                         )}
                         <button
@@ -276,8 +422,8 @@ export default function PetsPage() {
               </div>
             </div>
             <div className="md:col-span-2 flex gap-3">
-              <Button type="submit">{editing ? 'Save Changes' : 'Create Pet'}</Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Pet'}</Button>
+              <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancel</Button>
             </div>
           </form>
         </Card>
@@ -306,7 +452,7 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm font-medium text-slate-900">{pet.name}</td>
                     <td className="px-4 py-3 text-sm text-slate-600 capitalize">{pet.species}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.breed}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{pet.age_months} mo</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">₱{pet.adoption_fee}</td>
                     <td className="px-4 py-3 text-right">

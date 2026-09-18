@@ -1,0 +1,35 @@
+Creating test database for alias 'default' ('test_pam_db')...
+Got an error creating the test database: database "test_pam_db" already exists
+
+Destroying old test database for alias 'default' ('test_pam_db')...
+test_adding_photo_to_unknown_pet_returns_404 (apps.pets.tests.PetEditPhotoTests.test_adding_photo_to_unknown_pet_returns_404) ... ok
+test_adopter_cannot_add_or_remove_pet_photos (apps.pets.tests.PetEditPhotoTests.test_adopter_cannot_add_or_remove_pet_photos) ... ok
+test_cannot_remove_another_pets_photo_through_this_pet (apps.pets.tests.PetEditPhotoTests.test_cannot_remove_another_pets_photo_through_this_pet) ... ok
+test_edit_pet_adds_new_photos_additively (apps.pets.tests.PetEditPhotoTests.test_edit_pet_adds_new_photos_additively)
+Existing photo1+photo2 plus newly added photo3+photo4 = 4 photos. ... ok
+test_edit_pet_information_preserves_existing_photos (apps.pets.tests.PetEditPhotoTests.test_edit_pet_information_preserves_existing_photos)
+Changing ordinary pet fields must never drop the pet's photos. ... ok
+test_edit_pet_removes_only_the_chosen_photo (apps.pets.tests.PetEditPhotoTests.test_edit_pet_removes_only_the_chosen_photo) ... ok
+test_first_photo_added_to_a_photo_less_pet_becomes_primary (apps.pets.tests.PetEditPhotoTests.test_first_photo_added_to_a_photo_less_pet_becomes_primary) ... ok
+test_removing_arrival_date_is_allowed (apps.pets.tests.PetEditPhotoTests.test_removing_arrival_date_is_allowed) ... ok
+test_removing_primary_photo_promotes_the_next_remaining_photo (apps.pets.tests.PetEditPhotoTests.test_removing_primary_photo_promotes_the_next_remaining_photo) ... ok
+test_create_pet_with_one_image (apps.pets.tests.PetImageUploadTests.test_create_pet_with_one_image) ... ok
+test_create_pet_with_three_images (apps.pets.tests.PetImageUploadTests.test_create_pet_with_three_images) ... ok
+test_create_pet_with_two_images (apps.pets.tests.PetImageUploadTests.test_create_pet_with_two_images) ... ok
+test_public_pet_detail_returns_all_images (apps.pets.tests.PetImageUploadTests.test_public_pet_detail_returns_all_images)
+Regression: the adopter-facing pet detail endpoint must return ... ok
+test_adopter_cannot_create_pet (apps.pets.tests.PetTests.test_adopter_cannot_create_pet) ... ok
+test_age_years_is_validated (apps.pets.tests.PetTests.test_age_years_is_validated) ... ok
+test_filter_by_status (apps.pets.tests.PetTests.test_filter_by_status) ... ok
+test_pet_status_change_is_audited (apps.pets.tests.PetTests.test_pet_status_change_is_audited) ... ok
+test_public_can_list_pets (apps.pets.tests.PetTests.test_public_can_list_pets) ... ok
+test_public_can_view_pet_detail (apps.pets.tests.PetTests.test_public_can_view_pet_detail) ... ok
+test_search_pets (apps.pets.tests.PetTests.test_search_pets) ... ok
+test_staff_can_create_pet (apps.pets.tests.PetTests.test_staff_can_create_pet) ... ok
+test_staff_can_update_pet (apps.pets.tests.PetTests.test_staff_can_update_pet) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 25.800s
+
+OK
+Destroying test database for alias 'default' ('test_pam_db')...

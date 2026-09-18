@@ -9,7 +9,7 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.adopter = self.create_user(email="adopter@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
         self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="approved")
@@ -20,7 +20,7 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
     def test_cannot_create_adoption_from_unapproved_application(self):
         # Use a different pet so this second application does not violate the
         # "one active application per adopter+pet" constraint.
-        other_pet = Pet.objects.create(name="Rex", species="dog", age_months=24, status="available")
+        other_pet = Pet.objects.create(name="Rex", species="dog", age_years=2, status="available")
         unapproved_app = Application.objects.create(
             adopter=self.adopter, pet=other_pet, status="submitted"
         )

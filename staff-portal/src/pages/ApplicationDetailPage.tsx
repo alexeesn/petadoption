@@ -20,7 +20,7 @@ import {
   saveDocument,
 } from '../services/apiService';
 import type { Application, Appointment, Document, Payment, Pet } from '../types';
-import { formatDate, formatDateTime, formatFileSize } from '../utils/format';
+import { formatDate, formatDateTime, formatFileSize, formatPetAge } from '../utils/format';
 
 /**
  * Mirrors Application.VALID_TRANSITIONS in
@@ -85,15 +85,6 @@ function todayISO(): string {
 
 function humanise(value: string) {
   return value.replace(/_/g, ' ');
-}
-
-function ageLabel(months?: number) {
-  if (months === undefined || months === null) return '—';
-  const years = Math.floor(months / 12);
-  const rest = months % 12;
-  if (years > 0 && rest > 0) return `${years} yr ${rest} mo`;
-  if (years > 0) return `${years} yr`;
-  return `${months} mo`;
 }
 
 function Detail({ label, value }: { label: string; value?: ReactNode }) {
@@ -425,7 +416,8 @@ export default function ApplicationDetailPage() {
             <Detail label="Name" value={app.pet_name} />
             <Detail label="Species" value={pet?.species ? humanise(pet.species) : ''} />
             <Detail label="Breed" value={pet?.breed} />
-            <Detail label="Age" value={ageLabel(pet?.age_months)} />
+            <Detail label="Age" value={formatPetAge(pet?.age_years)} />
+            <Detail label="Arrived at the center" value={pet?.arrival_date ? formatDate(pet.arrival_date) : ''} />
             <Detail label="Gender" value={pet?.gender ? humanise(pet.gender) : ''} />
             <Detail label="Size" value={pet?.size ? humanise(pet.size) : ''} />
             <Detail label="Color" value={pet?.color} />

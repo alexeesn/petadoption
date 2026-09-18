@@ -10,7 +10,7 @@ class ReviewTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.adopter = self.create_user(email="adopter@example.com")
         self.staff = self.create_staff(email="staff1@example.com")
         self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="submitted")
@@ -93,7 +93,7 @@ class ReviewApprovalEmailTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
-        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_years=1, status="available")
         self.adopter = self.create_user(
             email="adopter@example.com", first_name="Ada", last_name="Lovelace"
         )

@@ -52,7 +52,7 @@ class RBACTestCaseBase(TestCase):
 
         # --- Shared test objects ---
         self.pet = Pet.objects.create(
-            name="Rex", species="dog", age_months=24,
+            name="Rex", species="dog", age_years=2,
             status="available", adoption_fee=0,
         )
         self.package = AdoptionPackage.objects.create(
@@ -192,7 +192,7 @@ class UnauthenticatedAccessTests(RBACTestCaseBase):
             ("POST", "/api/applications/",
              {"pet": str(self.pet.id), "why_adopt": "test"}),
             ("POST", "/api/pets/",
-             {"name": "New", "species": "dog", "age_months": 12}),
+             {"name": "New", "species": "dog", "age_years": 1}),
         ]
         self._unauth()
         for method, url, data in write_endpoints:
@@ -296,7 +296,7 @@ class AdopterBlockedFromStaffEndpointsTests(RBACTestCaseBase):
     # --- Pet write operations ---
     def test_pet_create_denied(self):
         resp = self.client.post("/api/pets/", {
-            "name": "Buddy", "species": "dog", "age_months": 12,
+            "name": "Buddy", "species": "dog", "age_years": 1,
         }, format="json")
         self.assertEqual(resp.status_code, 403)
 
@@ -452,7 +452,7 @@ class AdminAccessTests(RBACTestCaseBase):
 
     def test_pet_create(self):
         resp = self.client.post("/api/pets/", {
-            "name": "AdminPet", "species": "cat", "age_months": 6,
+            "name": "AdminPet", "species": "cat", "age_years": 0,
         }, format="json")
         self.assertEqual(resp.status_code, 201)
 
@@ -551,7 +551,7 @@ class StaffAccessTests(RBACTestCaseBase):
     def test_adoption_create(self):
         # Adoption requires an approved application. Use a fresh pet/application
         # because the base setUp already created an AdoptionRecord for self.app.
-        fresh_pet = Pet.objects.create(name="Lucky", species="dog", age_months=12, status="available")
+        fresh_pet = Pet.objects.create(name="Lucky", species="dog", age_years=1, status="available")
         approved_app = Application.objects.create(
             adopter=self.adopter, pet=fresh_pet, status="approved",
             why_adopt="I love dogs",
@@ -563,7 +563,7 @@ class StaffAccessTests(RBACTestCaseBase):
 
     def test_pet_create(self):
         resp = self.client.post("/api/pets/", {
-            "name": "StaffPet", "species": "bird", "age_months": 3,
+            "name": "StaffPet", "species": "bird", "age_years": 0,
         }, format="json")
         self.assertEqual(resp.status_code, 201)
 
@@ -574,7 +574,7 @@ class StaffAccessTests(RBACTestCaseBase):
         self.assertEqual(resp.status_code, 200)
 
     def test_pet_delete(self):
-        pet2 = Pet.objects.create(name="TempPet", species="cat", age_months=1)
+        pet2 = Pet.objects.create(name="TempPet", species="cat", age_years=0)
         resp = self.client.delete(f"/api/pets/{pet2.id}/")
         self.assertEqual(resp.status_code, 204)
 
@@ -721,7 +721,7 @@ class PetAccessTests(RBACTestCaseBase):
     def test_adopter_cannot_create_pet(self):
         self._auth(self.adopter)
         resp = self.client.post("/api/pets/", {
-            "name": "Nope", "species": "cat", "age_months": 1,
+            "name": "Nope", "species": "cat", "age_years": 0,
         }, format="json")
         self.assertEqual(resp.status_code, 403)
 
