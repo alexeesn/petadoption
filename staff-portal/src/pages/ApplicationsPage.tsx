@@ -55,11 +55,18 @@ export default function ApplicationsPage() {
         <Card><Empty message="No applications found." /></Card>
       ) : (
         <Card>
-          <Table headers={['Pet', 'Adopter', 'Status', 'Submitted', '']}>
+          <Table headers={['Applicant', 'Pet', 'Status', 'Submitted', '']}>
             {apps.map((app) => (
               <tr key={app.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-sm font-medium text-slate-900">{app.pet_name}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">{app.adopter_email}</td>
+                <td className="px-4 py-3 text-sm">
+                  <span className="font-medium text-slate-900">
+                    {app.adopter_name || app.adopter_email}
+                  </span>
+                  {app.adopter_name && (
+                    <span className="block text-xs text-slate-500">{app.adopter_email}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-600">{app.pet_name}</td>
                 <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
                 <td className="px-4 py-3 text-sm text-slate-500">
                   {new Date(app.created_at).toLocaleDateString()}
@@ -69,7 +76,7 @@ export default function ApplicationsPage() {
                     to={`/applications/${app.id}`}
                     className="text-indigo-600 hover:underline text-sm font-medium"
                   >
-                    View
+                    Review
                   </Link>
                 </td>
               </tr>

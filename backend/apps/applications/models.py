@@ -18,9 +18,16 @@ class Application(models.Model):
         ADOPTION_COMPLETED = "adoption_completed", "Adoption Completed"
 
     # Valid status transitions
+    #
+    # A submitted application can move straight to the staff review outcomes
+    # (pending_documents / approved / rejected) so staff can act on it in one
+    # step.  Requiring "submitted -> under_review" first produced dead buttons
+    # in the staff portal (its transition map already offered Reject on a
+    # submitted application, which the API answered with HTTP 400).
+    # "under_review" remains reachable, and no status was removed.
     VALID_TRANSITIONS = {
         "draft": ["submitted", "cancelled"],
-        "submitted": ["under_review", "cancelled"],
+        "submitted": ["under_review", "pending_documents", "approved", "rejected", "cancelled"],
         "under_review": ["pending_documents", "additional_info_requested", "approved", "rejected"],
         "pending_documents": ["under_review", "cancelled"],
         "additional_info_requested": ["under_review", "cancelled"],

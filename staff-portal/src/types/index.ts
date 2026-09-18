@@ -60,6 +60,8 @@ export interface Application {
   id: string;
   adopter: string;
   adopter_email: string;
+  adopter_name?: string;
+  adopter_profile?: AdopterProfile | null;
   pet: string;
   pet_name: string;
   status: string;
@@ -90,6 +92,7 @@ export interface Document {
   file_size: number;
   notes: string;
   uploaded_by?: string;
+  uploaded_by_email?: string;
   download_url?: string;
   created_at: string;
 }

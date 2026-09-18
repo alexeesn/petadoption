@@ -91,8 +91,32 @@ export const adopterService = {
 export const documentService = {
   list: (params?: Record<string, unknown>) => api.get('/documents/', { params }),
   remove: (id: string) => api.delete(`/documents/${id}/`),
-  downloadUrl: (id: string) => `${(import.meta.env.VITE_API_BASE_URL as string) || '/api'}/documents/${id}/download/`,
+  // Documents are private: the file has to be fetched with the auth token, so
+  // a plain <a href="..."> is refused (it cannot send the Authorization
+  // header). Always go through these helpers instead.
+  download: (id: string) => api.get(`/documents/${id}/download/`, { responseType: 'blob' }),
 };
+
+/** Opens a private document in a new tab (browser previews PDFs and images). */
+export async function openDocument(id: string) {
+  const res = await documentService.download(id);
+  const url = URL.createObjectURL(res.data as Blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** Saves a private document to disk using its original filename. */
+export async function saveDocument(id: string, filename: string) {
+  const res = await documentService.download(id);
+  const url = URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'document';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 // ----- Reviews -----
 export const reviewService = {

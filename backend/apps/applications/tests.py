@@ -357,3 +357,133 @@ class ApplicationTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data["documents"]), 2)
         self.assertTrue(all(d["download_url"] for d in resp.data["documents"]))
+class StaffReviewWorkflowTests(BaseAPITestCase):
+    """Staff/Admin review of a submitted application.
+
+    Regression coverage for the staff review step: a submitted application
+    that already carries its documents must be reviewable in one action
+    (approve / reject / request missing documents), and the staff review page
+    must receive the applicant information it renders.  All assertions below
+    go through the real HTTP endpoints, not the model/serializer layer.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Rex", species="dog", age_months=24, status="available")
+        self.adopter = self.create_user(
+            email="review-adopter@example.com", first_name="Ada", last_name="Lovelace"
+        )
+        self.staff = self.create_staff(email="review-staff@example.com")
+        profile = self.adopter.adopter_profile
+        profile.phone_number = "+63 900 000 0000"
+        profile.city = "Cebu City"
+        profile.save(update_fields=["phone_number", "city"])
+
+    def make_pdf(self, name="doc.pdf"):
+        return SimpleUploadedFile(name, b"%PDF-1.4 test", content_type="application/pdf")
+
+    def submit_with_documents(self):
+        """Adopter submits the application together with the required documents."""
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/applications/", {
+            "pet": str(self.pet.id),
+            "why_adopt": "I have a large fenced garden.",
+            "living_situation": "Own house with fenced yard.",
+            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
+            "document_types": ["identification", "proof_of_address"],
+        }, format="multipart")
+        self.assertEqual(resp.status_code, 201)
+        return Application.objects.get(pk=resp.data["id"])
+
+    def review(self, app, status_value, **extra):
+        """Staff calls the review endpoint (POST /applications/<id>/update-status/)."""
+        self.authenticate(self.staff)
+        return self.client.post(
+            f"/api/applications/{app.id}/update-status/",
+            {"status": status_value, **extra},
+        )
+
+    def test_staff_can_approve_submitted_application(self):
+        app = self.submit_with_documents()
+        resp = self.review(app, "approved")
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "approved")
+        self.assertEqual(app.reviewed_by, self.staff)
+        self.assertIsNotNone(app.reviewed_at)
+        # An approved pet must no longer be advertised as available.
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "pending")
+        from apps.audit.models import AuditLog
+        self.assertTrue(AuditLog.objects.filter(
+            model_name="Application", object_id=str(app.id), new_value="approved"
+        ).exists())
+
+    def test_staff_can_reject_submitted_application_with_reason(self):
+        app = self.submit_with_documents()
+        resp = self.review(app, "rejected", rejection_reason="Yard is not fenced.")
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "rejected")
+        self.assertEqual(app.rejection_reason, "Yard is not fenced.")
+        # The adopter must be able to see the reason on their own application.
+        self.authenticate(self.adopter)
+        detail = self.client.get(f"/api/applications/{app.id}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.data["status"], "rejected")
+        self.assertEqual(detail.data["rejection_reason"], "Yard is not fenced.")
+
+    def test_reject_without_reason_is_refused(self):
+        app = self.submit_with_documents()
+        resp = self.review(app, "rejected")
+        self.assertEqual(resp.status_code, 400)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "submitted")
+
+    def test_staff_can_request_missing_documents(self):
+        app = self.submit_with_documents()
+        resp = self.review(app, "pending_documents")
+        self.assertEqual(resp.status_code, 200)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "pending_documents")
+        # The adopter is notified that documents are required.
+        from apps.notifications.models import Notification
+        self.assertTrue(Notification.objects.filter(
+            user=self.adopter, title="Documents Required"
+        ).exists())
+
+    def test_staff_review_payload_includes_applicant_pet_and_documents(self):
+        app = self.submit_with_documents()
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/applications/{app.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["adopter_name"], "Ada Lovelace")
+        self.assertEqual(resp.data["adopter_email"], "review-adopter@example.com")
+        self.assertEqual(resp.data["adopter_profile"]["phone_number"], "+63 900 000 0000")
+        self.assertEqual(resp.data["adopter_profile"]["city"], "Cebu City")
+        self.assertEqual(resp.data["pet_name"], "Rex")
+        self.assertEqual(
+            {d["document_type"] for d in resp.data["documents"]},
+            {"identification", "proof_of_address"},
+        )
+        self.assertTrue(all(d["download_url"] for d in resp.data["documents"]))
+
+    def test_staff_can_read_internal_notes_but_adopter_cannot(self):
+        app = self.submit_with_documents()
+        resp = self.review(app, "under_review", staff_notes="Needs a home visit.")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["staff_notes"], "Needs a home visit.")
+        self.authenticate(self.adopter)
+        detail = self.client.get(f"/api/applications/{app.id}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertNotIn("staff_notes", detail.data)
+
+    def test_adopter_cannot_review_own_application(self):
+        app = self.submit_with_documents()
+        self.authenticate(self.adopter)
+        resp = self.client.post(
+            f"/api/applications/{app.id}/update-status/", {"status": "approved"}
+        )
+        self.assertEqual(resp.status_code, 403)
+        app.refresh_from_db()
+        self.assertEqual(app.status, "submitted")

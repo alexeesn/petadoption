@@ -19,7 +19,9 @@ from apps.notifications.models import create_notification
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
-    queryset = Application.objects.select_related("adopter", "pet", "reviewed_by").prefetch_related("documents").all()
+    queryset = Application.objects.select_related(
+        "adopter", "adopter__adopter_profile", "pet", "reviewed_by"
+    ).prefetch_related("documents").all()
     permission_classes = [permissions.IsAuthenticated]
     # Applications are submitted together with their required documents, so the
     # endpoint has to accept multipart in addition to JSON.
@@ -164,6 +166,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if not app.can_transition_to(new_status):
             return Response(
                 {"error": f"Cannot transition from '{app.status}' to '{new_status}'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        rejection_reason = serializer.validated_data.get("rejection_reason", "").strip()
+        if new_status == "rejected" and not rejection_reason:
+            # The staff portal already disables Reject until a reason is typed;
+            # enforce the same rule at the API so it cannot be bypassed.
+            return Response(
+                {"error": "A rejection reason is required when rejecting an application."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         old_status = app.status
