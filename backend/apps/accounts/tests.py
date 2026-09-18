@@ -34,7 +34,22 @@ class BaseAPITestCase(TestCase):
             user.is_email_verified = True
             user.save(update_fields=["is_email_verified"])
         if role == "adopter":
-            AdopterProfile.objects.get_or_create(user=user)
+            # Adopters get a complete profile by default: application creation
+            # requires one (AdopterProfile.REQUIRED_PROFILE_FIELDS).  Tests
+            # that need an incomplete profile clear specific fields explicitly.
+            profile, _ = AdopterProfile.objects.get_or_create(user=user)
+            if not profile.is_complete():
+                for field, value in {
+                    "phone_number": "+63 900 000 0000",
+                    "address_line1": "123 Test Street",
+                    "city": "Manila",
+                    "state": "Metro Manila",
+                    "zip_code": "1000",
+                    "housing_type": "house",
+                    "owns_or_rents": "own",
+                }.items():
+                    setattr(profile, field, value)
+                profile.save()
         return user
 
     def create_staff(self, **kwargs):

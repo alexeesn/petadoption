@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.adopters.serializers import AdopterProfileSerializer
+from apps.adopters.models import AdopterProfile
 from apps.documents.serializers import DocumentSerializer
 from .models import Application
 
@@ -80,6 +81,32 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         adopter = self.context["request"].user
+
+        # ------------------------------------------------------------------
+        # An adopter must have a complete saved profile before starting a new
+        # application.  Enforced here — the single creation path — so the rule
+        # holds no matter how the request reaches the API (AGENTS.md #4:
+        # never rely only on React route protection or button hiding).
+        # Staff/admin are exempt: they are not applicants being vetted.
+        # Create-only: this check never touches existing applications.
+        # ------------------------------------------------------------------
+        if adopter.is_adopter:
+            profile = getattr(adopter, "adopter_profile", None)
+            if profile is None or not profile.is_complete():
+                missing = (
+                    profile.missing_required_fields() if profile
+                    else list(AdopterProfile.REQUIRED_PROFILE_FIELDS)
+                )
+                raise serializers.ValidationError(
+                    {
+                        "profile": (
+                            "Your profile information is incomplete. Please update and save "
+                            "your profile before starting an adoption application. "
+                            f"Missing: {', '.join(missing)}."
+                        )
+                    }
+                )
+
         pet = attrs.get("pet")
         if pet is not None:
             # A pet cannot be assigned to two conflicting active applications

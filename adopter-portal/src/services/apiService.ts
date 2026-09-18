@@ -117,7 +117,7 @@ export async function fetchAdoptionRecord(id: string) {
 
 export async function fetchAdopterProfile() {
   const { data } = await api.get('/adopters/profile/')
-  return data
+  return data as import('../types').AdopterProfile
 }
 
 export async function updateAdopterProfile(profile: Record<string, string | number | boolean>) {

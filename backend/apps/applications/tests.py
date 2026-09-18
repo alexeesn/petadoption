@@ -587,3 +587,114 @@ class ApprovalEmailTests(BaseAPITestCase):
         self.authenticate(self.adopter)
         self.client.post(f"/api/applications/{app2.id}/cancel/")
         self.assertEqual(len(mail.outbox), 0)
+
+class ProfileCompletenessTests(BaseAPITestCase):
+    """An adopter must have a complete saved profile before starting a new
+    application (create-only — existing applications are never touched)."""
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Buddy", species="dog", age_months=12, status="available")
+        self.adopter = self.create_user(email="profile-gate@example.com")
+
+    def incomplete_profile(self):
+        """Reset the adopter's profile to an incomplete state."""
+        profile = self.adopter.adopter_profile
+        profile.phone_number = ""
+        profile.address_line1 = ""
+        profile.city = ""
+        profile.state = ""
+        profile.zip_code = ""
+        profile.housing_type = ""
+        profile.owns_or_rents = ""
+        profile.save()
+
+    def required_documents(self):
+        return {
+            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
+            "document_types": ["identification", "proof_of_address"],
+        }
+
+    def make_pdf(self, name="doc.pdf"):
+        return SimpleUploadedFile(name, b"%PDF-1.4 test", content_type="application/pdf")
+
+    def submit_application(self, pet=None, **fields):
+        payload = {"pet": str((pet or self.pet).id), **fields}
+        payload.update(self.required_documents())
+        return self.client.post("/api/applications/", payload, format="multipart")
+
+    def test_create_rejected_when_profile_is_incomplete(self):
+        self.incomplete_profile()
+        self.authenticate(self.adopter)
+        resp = self.submit_application(why_adopt="I love dogs")
+        self.assertEqual(resp.status_code, 400)
+        # The API explains exactly what to do and which fields are missing.
+        message = resp.data["profile"][0]
+        self.assertIn("profile information is incomplete", message)
+        self.assertIn("phone_number", message)
+        # No partial/invalid application may be created.
+        self.assertFalse(
+            Application.objects.filter(adopter=self.adopter, pet=self.pet).exists()
+        )
+
+    def test_create_allowed_once_profile_is_complete(self):
+        self.incomplete_profile()
+        self.authenticate(self.adopter)
+        blocked = self.submit_application(why_adopt="I love dogs")
+        self.assertEqual(blocked.status_code, 400)
+
+        # Adopter completes and saves the required profile fields.
+        resp = self.client.patch("/api/adopters/profile/", {
+            "phone_number": "09171234567",
+            "address_line1": "456 Complete Street",
+            "city": "Quezon City",
+            "state": "Metro Manila",
+            "zip_code": "1100",
+            "housing_type": "apartment",
+            "owns_or_rents": "rent",
+        }, format="json")
+        self.assertEqual(resp.status_code, 200)
+        # The gate reads the read-serializer flag (same endpoint, GET).
+        resp = self.client.get("/api/adopters/profile/")
+        self.assertTrue(resp.data["profile_is_complete"])
+
+        # No re-login needed: the next create goes straight through.
+        allowed = self.submit_application(why_adopt="I love dogs")
+        self.assertEqual(allowed.status_code, 201)
+        self.assertEqual(allowed.data["status"], "submitted")
+
+    def test_profile_completeness_flag_in_profile_response(self):
+        self.authenticate(self.adopter)
+        resp = self.client.get("/api/adopters/profile/")
+        self.assertTrue(resp.data["profile_is_complete"])
+        field = "zip_code"
+        profile = self.adopter.adopter_profile
+        old = getattr(profile, field)
+        setattr(profile, field, "")
+        profile.save(update_fields=[field])
+        resp = self.client.get("/api/adopters/profile/")
+        self.assertFalse(resp.data["profile_is_complete"])
+        setattr(profile, field, old)
+        profile.save(update_fields=[field])
+
+    def test_existing_applications_unaffected_when_profile_becomes_incomplete(self):
+        self.authenticate(self.adopter)
+        # Submit while the profile is complete (factory default).
+        resp = self.submit_application(why_adopt="I love dogs")
+        self.assertEqual(resp.status_code, 201)
+        app = Application.objects.get(pk=resp.data["id"])
+        self.assertEqual(app.status, "submitted")
+        # Later the profile loses a required field.
+        self.incomplete_profile()
+        # The previously submitted application is neither deleted nor reset.
+        app.refresh_from_db()
+        self.assertEqual(app.status, "submitted")
+        # It can still be read through the API.
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/applications/{app.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["status"], "submitted")
+        # Only NEW creations are blocked.
+        resp = self.submit_application(why_adopt="Second pet")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("profile", resp.data)

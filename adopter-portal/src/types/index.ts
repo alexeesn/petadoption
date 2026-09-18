@@ -117,3 +117,30 @@ export interface Appointment {
   created_at: string
   updated_at: string
 }
+
+/**
+ * Adopter profile as returned by GET /api/adopters/profile/.
+ * `profile_is_complete` is computed server-side from
+ * AdopterProfile.REQUIRED_PROFILE_FIELDS and gates new adoption applications.
+ */
+export interface AdopterProfile {
+  id: string
+  user_email: string
+  user_name: string
+  phone_number: string
+  address_line1: string
+  address_line2: string
+  city: string
+  state: string
+  zip_code: string
+  date_of_birth: string | null
+  housing_type: string
+  owns_or_rents: string
+  has_yard: boolean
+  other_pets: string
+  household_members: number
+  agree_to_terms: boolean
+  profile_is_complete: boolean
+  created_at: string
+  updated_at: string
+}

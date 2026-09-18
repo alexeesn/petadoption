@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { createApplication, fetchPet } from '../services/apiService'
-import type { Application, Pet } from '../types'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { createApplication, fetchAdopterProfile, fetchPet } from '../services/apiService'
+import type { Application, AdopterProfile, Pet } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
 import { capitalize, getStatusColor } from '../utils/format'
 
@@ -59,8 +59,11 @@ export default function NewApplicationPage() {
   const [searchParams] = useSearchParams()
   const petId = searchParams.get('pet') || ''
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [pet, setPet] = useState<Pet | null>(null)
+  const [profile, setProfile] = useState<AdopterProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<ApplicationForm>(EMPTY)
   const [files, setFiles] = useState<Record<string, File | null>>({})
@@ -70,6 +73,30 @@ export default function NewApplicationPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [documentErrors, setDocumentErrors] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState<Application | null>(null)
+
+  // Profile gate: the adopter must have a complete saved profile before they
+  // can fill out an application. The server computes `profile_is_complete`
+  // and enforces the same rule on POST /api/applications/.
+  useEffect(() => {
+    let cancelled = false
+    fetchAdopterProfile()
+      .then((data) => {
+        if (!cancelled) setProfile(data)
+      })
+      .catch(() => {
+        if (!cancelled) setProfile(null)
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Where to send the adopter so they can come straight back to this
+  // application after saving their profile.
+  const backToApplication = { from: location.pathname + location.search }
 
   useEffect(() => {
     if (petId) {
@@ -185,6 +212,13 @@ export default function NewApplicationPage() {
           setDocumentErrors(flattened)
           setError('Please fix the problems with your documents and submit again.')
           setStep(1)
+        } else if (data.profile) {
+          // The server is authoritative: it rejected the submission because
+          // the adopter's profile is incomplete. Say so plainly.
+          setError(
+            Array.isArray(data.profile) ? String(data.profile[0]) : String(data.profile)
+          )
+          setStep(0)
         } else {
           const flattened: Record<string, string> = {}
           Object.entries(data).forEach(([key, value]) => {
@@ -208,6 +242,47 @@ export default function NewApplicationPage() {
 
   if (loading) return <Spinner label="Loading pet..." />
   if (error && !pet && !submitted) return <ErrorState message={error} />
+
+  // ------------------------------------------------------------------
+  // Profile gate — the adopter cannot enter/fill out the application
+  // until their profile is complete and saved.  This covers selecting a
+  // pet and applying, opening the form directly, and manual access to
+  // the /applications/new route.  A just-submitted application is never
+  // hidden behind the gate.
+  // ------------------------------------------------------------------
+  if (!profileLoading && profile && !profile.profile_is_complete && !submitted) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <button onClick={() => navigate(-1)} className="mb-4 text-sm font-medium text-stone-600 hover:text-stone-900">
+          &larr; Back
+        </button>
+        <div className="rounded-lg border border-orange-100 bg-white p-6 shadow-sm sm:p-8">
+          <div
+            className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-2xl"
+            aria-hidden="true"
+          >
+            🏠
+          </div>
+          <h1 className="mt-4 text-center text-2xl font-semibold text-stone-900">
+            Complete Your Profile First
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-stone-600">
+            Please complete and save your profile information before filling out an adoption
+            application. Your contact and housing details help our team review your application.
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Link
+              to="/profile"
+              state={backToApplication}
+              className="rounded-md bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700"
+            >
+              Update Profile
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const inputCls =
     'w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
