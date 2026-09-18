@@ -7,6 +7,10 @@ from rest_framework.response import Response
 from apps.audit.models import AuditLog
 from apps.notifications.models import create_notification
 
+from .emails import (
+    send_appointment_approved_email,
+    send_appointment_rejected_email,
+)
 from .models import Appointment
 from .serializers import (
     AppointmentCreateSerializer,
@@ -148,6 +152,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             notification_type="appointment",
             link=f"/applications/{appointment.application_id}",
         )
+        # Only reached on a real pending_confirmation -> confirmed transition
+        # (an already-confirmed appointment returned 400 above), so a repeated
+        # or retried approve request cannot email the adopter twice.
+        send_appointment_approved_email(appointment)
         return Response(
             AppointmentSerializer(appointment, context=self.get_serializer_context()).data
         )
@@ -202,6 +210,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             notification_type="appointment",
             link=f"/applications/{appointment.application_id}",
         )
+        # Only reached on a real pending_confirmation -> rejected transition with
+        # a validated non-blank reason, so repeating or retrying the reject
+        # request cannot email the adopter twice.
+        send_appointment_rejected_email(appointment)
         return Response(
             AppointmentSerializer(appointment, context=self.get_serializer_context()).data
         )

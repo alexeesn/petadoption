@@ -7,6 +7,8 @@ visible through the full request/response flow.
 """
 from datetime import timedelta
 
+from django.conf import settings
+from django.core import mail
 from django.utils import timezone
 
 from apps.accounts.tests import BaseAPITestCase
@@ -294,3 +296,193 @@ class AppointmentWorkflowTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["status"], "approved")
         self.assertEqual(Appointment.objects.count(), 0)
+
+
+class AppointmentDecisionEmailTests(BaseAPITestCase):
+    """The appointment decision emails the adopter exactly once per transition."""
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Coco", species="dog", age_months=10, status="pending")
+        self.adopter = self.create_user(email="emailer@example.com")
+        self.staff = self.create_staff(email="reviewer@example.com")
+        self.application = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+        self.visit_date = next_weekday()
+
+    def make_appointment(self, days_ahead=1):
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/appointments/", {
+            "application_id": str(self.application.id),
+            "requested_date": next_weekday(days_ahead).isoformat(),
+        })
+        self.assertEqual(resp.status_code, 201)
+        return Appointment.objects.get(pk=resp.data["id"])
+
+    def approve(self, appointment):
+        self.authenticate(self.staff)
+        return self.client.post(f"/api/appointments/{appointment.id}/approve/")
+
+    def reject(self, appointment, reason):
+        self.authenticate(self.staff)
+        return self.client.post(
+            f"/api/appointments/{appointment.id}/reject/", {"reason": reason}
+        )
+
+    @staticmethod
+    def display_date(value):
+        """Independent rendering of the DB date: 'September 21, 2026'."""
+        return value.strftime("%B %d, %Y").replace(" 0", " ")
+
+    # ----- approved ------------------------------------------------------
+
+    def test_submitting_a_request_sends_no_decision_email(self):
+        self.make_appointment()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_approval_sends_exactly_one_email_with_correct_content(self):
+        appointment = self.make_appointment()
+        resp = self.approve(appointment)
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["emailer@example.com"])
+        self.assertTrue(msg.from_email.startswith("PawConnect <"), msg.from_email)
+        self.assertEqual(msg.subject, "Your PawConnect appointment has been approved")
+        # Adopter name, pet name and the real database date.
+        self.assertIn(f"Hello {self.adopter.full_name}", msg.body)
+        self.assertIn("Coco", msg.body)
+        self.assertIn(self.display_date(appointment.requested_date), msg.body)
+        self.assertIn("has been approved", msg.body)
+        self.assertIn("visit the center on the approved date", msg.body)
+        # Branded HTML alternative, same as the other system emails.
+        self.assertTrue(len(msg.alternatives) > 0)
+        html_content, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn(self.display_date(appointment.requested_date), html_content)
+        self.assertIn("Coco", html_content)
+
+    def test_approval_email_date_matches_the_database_not_a_placeholder(self):
+        appointment = self.make_appointment(days_ahead=6)
+        self.approve(appointment)
+        appointment.refresh_from_db()
+        self.assertIn(self.display_date(appointment.requested_date), mail.outbox[0].body)
+
+        # A different requested date must produce a different body (proves the
+        # date is read from the appointment row, not hardcoded).
+        other_pet = Pet.objects.create(name="Nala", species="cat", age_months=20, status="pending")
+        other_application = Application.objects.create(
+            adopter=self.adopter, pet=other_pet, status="approved"
+        )
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/appointments/", {
+            "application_id": str(other_application.id),
+            "requested_date": next_weekday(12).isoformat(),
+        })
+        self.assertEqual(resp.status_code, 201)
+        other = Appointment.objects.get(pk=resp.data["id"])
+        self.assertEqual(self.approve(other).status_code, 200)
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertNotEqual(mail.outbox[0].body, mail.outbox[1].body)
+        self.assertIn(self.display_date(other.requested_date), mail.outbox[1].body)
+
+    def test_repeated_approve_does_not_send_second_email(self):
+        appointment = self.make_appointment()
+        self.assertEqual(self.approve(appointment).status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        # Repeated action / page refresh / retry of the same state update.
+        self.assertEqual(self.approve(appointment).status_code, 400)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_confirming_an_already_rejected_appointment_sends_no_email(self):
+        appointment = self.make_appointment()
+        self.assertEqual(self.reject(appointment, "Closed").status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(self.approve(appointment).status_code, 400)
+        self.assertEqual(len(mail.outbox), 1)
+
+    # ----- rejected ------------------------------------------------------
+
+    def test_rejection_sends_exactly_one_email_with_the_reason(self):
+        appointment = self.make_appointment()
+        reason = "The center is closed for maintenance on that day."
+        resp = self.reject(appointment, reason)
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(len(mail.outbox), 1)
+        msg = mail.outbox[0]
+        self.assertEqual(msg.to, ["emailer@example.com"])
+        self.assertTrue(msg.from_email.startswith("PawConnect <"), msg.from_email)
+        self.assertEqual(msg.subject, "Your PawConnect appointment needs a new date")
+        self.assertIn(f"Hello {self.adopter.full_name}", msg.body)
+        self.assertIn("Coco", msg.body)
+        self.assertIn("could not be approved", msg.body)
+        # The reason recorded by staff/admin appears verbatim.
+        self.assertIn(reason, msg.body)
+        # Tells the adopter to pick another date, not to re-apply.
+        self.assertIn("choose another available appointment date", msg.body)
+        self.assertIn("Your adoption application is still approved", msg.body)
+        self.assertNotIn("new adoption application", msg.body.lower())
+        self.assertNotIn("submit a new application", msg.body.lower())
+        # The requested date shown matches the database row.
+        self.assertIn(self.display_date(appointment.requested_date), msg.body)
+        # Branded HTML alternative carries the same reason.
+        html_content, mimetype = msg.alternatives[0]
+        self.assertEqual(mimetype, "text/html")
+        self.assertIn(reason, html_content)
+
+        # The adoption application itself is untouched.
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.status, "rejected")
+        self.assertEqual(appointment.rejection_reason, reason)
+
+    def test_blank_rejection_reason_is_refused_and_sends_no_email(self):
+        appointment = self.make_appointment()
+        self.authenticate(self.staff)
+        for payload in ({"reason": "   "}, {}, {"reason": ""}):
+            resp = self.client.post(f"/api/appointments/{appointment.id}/reject/", payload)
+            self.assertEqual(resp.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
+        appointment.refresh_from_db()
+        self.assertEqual(appointment.status, "pending_confirmation")
+        self.assertEqual(appointment.rejection_reason, "")
+
+    def test_repeated_reject_does_not_send_second_email(self):
+        appointment = self.make_appointment()
+        self.assertEqual(self.reject(appointment, "Closed").status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        # Repeated action / page refresh / retry of the same state update.
+        self.assertEqual(self.reject(appointment, "Closed again").status_code, 400)
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_adopter_can_still_choose_another_date_without_new_emails(self):
+        appointment = self.make_appointment()
+        self.assertEqual(self.reject(appointment, "Fully booked").status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        # Re-requesting a new date is a new request, not a decision: no email yet.
+        self.make_appointment(days_ahead=8)
+        self.assertEqual(len(mail.outbox), 1)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+
+    # ----- unrelated statuses do not trigger appointment emails -----------
+
+    def test_application_status_change_does_not_send_appointment_email(self):
+        pet = Pet.objects.create(name="Nala", species="cat", age_months=20, status="available")
+        application = Application.objects.create(
+            adopter=self.adopter, pet=pet, status="submitted"
+        )
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{application.id}/update-status/", {"status": "approved"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Only the existing application approval email fires.
+        subjects = [m.subject for m in mail.outbox]
+        self.assertEqual(subjects, ["Your PawConnect adoption application has been approved"])
+        self.assertNotIn("Your PawConnect appointment has been approved", subjects)
+        self.assertNotIn("Your PawConnect appointment needs a new date", subjects)
