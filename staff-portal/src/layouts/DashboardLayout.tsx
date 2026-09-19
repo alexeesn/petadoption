@@ -1,6 +1,8 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSidebarCounts } from '../hooks/useSidebarCounts';
+import type { SidebarBadgeKey } from '../hooks/useSidebarCounts';
 import { BrandTile, Icon } from '../components/Icons';
 import type { IconName } from '../components/Icons';
 
@@ -8,6 +10,8 @@ interface NavItem {
   to: string;
   label: string;
   icon: IconName;
+  /** Sidebar module that shows an unread-notification badge, when applicable. */
+  badge?: SidebarBadgeKey;
 }
 
 interface NavSection {
@@ -36,8 +40,8 @@ const navSections: NavSection[] = [
   {
     title: 'Adoption Management',
     items: [
-      { to: '/applications', label: 'Applications', icon: 'clipboard' },
-      { to: '/appointments', label: 'Appointments', icon: 'calendar' },
+      { to: '/applications', label: 'Applications', icon: 'clipboard', badge: 'applications' },
+      { to: '/appointments', label: 'Appointments', icon: 'calendar', badge: 'appointments' },
       { to: '/adopters', label: 'Adopters', icon: 'user' },
     ],
   },
@@ -69,6 +73,8 @@ const navSections: NavSection[] = [
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  // Unread staff notifications, re-read from the existing notification API.
+  const { counts, markModuleRead } = useSidebarCounts();
 
   const handleLogout = async () => {
     await logout();
@@ -97,24 +103,37 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <div key={section.title}>
               <h2 className="px-3 pb-1.5 font-sans text-xs font-semibold text-stone-500">{section.title}</h2>
               <ul className="space-y-0.5">
-                {section.items.map((item) => (
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.to === '/'}
-                      className={({ isActive }) =>
-                        `relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-primary-50 text-primary-900 before:absolute before:inset-y-1.5 before:-left-3 before:w-1 before:rounded-r-full before:bg-accent-400'
-                            : 'text-stone-600 hover:bg-stone-100 hover:text-primary-900'
-                        }`
-                      }
-                    >
-                      <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
-                      {item.label}
-                    </NavLink>
-                  </li>
-                ))}
+                {section.items.map((item) => {
+                  const badgeCount = item.badge ? counts[item.badge] : 0;
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end={item.to === '/'}
+                        onClick={() => {
+                          // Opening a module clears its own unread notifications only.
+                          if (item.badge && badgeCount > 0) void markModuleRead(item.badge);
+                        }}
+                        className={({ isActive }) =>
+                          `relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                            isActive
+                              ? 'bg-primary-50 text-primary-900 before:absolute before:inset-y-1.5 before:-left-3 before:w-1 before:rounded-r-full before:bg-accent-400'
+                              : 'text-stone-600 hover:bg-stone-100 hover:text-primary-900'
+                          }`
+                        }
+                      >
+                        <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {item.badge && badgeCount > 0 && (
+                          <span className="inline-flex min-w-[1.375rem] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-white">
+                            {badgeCount > 99 ? '99+' : badgeCount}
+                            <span className="sr-only"> unread notifications</span>
+                          </span>
+                        )}
+                      </NavLink>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

@@ -1,5 +1,5 @@
 import api from './api';
-import type { User, PaginatedResponse } from '../types';
+import type { User, Notification, PaginatedResponse } from '../types';
 
 export async function login(email: string, password: string) {
   const res = await api.post('/auth/login/', { email, password });
@@ -211,7 +211,28 @@ export const reportService = {
 // ----- Notifications -----
 export const notificationService = {
   list: (params?: Record<string, unknown>) => api.get('/notifications/', { params }),
-  markRead: (id: string) => api.patch(`/notifications/${id}/`, { is_read: true }),
+  // Unread notifications of the authenticated user, following the existing
+  // `?unread=true` filter and pagination (PAGE_SIZE = 20) so counts are not
+  // silently capped at the first page.
+  listUnread: async (): Promise<Notification[]> => {
+    const collected: Notification[] = [];
+    // Bounded loop: a guard against a malformed `next` link, never hit in practice.
+    for (let page = 1; page <= 10; page += 1) {
+      const res = await api.get('/notifications/', { params: { unread: true, page } });
+      const data = res.data as PaginatedResponse<Notification> | Notification[];
+      if (Array.isArray(data)) {
+        collected.push(...data);
+        break;
+      }
+      collected.push(...data.results);
+      if (!data.next) break;
+    }
+    return collected;
+  },
+  // Existing backend endpoint (PATCH /api/notifications/<id>/read/): sets
+  // is_read on that one notification for the authenticated user. It never
+  // touches application/appointment/payment records.
+  markRead: (id: string) => api.patch(`/notifications/${id}/read/`, {}),
 };
 
 // ----- Audit Logs (Admin only) -----

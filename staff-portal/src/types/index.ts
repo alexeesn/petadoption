@@ -205,10 +205,11 @@ export interface Payment {
 
 export interface Notification {
   id: string;
-  recipient: string;
   title: string;
   message: string;
+  notification_type: string;
   is_read: boolean;
+  link: string;
   created_at: string;
 }
 
