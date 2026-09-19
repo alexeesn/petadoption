@@ -144,16 +144,23 @@ export interface AdoptionPackage {
 
 export interface AdoptionRecord {
   id: string;
-  application: string;
+  application_id: string;
   pet: string;
   pet_name: string;
+  adopter: string;
   adopter_email: string;
+  staff_member?: string | null;
+  staff_email?: string | null;
+  /** Confirmed onsite visit this record was scheduled from (null when none). */
+  appointment_id?: string | null;
+  appointment_date?: string | null;
   status: string;
-  scheduled_date?: string;
-  completed_date?: string;
-  cost: string;
+  adoption_date: string | null;
+  completed_date?: string | null;
   notes: string;
+  return_reason: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Appointment {

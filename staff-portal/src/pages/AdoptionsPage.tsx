@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select } from '../components/UI';
+import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
-import { adoptionService, applicationService } from '../services/apiService';
-import type { AdoptionRecord, Application } from '../types';
+import { adoptionService } from '../services/apiService';
+import type { AdoptionRecord } from '../types';
+import { formatDate } from '../utils/format';
 
+/**
+ * Adoption Records are created by the backend when staff confirm an adoption
+ * appointment (POST /api/appointments/<id>/approve/): the record arrives here
+ * already "Scheduled" with its pet, adopter, application and visit date, so
+ * nothing has to be entered by hand.  Staff only move the record on
+ * (cancel/return here) or complete the adoption from the application page.
+ */
 const STATUS_OPTIONS = [
-  { value: 'approved', label: 'Approved' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
@@ -14,122 +21,46 @@ const STATUS_OPTIONS = [
 
 export default function AdoptionsPage() {
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
-  const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    application_id: '',
-    scheduled_date: '',
-    notes: '',
-    cost: '0',
-  });
-  const [submitError, setSubmitError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
+  const [busyId, setBusyId] = useState('');
 
   const load = () => {
     setLoading(true);
     setError('');
-    Promise.all([adoptionService.list(), applicationService.list({ status: 'approved' })])
-      .then(([adoptRes, appRes]) => {
-        setRecords(adoptRes.data.results);
-        const existingAppIds = new Set(adoptRes.data.results.map((r: AdoptionRecord) => r.application));
-        setApps(appRes.data.results.filter((a: Application) => !existingAppIds.has(a.id)));
-      })
+    adoptionService
+      .list()
+      .then((res) => setRecords(res.data.results))
       .catch(() => setError('Failed to load adoption records.'))
       .finally(() => setLoading(false));
   };
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitError('');
-    setSuccess('');
-    setSubmitting(true);
-    adoptionService
-      .create(form)
-      .then(() => {
-        setSuccess('Adoption record created.');
-        setShowForm(false);
-        setForm({ application_id: '', scheduled_date: '', notes: '', cost: '0' });
-        load();
-      })
-      .catch((e: any) => {
-        const data = e.response?.data;
-        const msg = data?.application_id?.[0] || data?.error || data?.detail || 'Failed to create adoption record.';
-        setSubmitError(Array.isArray(msg) ? msg.join(' ') : String(msg));
-      })
-      .finally(() => setSubmitting(false));
-  };
-
   const handleStatusChange = (id: string, status: string) => {
+    setBusyId(id);
+    setError('');
+    setSuccess('');
     adoptionService
       .update(id, { status })
       .then(() => {
         setSuccess('Adoption status updated.');
         load();
       })
-      .catch(() => setError('Failed to update adoption status.'))
-      .finally(() => {});
+      .catch((e: any) => {
+        const data = e.response?.data;
+        setError(data?.error || data?.detail || 'Failed to update adoption status.');
+      })
+      .finally(() => setBusyId(''));
   };
 
   useEffect(load, []);
 
   return (
     <div>
-      <PageHeader title="Adoption Records" subtitle="Track adoption progress from approved application to completion" />
-      <div className="mb-4">
-        <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'Create Adoption Record'}
-        </Button>
-      </div>
-
-      {showForm && (
-        <Card className="mb-6 p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4">New Adoption Record</h3>
-          <form onSubmit={handleCreate} className="space-y-4 max-w-lg">
-            <Select
-              label="Approved Application"
-              value={form.application_id}
-              onChange={(e) => setForm({ ...form, application_id: e.target.value })}
-              options={[{ value: '', label: 'Select application' }, ...apps.map((a) => ({ value: a.id, label: `${a.pet_name} - ${a.adopter_email}` }))]}
-            />
-            <label className="block">
-              <span className="block text-sm font-medium text-slate-700 mb-1">Scheduled Date</span>
-              <input
-                type="date"
-                value={form.scheduled_date}
-                onChange={(e) => setForm({ ...form, scheduled_date: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="block text-sm font-medium text-slate-700 mb-1">Cost</span>
-              <input
-                type="number"
-                step="0.01"
-                value={form.cost}
-                onChange={(e) => setForm({ ...form, cost: e.target.value })}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </label>
-            <label className="block">
-              <span className="block text-sm font-medium text-slate-700 mb-1">Notes</span>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={3}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              />
-            </label>
-            {submitError && <p className="text-red-600 text-sm">{submitError}</p>}
-            {apps.length === 0 && <p className="text-amber-600 text-sm">No approved applications available for adoption.</p>}
-            <Button type="submit" disabled={submitting || apps.length === 0}>
-              {submitting ? 'Creating...' : 'Create Record'}
-            </Button>
-          </form>
-        </Card>
-      )}
+      <PageHeader
+        title="Adoption Records"
+        subtitle="Scheduled automatically when staff confirm an adoption appointment — no manual record needed."
+      />
 
       {success && <p className="mb-4 text-green-600 text-sm">{success}</p>}
 
@@ -141,19 +72,27 @@ export default function AdoptionsPage() {
         <Card><Empty message="No adoption records found." /></Card>
       ) : (
         <Card>
-          <Table headers={['Pet', 'Adopter', 'Status', 'Scheduled', 'Completed', 'Actions']}>
+          <Table headers={['Pet', 'Adopter', 'Status', 'Application', 'Scheduled visit', 'Appointment', 'Completed', 'Update status']}>
             {records.map((rec) => (
               <tr key={rec.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">{rec.pet_name}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{rec.adopter_email}</td>
                 <td className="px-4 py-3"><StatusBadge status={rec.status} /></td>
-                <td className="px-4 py-3 text-sm text-slate-500">{rec.scheduled_date || '—'}</td>
-                <td className="px-4 py-3 text-sm text-slate-500">{rec.completed_date || '—'}</td>
+                <td className="px-4 py-3 text-xs text-slate-500">{rec.application_id}</td>
+                <td className="px-4 py-3 text-sm text-slate-500">{formatDate(rec.adoption_date ?? undefined)}</td>
+                <td className="px-4 py-3 text-sm text-slate-500">
+                  {rec.appointment_id
+                    ? `${formatDate(rec.appointment_date ?? undefined)} · ${rec.appointment_id}`
+                    : '—'}
+                </td>
+                <td className="px-4 py-3 text-sm text-slate-500">{formatDate(rec.completed_date ?? undefined)}</td>
                 <td className="px-4 py-3">
                   <select
                     value={rec.status}
                     onChange={(e) => handleStatusChange(rec.id, e.target.value)}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    disabled={busyId === rec.id}
+                    aria-label={`Update status for the adoption record of ${rec.pet_name}`}
+                    className="rounded-md border border-slate-300 px-2 py-1 text-sm disabled:opacity-60"
                   >
                     {STATUS_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>

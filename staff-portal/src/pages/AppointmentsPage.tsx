@@ -49,7 +49,9 @@ export default function AppointmentsPage() {
     appointmentService
       .approve(appointment.id)
       .then(() => {
-        setSuccess(`Visit date confirmed for ${appointment.adopter_email}.`);
+        setSuccess(
+          `Visit date confirmed for ${appointment.adopter_email}. The adoption record is now scheduled.`,
+        );
         load();
       })
       .catch((e: any) => {

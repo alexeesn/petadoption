@@ -9,7 +9,9 @@ from apps.notifications.models import create_notification
 
 
 class AdoptionRecordViewSet(viewsets.ModelViewSet):
-    queryset = AdoptionRecord.objects.select_related("pet", "adopter", "staff_member", "application").all()
+    queryset = AdoptionRecord.objects.select_related(
+        "pet", "adopter", "staff_member", "application", "appointment"
+    ).all()
     serializer_class = AdoptionRecordSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
 
@@ -20,10 +22,21 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
         return self.queryset
 
     def create(self, request, *args, **kwargs):
-        """Create adoption record from approved application."""
+        """Create adoption record from approved application.
+
+        Kept for API compatibility (and for records that have to be created
+        without a stored onsite visit).  The normal flow no longer needs it:
+        approving the adopter's appointment schedules the record automatically
+        (see ``apps.appointments.views.AppointmentViewSet.approve``).
+
+        One record per adoption transaction: an application that already has a
+        record gets that record back instead of a duplicate (or a 500 from the
+        OneToOne constraint).
+        """
         serializer = AdoptionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         from apps.applications.models import Application
+        from apps.appointments.models import Appointment
         application = get_object_or_404(
             Application, id=serializer.validated_data["application_id"]
         )
@@ -32,14 +45,30 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
                 {"error": "Application must be approved to create an adoption record."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        adoption = AdoptionRecord.objects.create(
-            application=application,
-            pet=application.pet,
-            adopter=application.adopter,
-            staff_member=request.user,
-            adoption_date=serializer.validated_data.get("adoption_date", timezone.now().date()),
-            notes=serializer.validated_data.get("notes", ""),
+        # Reference the confirmed onsite visit when there is one, so a record
+        # created here still points at the appointment that scheduled it.
+        appointment = (
+            application.appointments.filter(status=Appointment.Status.CONFIRMED)
+            .order_by("-requested_date")
+            .first()
         )
+        adoption, created = AdoptionRecord.objects.get_or_create(
+            application=application,
+            defaults={
+                "pet": application.pet,
+                "adopter": application.adopter,
+                "staff_member": request.user,
+                "appointment": appointment,
+                "adoption_date": serializer.validated_data.get("adoption_date")
+                or (appointment.requested_date if appointment else timezone.now().date()),
+                "notes": serializer.validated_data.get("notes", ""),
+            },
+        )
+        if not created:
+            # Already scheduled/completed by the workflow: reuse, never duplicate.
+            return Response(
+                AdoptionRecordSerializer(adoption).data, status=status.HTTP_200_OK
+            )
         from apps.audit.models import AuditLog
         AuditLog.objects.create(
             user=request.user, action="adoption_created", model_name="AdoptionRecord",

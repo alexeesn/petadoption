@@ -129,10 +129,19 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             )
 
         old_status = appointment.status
-        appointment.status = Appointment.Status.CONFIRMED
-        appointment.reviewed_by = request.user
-        appointment.reviewed_at = timezone.now()
-        appointment.save()
+        with transaction.atomic():
+            appointment.status = Appointment.Status.CONFIRMED
+            appointment.reviewed_by = request.user
+            appointment.reviewed_at = timezone.now()
+            appointment.save()
+
+            # Confirming the requested date is the scheduling decision: the
+            # backend creates (or reuses) the matching AdoptionRecord with
+            # status "scheduled" so staff never have to add one by hand.
+            # Idempotent, so a repeated/retried approval cannot duplicate it.
+            from apps.adoptions.services import schedule_adoption_record_for_appointment
+
+            schedule_adoption_record_for_appointment(appointment, request.user)
 
         AuditLog.objects.create(
             user=request.user,

@@ -4,7 +4,20 @@ from django.conf import settings
 
 
 class AdoptionRecord(models.Model):
-    """Records of completed or in-progress adoptions."""
+    """Adoption records, scheduled and completed by the onsite visit workflow.
+
+    A record is created automatically by the backend when staff confirm the
+    adopter's onsite visit date (see
+    ``apps.adoptions.services.schedule_adoption_record_for_appointment``), so
+    staff never create a Scheduled record by hand:
+
+        application approved
+        -> adopter picks a visit date (appointment pending_confirmation)
+        -> staff confirm the date (appointment confirmed)
+        -> AdoptionRecord auto-created/updated with status "scheduled"
+        -> staff record the onsite payment
+        -> staff complete the adoption (AdoptionRecord "completed")
+    """
 
     class Status(models.TextChoices):
         SCHEDULED = "scheduled", "Scheduled"
@@ -28,6 +41,14 @@ class AdoptionRecord(models.Model):
     staff_member = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="adoptions_handled"
+    )
+    # The approved onsite visit that scheduled this adoption.  Optional so
+    # records created before this field existed (and records completed straight
+    # from an application without a stored appointment) stay valid.
+    appointment = models.ForeignKey(
+        "appointments.Appointment", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="adoption_records",
+        help_text="Confirmed onsite visit this adoption record was scheduled from",
     )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
     adoption_date = models.DateField(blank=True, null=True)
