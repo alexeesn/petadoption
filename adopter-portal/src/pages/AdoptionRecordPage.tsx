@@ -39,15 +39,15 @@ export default function AdoptionRecordPage() {
 
   return (
     <div>
-      <Link to="/applications" className="text-sm text-orange-600 hover:text-orange-700 mb-4 inline-block">
+      <Link to="/applications" className="text-sm text-primary-600 hover:text-primary-700 mb-4 inline-block">
         ← Back to My Applications
       </Link>
-      <h1 className="text-2xl font-bold text-stone-800 mb-2">Adoption Record</h1>
+      <h1 className="text-3xl font-extrabold text-primary-900 mb-2">Adoption Record</h1>
       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${statusColor}`}>
         {record.status.replace(/_/g, ' ')}
       </span>
 
-      <div className="mt-6 bg-white rounded-lg shadow-sm border border-orange-100 p-6 max-w-2xl space-y-4">
+      <div className="panel mt-6 p-6 max-w-2xl space-y-4">
         <div>
           <p className="text-sm text-stone-500">Pet</p>
           <p className="text-lg font-semibold text-stone-800">{record.pet_name}</p>

@@ -76,7 +76,7 @@ export default function DocumentsPage() {
                     type="button"
                     onClick={() => handleOpen(doc)}
                     disabled={busyId === doc.id}
-                    className="text-indigo-600 hover:underline disabled:opacity-50"
+                    className="text-primary-600 hover:underline disabled:opacity-50"
                   >
                     {doc.original_filename}
                   </button>

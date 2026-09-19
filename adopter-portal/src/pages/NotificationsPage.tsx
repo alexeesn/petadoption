@@ -46,18 +46,18 @@ export default function NotificationsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold text-stone-800">Notifications</h1>
+      <div className="mb-2 flex items-end justify-between gap-4">
+        <h1 className="text-3xl font-extrabold text-primary-900 sm:text-4xl">Notifications</h1>
         {notifications.some((n) => !n.is_read) && (
           <button
             onClick={handleMarkAll}
-            className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+            className="text-sm font-semibold text-primary-700 hover:text-primary-900"
           >
             Mark all as read
           </button>
         )}
       </div>
-      <p className="text-stone-500 mb-6">Stay updated on your applications and adoptions.</p>
+      <p className="mb-8 text-stone-600">Stay updated on your applications and adoptions.</p>
 
       {error && <div className="mb-4"><ErrorState message={error} onRetry={load} /></div>}
 
@@ -70,13 +70,14 @@ export default function NotificationsPage() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`bg-white rounded-lg shadow-sm border p-4 ${
-                n.is_read ? 'border-stone-100' : 'border-orange-200'
+              className={`relative overflow-hidden rounded-lg border bg-white p-4 pl-6 shadow-sm ${
+                n.is_read ? 'border-stone-200' : 'border-primary-200'
               }`}
             >
+              {!n.is_read && <span className="absolute inset-y-0 left-0 w-1.5 bg-accent-400" aria-hidden="true" />}
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <p className={`font-medium ${n.is_read ? 'text-stone-600' : 'text-stone-800'}`}>
+                  <p className={`font-semibold ${n.is_read ? 'text-stone-600' : 'text-primary-900'}`}>
                     {n.title}
                   </p>
                   <p className="text-sm text-stone-500 mt-1">{n.message}</p>
@@ -84,14 +85,14 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {n.link && (
-                    <Link to={n.link} className="text-sm text-orange-600 hover:text-orange-700">
+                    <Link to={n.link} className="text-sm font-semibold text-primary-700 hover:text-primary-900">
                       View
                     </Link>
                   )}
                   {!n.is_read && (
                     <button
                       onClick={() => handleMarkRead(n.id)}
-                      className="text-xs text-stone-400 hover:text-stone-600"
+                      className="text-xs text-stone-500 hover:text-stone-800"
                     >
                       Mark read
                     </button>

@@ -1,11 +1,13 @@
 import { ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { BrandTile, Icon } from '../components/Icons';
+import type { IconName } from '../components/Icons';
 
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: IconName;
 }
 
 interface NavSection {
@@ -29,38 +31,38 @@ interface NavSection {
 const navSections: NavSection[] = [
   {
     title: 'Overview',
-    items: [{ to: '/', label: 'Dashboard', icon: '📊' }],
+    items: [{ to: '/', label: 'Dashboard', icon: 'dashboard' }],
   },
   {
     title: 'Adoption Management',
     items: [
-      { to: '/applications', label: 'Applications', icon: '📋' },
-      { to: '/appointments', label: 'Appointments', icon: '📅' },
-      { to: '/adopters', label: 'Adopters', icon: '👤' },
+      { to: '/applications', label: 'Applications', icon: 'clipboard' },
+      { to: '/appointments', label: 'Appointments', icon: 'calendar' },
+      { to: '/adopters', label: 'Adopters', icon: 'user' },
     ],
   },
   {
     title: 'Pet Management',
     items: [
-      { to: '/pets', label: 'Pets', icon: '🐾' },
-      { to: '/health', label: 'Health Records', icon: '🩺' },
+      { to: '/pets', label: 'Pets', icon: 'paw' },
+      { to: '/health', label: 'Health Records', icon: 'pulse' },
     ],
   },
   {
     title: 'Adoption Records',
     items: [
-      { to: '/adoptions', label: 'Adoption Records', icon: '🏠' },
-      { to: '/payments', label: 'Payments', icon: '💳' },
+      { to: '/adoptions', label: 'Adoption Records', icon: 'home' },
+      { to: '/payments', label: 'Payments', icon: 'card' },
     ],
   },
   {
     title: 'Reports',
-    items: [{ to: '/reports', label: 'Reports', icon: '📈' }],
+    items: [{ to: '/reports', label: 'Reports', icon: 'chart' }],
   },
   {
     title: 'Administration',
     adminOnly: true,
-    items: [{ to: '/audit', label: 'Audit Logs', icon: '🔒' }],
+    items: [{ to: '/audit', label: 'Audit Logs', icon: 'lock' }],
   },
 ];
 
@@ -77,32 +79,38 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     (section) => !section.adminOnly || user?.role === 'admin',
   );
 
+  const initial = (user?.full_name || user?.email || '?').trim().charAt(0).toUpperCase();
+
   return (
-    <div className="min-h-screen bg-slate-100 flex">
+    <div className="flex min-h-screen bg-stone-100">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex-shrink-0 hidden md:flex flex-col">
-        <div className="px-5 py-4 border-b border-slate-700">
-          <h1 className="text-lg font-bold">Pet Adoption</h1>
-          <p className="text-xs text-slate-400">Staff Portal</p>
+      <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col border-r border-stone-200 bg-white md:flex">
+        <div className="flex items-center gap-3 border-b border-stone-200 px-5 py-5">
+          <BrandTile />
+          <div>
+            <h1 className="font-display text-lg font-bold leading-5 text-primary-900">Pet Adoption</h1>
+            <p className="text-xs text-stone-500">Staff Portal</p>
+          </div>
         </div>
-        <nav className="flex-1 px-3 pb-4 overflow-y-auto" aria-label="Staff portal sections">
+        <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5" aria-label="Staff portal sections">
           {visibleSections.map((section) => (
-            <div key={section.title} className="pt-4">
-              <h2 className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                {section.title}
-              </h2>
-              <ul className="space-y-1">
+            <div key={section.title}>
+              <h2 className="px-3 pb-1.5 font-sans text-xs font-semibold text-stone-500">{section.title}</h2>
+              <ul className="space-y-0.5">
                 {section.items.map((item) => (
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
+                      end={item.to === '/'}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
-                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'
+                        `relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-900 before:absolute before:inset-y-1.5 before:-left-3 before:w-1 before:rounded-r-full before:bg-accent-400'
+                            : 'text-stone-600 hover:bg-stone-100 hover:text-primary-900'
                         }`
                       }
                     >
-                      <span aria-hidden="true">{item.icon}</span>
+                      <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
                       {item.label}
                     </NavLink>
                   </li>
@@ -111,82 +119,80 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
           ))}
         </nav>
-        <div className="px-5 py-4 border-t border-slate-700">
-          <p className="text-sm text-slate-300 truncate">{user?.full_name}</p>
-          <p className="text-xs text-slate-500 mb-2">{user?.email}</p>
+        <div className="border-t border-stone-200 p-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 font-display text-sm font-bold text-primary-800"
+              aria-hidden="true"
+            >
+              {initial}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-stone-900">{user?.full_name}</p>
+              <p className="truncate text-xs text-stone-500">{user?.email}</p>
+            </div>
+          </div>
           <button
             onClick={handleLogout}
-            className="text-xs text-red-400 hover:text-red-300 focus:outline-none"
+            className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold text-stone-600 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           >
+            <Icon name="logout" className="h-4 w-4" />
             Logout
           </button>
         </div>
       </aside>
 
       {/* Content column: header with the notification bell + grouped nav on small screens */}
-      <div className="flex flex-col flex-1 min-w-0">
-        <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between gap-3 md:bg-white md:text-slate-700 md:border-b md:border-slate-200 md:px-6 md:justify-end">
-          <h1 className="text-lg font-bold md:hidden">Staff Portal</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-300 md:hidden">{user?.full_name}</span>
-            {/* Single notification entry point: the Notifications page is reached from here */}
-            <NavLink
-              to="/notifications"
-              aria-label="Notifications"
-              title="Notifications"
-              className={({ isActive }) =>
-                `inline-flex items-center justify-center rounded-md px-2 py-1.5 text-lg leading-none focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                  isActive
-                    ? 'text-indigo-300 md:text-indigo-600'
-                    : 'text-slate-200 md:text-slate-600 hover:bg-white/10 md:hover:bg-slate-100'
-                }`
-              }
-            >
-              <span aria-hidden="true">🔔</span>
-            </NavLink>
-            <button
-              onClick={handleLogout}
-              className="text-xs text-red-400 md:hidden focus:outline-none"
-            >
-              Logout
-            </button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/90 backdrop-blur">
+          <div className="flex items-center justify-between px-6 py-3">
+            <div className="flex items-center gap-2.5 md:hidden">
+              <BrandTile className="h-8 w-8" />
+              <h1 className="font-display text-lg font-bold text-primary-900">Staff Portal</h1>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <NavLink
+                to="/notifications"
+                aria-label="Notifications"
+                className={({ isActive }) =>
+                  `flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-800'
+                      : 'text-stone-500 hover:bg-stone-100 hover:text-primary-900'
+                  }`
+                }
+              >
+                <Icon name="bell" className="h-5 w-5" />
+              </NavLink>
+              <button
+                onClick={handleLogout}
+                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-primary-900 md:hidden"
+              >
+                Logout
+              </button>
+            </div>
           </div>
+          {/* Section links for small screens (the sidebar is desktop-only) */}
+          <nav className="flex gap-1 overflow-x-auto border-t border-stone-100 px-4 py-2 md:hidden" aria-label="Staff portal sections (mobile)">
+            {visibleSections.flatMap((section) => section.items).map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  `flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ${
+                    isActive ? 'bg-primary-900 text-white' : 'text-stone-600'
+                  }`
+                }
+              >
+                <Icon name={item.icon} className="h-4 w-4" />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
         </header>
 
-        {/* Mobile section nav (same workflow sections as the sidebar) */}
-        <nav
-          className="md:hidden bg-white border-b border-slate-200 px-3 py-2 flex gap-3 overflow-x-auto"
-          aria-label="Staff portal sections"
-        >
-          {visibleSections.map((section) => (
-            <div
-              key={section.title}
-              className="flex flex-col gap-1 border-l border-slate-200 pl-3 first:border-l-0 first:pl-0"
-            >
-              <h2 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                {section.title}
-              </h2>
-              <div className="flex gap-1">
-                {section.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      `flex items-center gap-1 px-2 py-1.5 rounded text-xs whitespace-nowrap ${
-                        isActive ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                      }`
-                    }
-                  >
-                    <span aria-hidden="true">{item.icon}</span>
-                    {item.label}
-                  </NavLink>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-6 md:p-8">{children}</main>
       </div>
     </div>
   );
@@ -194,9 +200,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
 export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="mb-6">
-      <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
-      {subtitle && <p className="text-sm text-slate-600 mt-1">{subtitle}</p>}
+    <div className="mb-7">
+      <h2 className="text-3xl font-extrabold tracking-tight text-primary-900">{title}</h2>
+      {subtitle && <p className="mt-1.5 text-stone-600">{subtitle}</p>}
     </div>
   );
 }

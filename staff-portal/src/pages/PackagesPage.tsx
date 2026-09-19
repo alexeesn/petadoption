@@ -59,7 +59,7 @@ export default function PackagesPage() {
 
       {showForm && (
         <Card className="mb-6 p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4">New Package</h3>
+          <h3 className="text-lg font-medium text-primary-900 mb-4">New Package</h3>
           <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
             <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             <Textarea label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />

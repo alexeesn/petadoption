@@ -176,13 +176,13 @@ export default function ApplicationDetailPage() {
 
   return (
     <div className="max-w-3xl">
-      <Link to="/applications" className="text-orange-600 text-sm font-medium hover:underline">
+      <Link to="/applications" className="text-primary-600 text-sm font-medium hover:underline">
         ← Back to applications
       </Link>
 
-      <div className="mt-4 bg-white rounded-lg shadow-sm border border-orange-100 p-6">
+      <div className="panel mt-4 p-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-stone-800">Application for {app.pet_name}</h1>
+          <h1 className="text-3xl font-extrabold text-primary-900">Application for {app.pet_name}</h1>
           <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(app.status)}`}>
             {capitalize(app.status)}
           </span>
@@ -238,7 +238,7 @@ export default function ApplicationDetailPage() {
                     <span className="font-medium text-stone-700">{capitalize(doc.document_type)}</span>
                     <span className="text-stone-500">— {doc.original_filename}</span>
                     {doc.download_url && (
-                      <a href={doc.download_url} className="text-orange-600 hover:underline">
+                      <a href={doc.download_url} className="text-primary-600 hover:underline">
                         Download
                       </a>
                     )}
@@ -250,8 +250,8 @@ export default function ApplicationDetailPage() {
         </div>
 
         {app.status === 'approved' && (
-          <div className="mt-6 rounded-md border border-orange-200 bg-orange-50 p-4">
-            <h3 className="text-sm font-semibold text-stone-800">Onsite visit appointment</h3>
+          <div className="mt-6 rounded-md border border-primary-200 bg-primary-50 p-4">
+            <h3 className="text-sm font-semibold text-primary-900">Onsite visit appointment</h3>
 
             {activeAppointment && (
               <div className="mt-2 space-y-2">
@@ -280,7 +280,7 @@ export default function ApplicationDetailPage() {
                     online upload requirements. */}
                 {activeAppointment.status === 'confirmed' && (
                   <div className="mt-3 rounded-md border border-green-200 bg-green-50 p-4">
-                    <h4 className="text-sm font-semibold text-stone-800">What to Prepare for Your Visit</h4>
+                    <h4 className="text-sm font-semibold text-primary-900">What to Prepare for Your Visit</h4>
                     <p className="mt-1 text-sm text-stone-600">
                       Please prepare or bring the following for your visit to {app.pet_name}:
                     </p>
@@ -312,7 +312,7 @@ export default function ApplicationDetailPage() {
             {canChooseVisitDate && (
               <form onSubmit={handleRequestAppointment} className="mt-3 space-y-3">
                 <div>
-                  <label htmlFor="visitDate" className="block text-sm font-medium text-stone-700 mb-1">
+                  <label htmlFor="visitDate" className="field-label mb-1">
                     Choose appointment date
                   </label>
                   <input
@@ -326,7 +326,7 @@ export default function ApplicationDetailPage() {
                     }}
                     aria-describedby="visitDateHint"
                     aria-invalid={apptError ? true : undefined}
-                    className="w-full sm:w-64 rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="field-input sm:w-64"
                   />
                   <p id="visitDateHint" className="mt-1 text-xs text-stone-500">
                     Visits are available {CENTER_SCHEDULE_TEXT}. Weekends and past dates cannot be
@@ -337,7 +337,7 @@ export default function ApplicationDetailPage() {
                 <button
                   type="submit"
                   disabled={!visitDate || apptSubmitting}
-                  className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
+                  className="btn btn-primary"
                 >
                   {apptSubmitting ? 'Submitting...' : 'Submit appointment request'}
                 </button>
@@ -345,7 +345,7 @@ export default function ApplicationDetailPage() {
             )}
 
             {appointments.length > 0 && (
-              <ul className="mt-4 space-y-1 border-t border-orange-200 pt-3 text-xs text-stone-600">
+              <ul className="mt-4 space-y-1 border-t border-primary-200 pt-3 text-xs text-stone-600">
                 {appointments.map((appointment) => (
                   <li key={appointment.id}>
                     {formatDate(appointment.requested_date)} — {capitalize(appointment.status)}
@@ -360,21 +360,21 @@ export default function ApplicationDetailPage() {
         )}
 
         {DOCUMENTS_REQUESTED.includes(app.status) && (
-          <div className="mt-6 rounded-md border border-orange-200 bg-orange-50 p-4">
-            <h3 className="text-sm font-semibold text-stone-800">Add a requested document</h3>
+          <div className="mt-6 rounded-md border border-primary-200 bg-primary-50 p-4">
+            <h3 className="text-sm font-semibold text-primary-900">Add a requested document</h3>
             <p className="mt-1 text-xs text-stone-600">
               Staff asked for more information on this application. Uploads here are attached to it directly.
             </p>
             <form onSubmit={handleExtraUpload} className="mt-3 space-y-3">
               <div>
-                <label htmlFor="extraType" className="block text-sm font-medium text-stone-700 mb-1">
+                <label htmlFor="extraType" className="field-label mb-1">
                   Document type
                 </label>
                 <select
                   id="extraType"
                   value={extraType}
                   onChange={(e) => setExtraType(e.target.value)}
-                  className="w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="field-input"
                 >
                   <option value="identification">Identification</option>
                   <option value="proof_of_address">Proof of Address</option>
@@ -387,7 +387,7 @@ export default function ApplicationDetailPage() {
                 </select>
               </div>
               <div>
-                <label htmlFor="extraFile" className="block text-sm font-medium text-stone-700 mb-1">
+                <label htmlFor="extraFile" className="field-label mb-1">
                   File
                 </label>
                 <input
@@ -398,7 +398,7 @@ export default function ApplicationDetailPage() {
                     setExtraFile(e.target.files?.[0] ?? null)
                     setUploadError('')
                   }}
-                  className="w-full text-sm text-stone-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-orange-100 file:text-orange-700 hover:file:bg-orange-200"
+                  className="w-full text-sm text-stone-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-primary-100 file:text-primary-700 hover:file:bg-primary-200"
                 />
                 <p className="text-xs text-stone-500 mt-1">Accepted: PDF, images, DOC/DOCX, TXT. Max 10MB.</p>
               </div>
@@ -406,7 +406,7 @@ export default function ApplicationDetailPage() {
               <button
                 type="submit"
                 disabled={!extraFile || uploading}
-                className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
+                className="btn btn-primary"
               >
                 {uploading ? 'Uploading...' : 'Upload document'}
               </button>
@@ -419,7 +419,7 @@ export default function ApplicationDetailPage() {
             <button
               onClick={handleCancel}
               disabled={cancelling}
-              className="px-4 py-2 bg-stone-100 text-stone-700 text-sm font-medium rounded-md hover:bg-stone-200 disabled:opacity-50"
+              className="btn btn-secondary"
             >
               {cancelling ? 'Cancelling...' : 'Cancel application'}
             </button>
@@ -433,7 +433,7 @@ export default function ApplicationDetailPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border-t border-stone-100 pt-4">
-      <h3 className="text-sm font-semibold text-stone-700">{title}</h3>
+      <h3 className="text-sm font-semibold text-primary-900">{title}</h3>
       <div className="mt-2 text-sm">{children}</div>
     </div>
   )

@@ -39,8 +39,8 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-12">
-      <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-8">
-        <h1 className="text-2xl font-bold text-stone-800 text-center">Reset password</h1>
+      <div className="auth-card">
+        <h1 className="text-3xl font-extrabold text-primary-900 text-center">Reset password</h1>
         <p className="mt-2 text-sm text-stone-500 text-center">
           Enter the reset code and your new password.
         </p>
@@ -50,36 +50,36 @@ export default function ResetPasswordPage() {
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-stone-700">Email</label>
+            <label htmlFor="email" className="field-label">Email</label>
             <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              className="field-input mt-1" />
           </div>
           <div>
-            <label htmlFor="otp" className="block text-sm font-medium text-stone-700">Reset code</label>
+            <label htmlFor="otp" className="field-label">Reset code</label>
             <input id="otp" type="text" inputMode="numeric" maxLength={6} required value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))} placeholder="123456"
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 tracking-widest" />
+              className="field-input mt-1 tracking-widest" />
           </div>
           <div>
-            <label htmlFor="new_password" className="block text-sm font-medium text-stone-700">New password</label>
+            <label htmlFor="new_password" className="field-label">New password</label>
             <input id="new_password" type="password" required value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              className="field-input mt-1" />
           </div>
           <div>
-            <label htmlFor="confirm_password" className="block text-sm font-medium text-stone-700">Confirm new password</label>
+            <label htmlFor="confirm_password" className="field-label">Confirm new password</label>
             <input id="confirm_password" type="password" required value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500" />
+              className="field-input mt-1" />
           </div>
           <button type="submit" disabled={loading}
-            className="w-full px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 disabled:opacity-50">
+            className="btn btn-primary w-full">
             {loading ? 'Resetting...' : 'Reset password'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-stone-500">
-          <Link to="/login" className="text-orange-600 hover:underline">Back to login</Link>
+          <Link to="/login" className="text-primary-600 hover:underline">Back to login</Link>
         </p>
       </div>
     </div>

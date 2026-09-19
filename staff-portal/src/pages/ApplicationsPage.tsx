@@ -28,11 +28,11 @@ export default function ApplicationsPage() {
     <div>
       <PageHeader title="Applications" subtitle="Review and manage adoption applications" />
       <div className="mb-4">
-        <label className="block text-sm font-medium text-slate-700 mb-1">Filter by status</label>
+        <label className="field-label mb-1">Filter by status</label>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+          className="field-input w-auto"
         >
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -74,7 +74,7 @@ export default function ApplicationsPage() {
                 <td className="px-4 py-3 text-right">
                   <Link
                     to={`/applications/${app.id}`}
-                    className="text-indigo-600 hover:underline text-sm font-medium"
+                    className="text-primary-600 hover:underline text-sm font-medium"
                   >
                     Review
                   </Link>

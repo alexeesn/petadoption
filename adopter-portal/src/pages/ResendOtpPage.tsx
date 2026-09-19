@@ -30,8 +30,8 @@ export default function ResendOtpPage() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-12">
-      <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-8">
-        <h1 className="text-2xl font-bold text-stone-800 text-center">Resend verification code</h1>
+      <div className="auth-card">
+        <h1 className="text-3xl font-extrabold text-primary-900 text-center">Resend verification code</h1>
         <p className="mt-2 text-sm text-stone-500 text-center">
           Enter your email and we&apos;ll send you a fresh verification code.
         </p>
@@ -41,27 +41,27 @@ export default function ResendOtpPage() {
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-stone-700">Email</label>
+            <label htmlFor="email" className="field-label">Email</label>
             <input
               id="email"
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="field-input mt-1"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 disabled:opacity-50"
+            className="btn btn-primary w-full"
           >
             {loading ? 'Sending...' : 'Send new code'}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-stone-500">
-          <Link to="/verify-email" className="text-orange-600 hover:underline">Back to verification</Link>
+          <Link to="/verify-email" className="text-primary-600 hover:underline">Back to verification</Link>
         </p>
       </div>
     </div>

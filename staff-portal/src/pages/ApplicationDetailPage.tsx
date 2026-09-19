@@ -92,7 +92,7 @@ function Detail({ label, value }: { label: string; value?: ReactNode }) {
     || (typeof value === 'string' && value.trim() === '');
   return (
     <div>
-      <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+      <dt className="text-xs font-semibold text-slate-500">{label}</dt>
       <dd className="mt-1 text-sm text-slate-800 whitespace-pre-wrap">{empty ? '—' : value}</dd>
     </div>
   );
@@ -101,7 +101,7 @@ function Detail({ label, value }: { label: string; value?: ReactNode }) {
 function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="p-6 mb-6">
-      <h3 className="text-base font-semibold text-slate-900 mb-4">{title}</h3>
+      <h3 className="text-base font-semibold text-primary-900 mb-4">{title}</h3>
       {children}
     </Card>
   );
@@ -353,7 +353,7 @@ export default function ApplicationDetailPage() {
         subtitle={`${app.pet_name} — ${app.adopter_name || app.adopter_email}`}
       />
       <div className="mb-4">
-        <Link to="/applications" className="text-sm text-indigo-600 hover:underline">
+        <Link to="/applications" className="text-sm text-primary-600 hover:underline">
           &larr; Back to applications
         </Link>
       </div>
@@ -477,7 +477,7 @@ export default function ApplicationDetailPage() {
 
       <SectionCard title="Uploaded Documents">
         <div className="mb-5">
-          <h4 className="text-sm font-medium text-slate-700 mb-2">Required documents</h4>
+          <h4 className="text-sm font-medium text-primary-900 mb-2">Required documents</h4>
           <ul className="space-y-1">
             {REQUIRED_DOCUMENTS.map((required) => {
               const present = uploadedTypes.has(required.type);
@@ -519,7 +519,7 @@ export default function ApplicationDetailPage() {
                     type="button"
                     onClick={() => viewDocument(doc)}
                     disabled={busyDocument === doc.id}
-                    className="text-sm font-medium text-indigo-600 hover:text-indigo-700 disabled:opacity-50"
+                    className="text-sm font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
                   >
                     Open
                   </button>
@@ -645,7 +645,7 @@ export default function ApplicationDetailPage() {
               )}
 
               <div className="mt-6">
-                <h4 className="text-sm font-medium text-slate-700 mb-2">
+                <h4 className="text-sm font-medium text-primary-900 mb-2">
                   Recorded onsite payments
                 </h4>
                 {payments.length === 0 ? (
@@ -702,7 +702,7 @@ export default function ApplicationDetailPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="field-input"
             placeholder="Internal notes (not visible to the adopter)"
           />
         </label>
@@ -719,7 +719,7 @@ export default function ApplicationDetailPage() {
           {allowed.includes('rejected') && (
             <div className="mb-4">
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-700">
+                <span className="field-label mb-1">
                   Rejection reason <span className="text-red-600">(required to reject)</span>
                 </span>
                 <textarea
@@ -727,7 +727,7 @@ export default function ApplicationDetailPage() {
                   onChange={(e) => setRejectionReason(e.target.value)}
                   rows={3}
                   placeholder="Explain why this application is being rejected — the adopter will see this."
-                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="field-input"
                 />
               </label>
             </div>

@@ -4,6 +4,7 @@ import { fetchPets } from '../services/apiService'
 import type { Pet } from '../types'
 import { formatCurrency, capitalize, formatPetAge } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
+import { Icon, PawMark } from '../components/Icons'
 
 const speciesOptions = ['dog', 'cat', 'bird', 'rabbit', 'other']
 const sizeOptions = ['small', 'medium', 'large', 'extra_large']
@@ -43,31 +44,32 @@ export default function PetsPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-3xl font-bold text-stone-800">Find Your New Friend</h1>
-      <p className="mt-2 text-stone-500">Browse available pets looking for their forever home.</p>
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+      <h1 className="text-4xl font-extrabold text-primary-900 sm:text-5xl">Find Your New Friend</h1>
+      <p className="mt-3 max-w-xl text-lg text-stone-600">Browse available pets looking for their forever home.</p>
 
-      <div className="mt-6 bg-white rounded-lg border border-orange-100 p-4">
+      <div className="mt-8 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
         <form
-          className="flex flex-col sm:flex-row gap-4"
+          className="flex flex-col gap-2 sm:flex-row sm:items-center"
           onSubmit={(e) => { e.preventDefault(); const form = new FormData(e.currentTarget); updateParam('search', String(form.get('search') || '')); }}
         >
-          <div className="flex-1">
+          <div className="relative flex-1">
             <label htmlFor="search" className="sr-only">Search pets</label>
+            <Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-stone-400" />
             <input
               id="search"
               name="search"
               type="text"
               defaultValue={search}
               placeholder="Search by name or breed..."
-              className="w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="field-input border-transparent pl-11 focus:border-primary-500"
             />
           </div>
           <select
             aria-label="Species"
             value={species}
             onChange={(e) => updateParam('species', e.target.value)}
-            className="px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="field-input border-transparent bg-stone-100 sm:w-40"
           >
             <option value="">All species</option>
             {speciesOptions.map((s) => (
@@ -78,14 +80,14 @@ export default function PetsPage() {
             aria-label="Size"
             value={size}
             onChange={(e) => updateParam('size', e.target.value)}
-            className="px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+            className="field-input border-transparent bg-stone-100 sm:w-40"
           >
             <option value="">All sizes</option>
             {sizeOptions.map((s) => (
               <option key={s} value={s}>{capitalize(s)}</option>
             ))}
           </select>
-          <button type="submit" className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700">
+          <button type="submit" className="btn btn-primary px-6 py-3">
             Search
           </button>
         </form>
@@ -95,38 +97,39 @@ export default function PetsPage() {
       {error && <ErrorState message="Could not load pets." />}
 
       {!loading && !error && pets.length === 0 && (
-        <p className="text-center text-stone-500 py-12">No pets match your search.</p>
+        <p className="py-16 text-center text-stone-500">No pets match your search.</p>
       )}
 
       {!loading && !error && pets.length > 0 && (
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-10 grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
           {pets.map((pet) => (
-            <Link
-              key={pet.id}
-              to={`/pets/${pet.id}`}
-              className="bg-white rounded-lg shadow-sm border border-orange-100 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="h-48 bg-stone-100">
+            <Link key={pet.id} to={`/pets/${pet.id}`} className="pet-card">
+              <div className="relative h-56 bg-stone-200">
                 {pet.primary_image?.image ? (
-                  <img src={pet.primary_image.image} alt={pet.name} className="w-full h-full object-cover" />
+                  <img src={pet.primary_image.image} alt={pet.name} className="h-full w-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl" aria-hidden="true">🐾</div>
+                  <div className="flex h-full w-full items-center justify-center text-stone-400" aria-hidden="true">
+                    <PawMark className="h-14 w-14" />
+                  </div>
                 )}
+                <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-primary-900 shadow-sm">
+                  {capitalize(pet.species)}
+                </span>
               </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-stone-800">{pet.name}</h3>
-                  <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">{capitalize(pet.species)}</span>
-                </div>
-                <p className="mt-1 text-sm text-stone-500">
+              <div className="p-5">
+                <h3 className="text-xl font-bold text-primary-900">{pet.name}</h3>
+                <p className="mt-1 text-sm text-stone-600">
                   {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years)} · {capitalize(pet.gender)}
                 </p>
                 <p className="mt-1 text-sm text-stone-500">
                   {pet.size && capitalize(pet.size)}
                   {pet.is_vaccinated ? ' · Vaccinated' : ''}
                 </p>
-                <div className="mt-3 pt-3 border-t border-stone-100 font-medium text-orange-600 text-sm">
-                  {pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free adoption'}
+                <div className="mt-4 flex items-center justify-between border-t border-dashed border-stone-300 pt-4">
+                  <span className="rounded-md bg-accent-100 px-2.5 py-1 text-sm font-bold text-primary-900">
+                    {pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free adoption'}
+                  </span>
+                  <Icon name="arrowRight" className="h-5 w-5 text-primary-600" />
                 </div>
               </div>
             </Link>
@@ -135,10 +138,10 @@ export default function PetsPage() {
       )}
 
       {!loading && !error && nextPage && (
-        <div className="text-center mt-8">
+        <div className="mt-10 text-center">
           <Link
             to={`/pets?${searchParams.toString()}&page=2`}
-            className="px-4 py-2 border border-orange-300 text-orange-600 rounded-md hover:bg-orange-50"
+            className="btn btn-secondary"
           >
             Next page
           </Link>

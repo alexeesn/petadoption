@@ -72,21 +72,21 @@ export default function ReportsPage() {
           options={REPORT_TYPES}
         />
         <label className="block">
-          <span className="block text-sm font-medium text-slate-700 mb-1">From</span>
+          <span className="field-label mb-1">From</span>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field-input w-auto"
           />
         </label>
         <label className="block">
-          <span className="block text-sm font-medium text-slate-700 mb-1">To</span>
+          <span className="field-label mb-1">To</span>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field-input w-auto"
           />
         </label>
         <Button variant="outline" onClick={() => load(reportType, dateFrom, dateTo)}>Apply Filters</Button>
@@ -100,7 +100,7 @@ export default function ReportsPage() {
       ) : (
         <Card>
           <div className="p-6">
-            <h3 className="text-lg font-medium text-slate-900 mb-4">
+            <h3 className="text-lg font-medium text-primary-900 mb-4">
               {REPORT_TYPES.find((r) => r.value === reportType)?.label}
             </h3>
             {data.length === 0 ? (
@@ -114,7 +114,7 @@ export default function ReportsPage() {
                         <th
                           key={key}
                           scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider"
+                          className="px-4 py-3 text-left text-xs font-semibold text-slate-500"
                         >
                           {key.replace(/_/g, ' ')}
                         </th>

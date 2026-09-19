@@ -123,7 +123,7 @@ export default function GoogleSignInButton({ onCredential, onError, disabled }: 
   }, [onCredential, onError, disabled])
 
   if (unavailable) {
-    return <p className="mt-2 text-center text-sm text-stone-400">{unavailable}</p>
+    return <p className="mt-2 text-center text-sm text-stone-500">{unavailable}</p>
   }
 
   return (

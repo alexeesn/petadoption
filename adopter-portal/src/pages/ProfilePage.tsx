@@ -139,13 +139,13 @@ export default function ProfilePage() {
   if (loadError) return <ErrorState message={loadError} onRetry={load} />
 
   const inputCls =
-    'w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
+    'field-input'
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-stone-800 mb-2">My Profile</h1>
+          <h1 className="text-3xl font-extrabold text-primary-900 mb-2">My Profile</h1>
           <p className="text-stone-500 mb-6">
             Manage your adopter profile information. Fields marked{' '}
             <span className="text-red-600" aria-hidden="true">*</span>{' '}
@@ -153,7 +153,7 @@ export default function ProfilePage() {
             are required before you can start an adoption application.
           </p>
         </div>
-        <Link to="/applications" className="shrink-0 text-sm font-medium text-orange-600 hover:underline">
+        <Link to="/applications" className="shrink-0 text-sm font-medium text-primary-600 hover:underline">
           My Applications
         </Link>
       </div>
@@ -183,49 +183,49 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-orange-100 p-6 space-y-4" noValidate>
+      <form onSubmit={handleSubmit} className="panel p-6 space-y-4" noValidate>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="phone_number" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="phone_number" className="field-label mb-1">
               Phone Number <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input id="phone_number" name="phone_number" type="tel" required value={form.phone_number} onChange={handleChange} aria-invalid={fieldErrors.phone_number ? true : undefined} className={inputCls} />
             <FieldError message={fieldErrors.phone_number} />
           </div>
           <div>
-            <label htmlFor="city" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="city" className="field-label mb-1">
               City <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input id="city" name="city" type="text" required value={form.city} onChange={handleChange} aria-invalid={fieldErrors.city ? true : undefined} className={inputCls} />
             <FieldError message={fieldErrors.city} />
           </div>
           <div className="sm:col-span-2">
-            <label htmlFor="address_line1" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="address_line1" className="field-label mb-1">
               Address Line 1 <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input id="address_line1" name="address_line1" type="text" required value={form.address_line1} onChange={handleChange} aria-invalid={fieldErrors.address_line1 ? true : undefined} className={inputCls} />
             <FieldError message={fieldErrors.address_line1} />
           </div>
           <div className="sm:col-span-2">
-            <label htmlFor="address_line2" className="block text-sm font-medium text-stone-700 mb-1">Address Line 2</label>
+            <label htmlFor="address_line2" className="field-label mb-1">Address Line 2</label>
             <input id="address_line2" name="address_line2" type="text" value={form.address_line2} onChange={handleChange} className={inputCls} />
           </div>
           <div>
-            <label htmlFor="state" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="state" className="field-label mb-1">
               State / Province <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input id="state" name="state" type="text" required value={form.state} onChange={handleChange} aria-invalid={fieldErrors.state ? true : undefined} className={inputCls} />
             <FieldError message={fieldErrors.state} />
           </div>
           <div>
-            <label htmlFor="zip_code" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="zip_code" className="field-label mb-1">
               ZIP / Postal Code <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <input id="zip_code" name="zip_code" type="text" required value={form.zip_code} onChange={handleChange} aria-invalid={fieldErrors.zip_code ? true : undefined} className={inputCls} />
             <FieldError message={fieldErrors.zip_code} />
           </div>
           <div>
-            <label htmlFor="housing_type" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="housing_type" className="field-label mb-1">
               Housing Type <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <select id="housing_type" name="housing_type" required value={form.housing_type} onChange={handleChange} aria-invalid={fieldErrors.housing_type ? true : undefined} className={inputCls}>
@@ -239,7 +239,7 @@ export default function ProfilePage() {
             <FieldError message={fieldErrors.housing_type} />
           </div>
           <div>
-            <label htmlFor="owns_or_rents" className="block text-sm font-medium text-stone-700 mb-1">
+            <label htmlFor="owns_or_rents" className="field-label mb-1">
               Own or Rent <span className="text-red-600" aria-hidden="true">*</span>
             </label>
             <select id="owns_or_rents" name="owns_or_rents" required value={form.owns_or_rents} onChange={handleChange} aria-invalid={fieldErrors.owns_or_rents ? true : undefined} className={inputCls}>
@@ -251,12 +251,12 @@ export default function ProfilePage() {
             <FieldError message={fieldErrors.owns_or_rents} />
           </div>
           <div>
-            <label htmlFor="household_members" className="block text-sm font-medium text-stone-700 mb-1">Household Members</label>
+            <label htmlFor="household_members" className="field-label mb-1">Household Members</label>
             <input id="household_members" name="household_members" type="number" min="1" value={form.household_members} onChange={handleChange} className={inputCls} />
           </div>
           <div className="flex items-center">
             <label className="inline-flex items-center gap-2 text-sm text-stone-700">
-              <input type="checkbox" name="has_yard" checked={form.has_yard} onChange={handleChange} className="w-4 h-4 text-orange-600" />
+              <input type="checkbox" name="has_yard" checked={form.has_yard} onChange={handleChange} className="w-4 h-4 text-primary-600" />
               I have a yard
             </label>
           </div>
@@ -266,7 +266,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={saving}
-            className="px-4 py-2 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
+            className="btn btn-primary"
           >
             {saving ? 'Saving...' : 'Save Profile'}
           </button>

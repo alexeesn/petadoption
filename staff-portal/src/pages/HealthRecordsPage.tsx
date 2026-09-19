@@ -85,7 +85,7 @@ export default function HealthRecordsPage() {
 
       {showForm && (
         <Card className="mb-6 p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4">New Health Record</h3>
+          <h3 className="text-lg font-medium text-primary-900 mb-4">New Health Record</h3>
           <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
             <Select
               label="Pet"

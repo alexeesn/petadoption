@@ -4,6 +4,7 @@ import { createApplication, fetchAdopterProfile, fetchPet } from '../services/ap
 import type { Application, AdopterProfile, Pet } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
 import { capitalize, getStatusColor, formatPetAge } from '../utils/format'
+import { Icon } from '../components/Icons'
 
 interface ApplicationForm {
   why_adopt: string
@@ -256,14 +257,14 @@ export default function NewApplicationPage() {
         <button onClick={() => navigate(-1)} className="mb-4 text-sm font-medium text-stone-600 hover:text-stone-900">
           &larr; Back
         </button>
-        <div className="rounded-lg border border-orange-100 bg-white p-6 shadow-sm sm:p-8">
+        <div className="panel p-6 sm:p-8">
           <div
-            className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 text-2xl"
+            className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-100 text-primary-900"
             aria-hidden="true"
           >
-            🏠
+            <Icon name="home" className="h-7 w-7" />
           </div>
-          <h1 className="mt-4 text-center text-2xl font-semibold text-stone-900">
+          <h1 className="text-3xl font-extrabold text-primary-900 mt-4 text-center">
             Complete Your Profile First
           </h1>
           <p className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-stone-600">
@@ -274,7 +275,7 @@ export default function NewApplicationPage() {
             <Link
               to="/profile"
               state={backToApplication}
-              className="rounded-md bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700"
+              className="btn btn-primary"
             >
               Update Profile
             </Link>
@@ -285,12 +286,12 @@ export default function NewApplicationPage() {
   }
 
   const inputCls =
-    'w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500'
+    'field-input'
 
   if (submitted) {
     return (
       <div className="mx-auto max-w-3xl">
-        <div className="rounded-lg border border-orange-100 bg-white p-6 shadow-sm">
+        <div className="panel p-6">
           <Alert type="success">
             <strong>Application submitted successfully.</strong> We&apos;ll let you know once it has been reviewed.
           </Alert>
@@ -310,7 +311,7 @@ export default function NewApplicationPage() {
             </div>
           </dl>
 
-          <h2 className="mt-6 text-sm font-semibold text-stone-700">Documents</h2>
+          <h2 className="mt-6 text-sm font-semibold text-primary-900">Documents</h2>
           <ul className="mt-2 space-y-1 text-sm text-stone-600">
             {(submitted.documents ?? []).map((doc) => (
               <li key={doc.id}>
@@ -325,13 +326,13 @@ export default function NewApplicationPage() {
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               to={`/applications/${submitted.id}`}
-              className="rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+              className="btn btn-primary"
             >
               View application
             </Link>
             <Link
               to="/applications"
-              className="rounded-md bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-200"
+              className="btn btn-secondary"
             >
               My Applications
             </Link>
@@ -346,10 +347,10 @@ export default function NewApplicationPage() {
       <button onClick={() => navigate(-1)} className="mb-4 text-sm font-medium text-stone-600 hover:text-stone-900">
         &larr; Back
       </button>
-      <h1 className="text-2xl font-semibold text-stone-900">Adoption Application</h1>
+      <h1 className="text-3xl font-extrabold text-primary-900">Adoption Application</h1>
 
       {pet && (
-        <div className="mt-4 flex items-center gap-4 rounded-lg border border-stone-200 bg-white p-4">
+        <div className="panel mt-4 flex items-center gap-4 p-4">
           {pet.primary_image?.image && (
             <img src={pet.primary_image.image} alt={pet.name} className="h-16 w-16 rounded-lg object-cover" />
           )}
@@ -380,9 +381,9 @@ export default function NewApplicationPage() {
             <span
               className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${
                 index === step
-                  ? 'bg-orange-600 text-white'
+                  ? 'bg-primary-600 text-white'
                   : index < step
-                    ? 'bg-orange-100 text-orange-700'
+                    ? 'bg-primary-100 text-primary-700'
                     : 'bg-stone-100 text-stone-500'
               }`}
               aria-current={index === step ? 'step' : undefined}
@@ -401,12 +402,12 @@ export default function NewApplicationPage() {
         </div>
       )}
 
-      <div className="mt-6 rounded-lg border border-orange-100 bg-white p-6 shadow-sm">
+      <div className="panel mt-6 p-6">
         {step === 0 && (
           <div className="space-y-5">
-            <h2 className="text-lg font-semibold text-stone-800">Applicant Information</h2>
+            <h2 className="text-lg font-semibold text-primary-900">Applicant Information</h2>
             <div>
-              <label htmlFor="why_adopt" className="mb-1 block text-sm font-medium text-stone-700">
+              <label htmlFor="why_adopt" className="field-label mb-1">
                 Why do you want to adopt this pet? <span className="text-red-600">*</span>
               </label>
               <textarea
@@ -422,7 +423,7 @@ export default function NewApplicationPage() {
             </div>
 
             <div>
-              <label htmlFor="experience_with_pets" className="mb-1 block text-sm font-medium text-stone-700">
+              <label htmlFor="experience_with_pets" className="field-label mb-1">
                 Experience with pets <span className="text-red-600">*</span>
               </label>
               <textarea
@@ -437,9 +438,9 @@ export default function NewApplicationPage() {
               <FieldError message={fieldErrors.experience_with_pets} />
             </div>
 
-            <h2 className="pt-2 text-lg font-semibold text-stone-800">Application Details</h2>
+            <h2 className="pt-2 text-lg font-semibold text-primary-900">Application Details</h2>
             <div>
-              <label htmlFor="living_situation" className="mb-1 block text-sm font-medium text-stone-700">
+              <label htmlFor="living_situation" className="field-label mb-1">
                 Living situation <span className="text-red-600">*</span>
               </label>
               <textarea
@@ -470,7 +471,7 @@ export default function NewApplicationPage() {
 
             {form.has_other_pets && (
               <div>
-                <label htmlFor="other_pets_description" className="mb-1 block text-sm font-medium text-stone-700">
+                <label htmlFor="other_pets_description" className="field-label mb-1">
                   Describe your other pets <span className="text-red-600">*</span>
                 </label>
                 <textarea
@@ -487,7 +488,7 @@ export default function NewApplicationPage() {
             )}
 
             <div>
-              <label htmlFor="references" className="mb-1 block text-sm font-medium text-stone-700">
+              <label htmlFor="references" className="field-label mb-1">
                 References <span className="text-red-600">*</span>
               </label>
               <textarea
@@ -503,7 +504,7 @@ export default function NewApplicationPage() {
             </div>
 
             <div>
-              <label htmlFor="additional_notes" className="mb-1 block text-sm font-medium text-stone-700">
+              <label htmlFor="additional_notes" className="field-label mb-1">
                 Additional notes
               </label>
               <textarea
@@ -523,7 +524,7 @@ export default function NewApplicationPage() {
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <h2 className="text-lg font-semibold text-stone-800">Required Documents</h2>
+              <h2 className="text-lg font-semibold text-primary-900">Required Documents</h2>
               <p className="mt-1 text-sm text-stone-500">
                 Accepted: PDF, images, DOC/DOCX, TXT. Max 10MB each. These are submitted together with your
                 application.
@@ -532,7 +533,7 @@ export default function NewApplicationPage() {
 
             {DOCUMENT_SLOTS.map((slot) => (
               <div key={slot.type} className="rounded-md border border-stone-200 p-4">
-                <label htmlFor={`file-${slot.type}`} className="block text-sm font-medium text-stone-700">
+                <label htmlFor={`file-${slot.type}`} className="field-label">
                   {slot.label} {slot.required && <span className="text-red-600">*</span>}
                 </label>
                 <p className="mt-0.5 text-xs text-stone-500">{slot.hint}</p>
@@ -541,7 +542,7 @@ export default function NewApplicationPage() {
                   type="file"
                   accept={ACCEPTED_EXTENSIONS.join(',')}
                   onChange={(e) => handleFileChange(slot.type, e.target.files?.[0] ?? null)}
-                  className="mt-2 w-full text-sm text-stone-600 file:mr-4 file:rounded-md file:border-0 file:bg-orange-100 file:px-4 file:py-2 file:text-orange-700 hover:file:bg-orange-200"
+                  className="mt-2 w-full text-sm text-stone-600 file:mr-4 file:rounded-md file:border-0 file:bg-primary-100 file:px-4 file:py-2 file:text-primary-700 hover:file:bg-primary-200"
                 />
                 {files[slot.type] && !documentErrors[slot.type] && (
                   <p className="mt-2 text-sm text-green-700">
@@ -557,7 +558,7 @@ export default function NewApplicationPage() {
 
         {step === 2 && (
           <div className="space-y-5">
-            <h2 className="text-lg font-semibold text-stone-800">Review Your Information</h2>
+            <h2 className="text-lg font-semibold text-primary-900">Review Your Information</h2>
 
             <ReviewItem label="Pet" value={pet?.name || '—'} />
             <ReviewItem label="Why adopt" value={form.why_adopt} />
@@ -568,7 +569,7 @@ export default function NewApplicationPage() {
             {form.additional_notes && <ReviewItem label="Additional notes" value={form.additional_notes} />}
 
             <div className="border-t border-stone-100 pt-4">
-              <h3 className="text-sm font-semibold text-stone-700">Documents</h3>
+              <h3 className="text-sm font-semibold text-primary-900">Documents</h3>
               <ul className="mt-2 space-y-1 text-sm text-stone-600">
                 {DOCUMENT_SLOTS.map((slot) => {
                   const file = files[slot.type]
@@ -592,7 +593,7 @@ export default function NewApplicationPage() {
               type="button"
               onClick={goBack}
               disabled={submitting}
-              className="rounded-md bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-200 disabled:opacity-50"
+              className="btn btn-secondary"
             >
               Back
             </button>
@@ -601,7 +602,7 @@ export default function NewApplicationPage() {
             <button
               type="button"
               onClick={goNext}
-              className="rounded-md bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700"
+              className="btn btn-primary"
             >
               Continue
             </button>
@@ -610,7 +611,7 @@ export default function NewApplicationPage() {
               type="button"
               onClick={handleSubmit}
               disabled={submitting || !petId}
-              className="rounded-md bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
+              className="btn btn-primary"
             >
               {submitting ? 'Submitting...' : 'Submit Application'}
             </button>
@@ -624,7 +625,7 @@ export default function NewApplicationPage() {
 function ReviewItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-t border-stone-100 pt-4 first:border-t-0 first:pt-0">
-      <h3 className="text-sm font-semibold text-stone-700">{label}</h3>
+      <h3 className="text-sm font-semibold text-primary-900">{label}</h3>
       <p className="mt-1 whitespace-pre-line text-sm text-stone-600">{value || '—'}</p>
     </div>
   )

@@ -243,7 +243,7 @@ export default function PetsPage() {
 
       {showForm && (
         <Card className="p-6 mb-6">
-          <h3 className="font-semibold text-slate-900 mb-4">{editing ? 'Edit Pet' : 'New Pet'}</h3>
+          <h3 className="font-semibold text-primary-900 mb-4">{editing ? 'Edit Pet' : 'New Pet'}</h3>
           {submitError && <p className="text-red-600 text-sm mb-4">{submitError}</p>}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -300,16 +300,16 @@ export default function PetsPage() {
               </label>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <label className="field-label mb-1">Description</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={3}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="field-input"
               />
             </div>
             <div className="md:col-span-2">
-              <label htmlFor="pet-photos" className="block text-sm font-medium text-slate-700 mb-1">Pet Photos</label>
+              <label htmlFor="pet-photos" className="field-label mb-1">Pet Photos</label>
 
               {editing && (
                 <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -360,7 +360,7 @@ export default function PetsPage() {
                             <button
                               type="button"
                               onClick={() => undoPhotoRemoval(photo)}
-                              className="text-indigo-600 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="text-primary-600 hover:underline focus:outline-none focus:ring-2 focus:ring-primary-500"
                             >
                               Undo
                             </button>
@@ -378,7 +378,7 @@ export default function PetsPage() {
                 accept="image/*"
                 multiple
                 onChange={handlePhotoChange}
-                className="w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-primary-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
               {photoError && <p className="text-red-600 text-sm mt-1">{photoError}</p>}
               <div id="pet-photos-preview">
@@ -402,7 +402,7 @@ export default function PetsPage() {
                           </span>
                         )}
                         {existingPhotos.length > 0 && (
-                          <span className="absolute bottom-0 inset-x-0 bg-indigo-600/80 text-white text-[10px] text-center rounded-b-md py-0.5">
+                          <span className="absolute bottom-0 inset-x-0 bg-primary-600/80 text-white text-[10px] text-center rounded-b-md py-0.5">
                             New
                           </span>
                         )}
@@ -442,7 +442,7 @@ export default function PetsPage() {
               <thead className="bg-slate-50">
                 <tr>
                   {['Name', 'Species', 'Breed', 'Age', 'Status', 'Fee', ''].map((h) => (
-                    <th key={h} scope="col" className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">{h}</th>
+                    <th key={h} scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -456,7 +456,7 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">₱{pet.adoption_fee}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => openEdit(pet)} className="text-indigo-600 hover:underline text-sm font-medium">Edit</button>
+                      <button onClick={() => openEdit(pet)} className="text-primary-600 hover:underline text-sm font-medium">Edit</button>
                     </td>
                   </tr>
                 ))}

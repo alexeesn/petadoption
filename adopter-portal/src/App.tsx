@@ -27,9 +27,9 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+          <div className="mx-auto h-11 w-11 animate-spin rounded-full border-[3px] border-stone-200 border-t-primary-600"></div>
           <p className="mt-4 text-stone-500">Loading Pet Adoption...</p>
         </div>
       </div>

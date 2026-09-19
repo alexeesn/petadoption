@@ -154,7 +154,7 @@ export default function PaymentsPage() {
 
       {showForm && (
         <Card className="mb-6 p-6">
-          <h3 className="text-lg font-medium text-slate-900 mb-4">Record Onsite Payment</h3>
+          <h3 className="text-lg font-medium text-primary-900 mb-4">Record Onsite Payment</h3>
           <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
             <Select
               label="Application"

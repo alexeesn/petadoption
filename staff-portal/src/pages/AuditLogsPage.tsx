@@ -63,13 +63,13 @@ export default function AuditLogsPage() {
           options={MODEL_OPTIONS}
         />
         <label className="block">
-          <span className="block text-sm font-medium text-slate-700 mb-1">Action</span>
+          <span className="field-label mb-1">Action</span>
           <input
             type="text"
             placeholder="e.g. status_change"
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="field-input w-auto"
           />
         </label>
         <Button variant="outline" onClick={loadLogs}>

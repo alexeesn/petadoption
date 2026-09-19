@@ -10,30 +10,44 @@ export function formatCurrency(amount: number | string): string {
   return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 }
 
+// Soft-tinted pills with a hairline ring. Full class names are spelled out so
+// Tailwind can see them at build time.
+const PILL = {
+  green: 'bg-green-50 text-green-800 ring-1 ring-inset ring-green-600/20',
+  emerald: 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-600/20',
+  amber: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/25',
+  blue: 'bg-blue-50 text-blue-800 ring-1 ring-inset ring-blue-600/20',
+  purple: 'bg-purple-50 text-purple-800 ring-1 ring-inset ring-purple-600/20',
+  // The brand palette has no orange, so this one status uses literal values.
+  orange: 'bg-[#fff1e6] text-[#9a3f0b] ring-1 ring-inset ring-[#e8590c]/25',
+  red: 'bg-red-50 text-red-800 ring-1 ring-inset ring-red-600/20',
+  gray: 'bg-stone-100 text-stone-700 ring-1 ring-inset ring-stone-400/30',
+}
+
 export function getStatusColor(status: string): string {
   const map: Record<string, string> = {
-    available: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    reserved: 'bg-blue-100 text-blue-800',
-    adopted: 'bg-emerald-100 text-emerald-800',
-    under_medical_care: 'bg-red-100 text-red-800',
-    inactive: 'bg-gray-100 text-gray-800',
-    draft: 'bg-gray-100 text-gray-800',
-    submitted: 'bg-blue-100 text-blue-800',
-    under_review: 'bg-yellow-100 text-yellow-800',
-    pending_documents: 'bg-purple-100 text-purple-800',
-    additional_info_requested: 'bg-orange-100 text-orange-800',
-    approved: 'bg-green-100 text-green-800',
-    rejected: 'bg-red-100 text-red-800',
-    cancelled: 'bg-gray-100 text-gray-800',
-    adoption_completed: 'bg-emerald-100 text-emerald-800',
-    scheduled: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    returned: 'bg-gray-100 text-gray-800',
-    pending_confirmation: 'bg-amber-100 text-amber-800',
-    confirmed: 'bg-green-100 text-green-800',
+    available: PILL.green,
+    pending: PILL.amber,
+    reserved: PILL.blue,
+    adopted: PILL.emerald,
+    under_medical_care: PILL.red,
+    inactive: PILL.gray,
+    draft: PILL.gray,
+    submitted: PILL.blue,
+    under_review: PILL.amber,
+    pending_documents: PILL.purple,
+    additional_info_requested: PILL.orange,
+    approved: PILL.green,
+    rejected: PILL.red,
+    cancelled: PILL.gray,
+    adoption_completed: PILL.emerald,
+    scheduled: PILL.blue,
+    completed: PILL.green,
+    returned: PILL.gray,
+    pending_confirmation: PILL.amber,
+    confirmed: PILL.green,
   }
-  return map[status] || 'bg-gray-100 text-gray-800'
+  return map[status] || PILL.gray
 }
 
 export function capitalize(str: string): string {

@@ -40,8 +40,8 @@ export default function LoginPage() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-12">
-      <div className="bg-white rounded-lg shadow-sm border border-orange-100 p-8">
-        <h1 className="text-2xl font-bold text-stone-800 text-center">Welcome back</h1>
+      <div className="auth-card">
+        <h1 className="text-3xl font-extrabold text-primary-900 text-center">Welcome back</h1>
         <p className="mt-2 text-sm text-stone-500 text-center">
           Log in to manage your adoption applications.
         </p>
@@ -58,13 +58,13 @@ export default function LoginPage() {
 
         <div className="my-5 flex items-center gap-3" aria-hidden="true">
           <span className="h-px flex-1 bg-stone-200" />
-          <span className="text-xs text-stone-400">or</span>
+          <span className="text-xs text-stone-500">or</span>
           <span className="h-px flex-1 bg-stone-200" />
         </div>
 
         <form onSubmit={handleSubmit} className="mt-2 space-y-4" noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-stone-700">
+            <label htmlFor="email" className="field-label">
               Email
             </label>
             <input
@@ -73,15 +73,15 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="field-input mt-1"
             />
           </div>
           <div>
             <div className="flex items-center justify-between">
-              <label htmlFor="password" className="block text-sm font-medium text-stone-700">
+              <label htmlFor="password" className="field-label">
                 Password
               </label>
-              <Link to="/forgot-password" className="text-sm text-orange-600 hover:underline">
+              <Link to="/forgot-password" className="text-sm text-primary-600 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -91,13 +91,13 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-stone-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="field-input mt-1"
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-4 py-2 bg-orange-600 text-white font-medium rounded-md hover:bg-orange-700 disabled:opacity-50"
+            className="btn btn-primary w-full"
           >
             {loading ? 'Logging in...' : 'Log in'}
           </button>
@@ -105,7 +105,7 @@ export default function LoginPage() {
 
         <p className="mt-6 text-center text-sm text-stone-500">
           Don&apos;t have an account?{' '}
-          <Link to="/register" className="text-orange-600 hover:underline font-medium">
+          <Link to="/register" className="text-primary-600 hover:underline font-medium">
             Sign up
           </Link>
         </p>
