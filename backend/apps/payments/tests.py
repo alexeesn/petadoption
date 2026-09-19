@@ -286,3 +286,142 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["status"], "adoption_completed")
         self.assertNotIn("staff_notes", resp.data)
+
+
+class PaymentCreationRegressionTests(BaseAPITestCase):
+    """Regression tests for payment creation via POST /api/payments/.
+
+    These verify the full HTTP endpoint, ensuring that the field values
+    the Staff Portal sends (method, status, payment_date, etc.) are
+    accepted by the backend serializer and model validation.
+    """
+
+    ADOPTION_FEE = "500.00"
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(
+            name="Buddy", species="dog", age_years=1, status="pending"
+        )
+        self.adopter = self.create_user(email="adopter@example.com")
+        self.staff = self.create_staff(email="staff@example.com")
+        self.application = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+
+    def _create_payment(self, **overrides):
+        payload = {
+            "application": str(self.application.id),
+            "amount": self.ADOPTION_FEE,
+            "method": "cash",
+            "status": "completed",
+            "payment_date": timezone.localdate().isoformat(),
+            "reference_number": "OR-2026-0001",
+            "notes": "Onsite cash payment",
+        }
+        payload.update(overrides)
+        self.authenticate(self.staff)
+        return self.client.post("/api/payments/", payload, format="json")
+
+    def test_valid_cash_payment_creation(self):
+        resp = self._create_payment(method="cash", status="completed")
+        self.assertEqual(resp.status_code, 201)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.amount, Decimal("500.00"))
+        self.assertEqual(payment.method, "cash")
+        self.assertEqual(payment.status, "completed")
+        self.assertEqual(payment.payment_date, timezone.localdate())
+        self.assertEqual(payment.reference_number, "OR-2026-0001")
+        self.assertEqual(payment.notes, "Onsite cash payment")
+        self.assertEqual(payment.processed_by, self.staff)
+        self.assertEqual(payment.application, self.application)
+
+    def test_valid_pending_payment_creation(self):
+        resp = self._create_payment(method="bank_transfer", status="pending")
+        self.assertEqual(resp.status_code, 201)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.method, "bank_transfer")
+        self.assertEqual(payment.status, "pending")
+
+    def test_all_valid_methods_accepted(self):
+        for method in ["cash", "bank_transfer", "gcash", "paymaya", "credit_card", "online"]:
+            Payment.objects.all().delete()
+            resp = self._create_payment(method=method)
+            self.assertEqual(resp.status_code, 201, f"method='{method}' rejected: {resp.data}")
+
+    def test_all_valid_statuses_accepted(self):
+        for status in ["pending", "completed", "failed", "refunded", "cancelled"]:
+            Payment.objects.all().delete()
+            resp = self._create_payment(status=status)
+            self.assertEqual(resp.status_code, 201, f"status='{status}' rejected: {resp.data}")
+
+    def test_payment_without_optional_fields(self):
+        resp = self._create_payment(payment_date=None, reference_number="", notes="")
+        self.assertEqual(resp.status_code, 201)
+
+    def test_response_includes_id_and_key_fields(self):
+        resp = self._create_payment()
+        self.assertEqual(resp.status_code, 201)
+        self.assertIn("id", resp.data)
+        self.assertIn("status", resp.data)
+        self.assertIn("amount", resp.data)
+        self.assertIn("method", resp.data)
+
+
+    def test_invalid_method_rejected(self):
+        resp = self._create_payment(method="manual")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("method", resp.data)
+
+    def test_invalid_status_rejected(self):
+        resp = self._create_payment(status="paid")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+
+    def test_unpaid_status_rejected(self):
+        resp = self._create_payment(status="unpaid")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+
+    def test_partial_status_rejected(self):
+        resp = self._create_payment(status="partial")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+
+    def test_missing_application_rejected(self):
+        resp = self._create_payment(application="")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_missing_amount_rejected(self):
+        resp = self._create_payment(amount="")
+        self.assertEqual(resp.status_code, 400)
+
+    def test_duplicate_payment_creates_second_record(self):
+        self._create_payment()
+        self._create_payment()
+        self.assertEqual(Payment.objects.count(), 2)
+
+    def test_adopter_cannot_create_payment(self):
+        self.authenticate(self.adopter)
+        resp = self.client.post(
+            "/api/payments/",
+            {"application": str(self.application.id), "amount": self.ADOPTION_FEE, "method": "cash", "status": "completed"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_created_payment_appears_in_list(self):
+        self._create_payment()
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/payments/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+
+    def test_payment_filterable_by_application(self):
+        self._create_payment()
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/payments/", {"application": str(self.application.id)})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+

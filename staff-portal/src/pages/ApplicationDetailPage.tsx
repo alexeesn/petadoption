@@ -245,7 +245,30 @@ export default function ApplicationDetailPage() {
         setPayReference('');
         loadPayments(app.id);
       })
-      .catch((e) => setOnsiteError(e.response?.data?.error || 'Failed to record the payment.'))
+      .catch((e) => {
+        const data = e.response?.data;
+        let msg = 'Failed to record the payment.';
+        if (data && typeof data === 'object') {
+          if (typeof data.error === 'string') {
+            msg = data.error;
+          } else if (typeof data.detail === 'string') {
+            msg = data.detail;
+          } else {
+            const parts: string[] = [];
+            for (const [key, val] of Object.entries(data)) {
+              if (Array.isArray(val)) {
+                const label = key === 'non_field_errors' ? '' : `${key.replace(/_/g, ' ')}: `;
+                parts.push(...(val as string[]).map((v) => `${label}${v}`));
+              } else if (typeof val === 'string') {
+                const label = key === 'non_field_errors' ? '' : `${key.replace(/_/g, ' ')}: `;
+                parts.push(`${label}${val}`);
+              }
+            }
+            if (parts.length > 0) msg = parts.join(' · ');
+          }
+        }
+        setOnsiteError(msg);
+      })
       .finally(() => setPaymentBusy(false));
   };
 

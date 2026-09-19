@@ -185,6 +185,7 @@ export interface Payment {
   id: string;
   application: string;
   application_id?: string;
+  adopter_email?: string;
   adoption?: string | null;
   package?: string;
   amount: string;
@@ -197,7 +198,9 @@ export interface Payment {
   paid_at?: string;
   processed_by?: string;
   processed_by_email?: string | null;
+  package_name?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface Notification {
