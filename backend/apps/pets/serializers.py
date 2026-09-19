@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.health.services import build_adopter_health_summary
 from .models import MAX_PET_AGE_YEARS, Pet, PetImage
 
 
@@ -14,6 +15,11 @@ class PetSerializer(serializers.ModelSerializer):
     # (create, PUT and PATCH) instead of relying on the model validators, which
     # DRF does not run on its own.
     age_years = serializers.IntegerField(min_value=0, max_value=MAX_PET_AGE_YEARS)
+    # Adopter-safe summary of the staff-managed health record (see
+    # apps.health.services). The full record stays behind the staff-only
+    # /api/health-records/ endpoints; this field only feeds the adopter-facing
+    # Pet Details page.
+    health_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Pet
@@ -21,9 +27,12 @@ class PetSerializer(serializers.ModelSerializer):
             "id", "name", "species", "breed", "age_years", "gender", "size",
             "weight_kg", "color", "description", "arrival_date", "status",
             "is_vaccinated", "is_neutered", "adoption_fee", "images",
-            "created_at", "updated_at",
+            "health_summary", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+    def get_health_summary(self, obj):
+        return build_adopter_health_summary(obj)
 
 
 class PetListSerializer(serializers.ModelSerializer):

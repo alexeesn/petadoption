@@ -114,8 +114,6 @@ export default function PetDetailPage() {
             {pet.weight_kg && <InfoRow label="Weight" value={`${pet.weight_kg} kg`} />}
             <InfoRow label="Color" value={pet.color || '—'} />
             <InfoRow label="At the center since" value={pet.arrival_date ? formatDate(pet.arrival_date) : '—'} />
-            <InfoRow label="Vaccinated" value={pet.is_vaccinated ? 'Yes' : 'No'} />
-            <InfoRow label="Neutered" value={pet.is_neutered ? 'Yes' : 'No'} />
             <InfoRow label="Adoption fee" value={pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free'} />
           </div>
 
@@ -125,6 +123,8 @@ export default function PetDetailPage() {
               <p className="mt-2 text-stone-600 whitespace-pre-line">{pet.description}</p>
             </div>
           )}
+
+          <PetHealthInfo pet={pet} />
 
           <div className="mt-8">
             {user ? (
@@ -149,11 +149,64 @@ export default function PetDetailPage() {
   )
 }
 
+/**
+ * Health Information for the Pet Details page.
+ *
+ * Everything shown here comes from the pet detail API: the vaccination and
+ * spayed/neutered flags are part of the pet record, and `health_summary` is
+ * built by the backend from the pet's existing health records. Staff-only
+ * fields (internal notes, treatment details, veterinarian information) are
+ * never sent to the adopter portal.
+ *
+ * Exported because it is driven purely by the `pet` prop.
+ */
+export function PetHealthInfo({ pet }: { pet: Pet }) {
+  const health = pet.health_summary
+  const vaccinationStatus = health?.vaccination_status ?? null
+  const healthStatus = health?.health_status?.trim() || ''
+  const lastCheckup = health?.last_checkup_date ? formatDate(health.last_checkup_date) : ''
+  const nextCheckup = health?.next_checkup_date ? formatDate(health.next_checkup_date) : ''
+  // No health record and no vaccination records yet: only the basic vaccinated
+  // and spayed/neutered flags on the pet record are known.
+  const hasNoHealthData = !health?.has_health_record && !vaccinationStatus
+
+  return (
+    <section className="mt-6 border-t border-stone-100 pt-6" data-testid="pet-health-info">
+      <h2 className="font-semibold text-stone-800">Health Information</h2>
+      <div className="mt-3 space-y-3">
+        <InfoRow label="Vaccination" value={pet.is_vaccinated ? 'Vaccinated' : 'Not vaccinated'} />
+        {vaccinationStatus && (
+          <InfoRow
+            label="Vaccination status"
+            value={VACCINATION_STATUS_LABELS[vaccinationStatus] ?? capitalize(vaccinationStatus)}
+          />
+        )}
+        <InfoRow label="Spayed/Neutered" value={pet.is_neutered ? 'Yes' : 'No'} />
+        {healthStatus && <InfoRow label="Health status" value={healthStatus} />}
+        {lastCheckup && <InfoRow label="Last checkup" value={lastCheckup} />}
+        {nextCheckup && <InfoRow label="Next checkup" value={nextCheckup} />}
+      </div>
+      {hasNoHealthData && (
+        <p className="mt-3 text-sm text-stone-500" data-testid="pet-health-empty">
+          No health information available yet.
+        </p>
+      )}
+    </section>
+  )
+}
+
+// Vaccination status codes computed by the backend health records.
+const VACCINATION_STATUS_LABELS: Record<string, string> = {
+  up_to_date: 'Up to date',
+  due_soon: 'Due soon',
+  overdue: 'Overdue',
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between">
+    <div className="flex justify-between gap-4">
       <span className="text-stone-500">{label}</span>
-      <span className="font-medium text-stone-700">{value}</span>
+      <span className="font-medium text-stone-700 text-right whitespace-pre-line">{value}</span>
     </div>
   )
 }

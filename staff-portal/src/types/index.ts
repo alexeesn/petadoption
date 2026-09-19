@@ -113,10 +113,12 @@ export interface HealthRecord {
   id: string;
   pet: string;
   pet_name: string;
-  record_type: string;
-  date: string;
-  vet_name: string;
-  vet_contact: string;
+  record_date: string;
+  diagnosis: string;
+  treatment: string;
+  veterinarian_name: string;
+  veterinary_clinic: string;
+  next_checkup_date?: string | null;
   notes: string;
   created_by?: string;
   created_at: string;

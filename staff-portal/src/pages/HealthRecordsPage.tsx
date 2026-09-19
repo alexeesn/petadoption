@@ -1,8 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Input, Select, Textarea } from '../components/UI';
+import { Card, Loading, ErrorMessage, Empty, Table, Button, Input, Select, Textarea } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { healthService, petService } from '../services/apiService';
 import type { HealthRecord, Pet } from '../types';
+
+/** Extracts a readable message from a DRF validation error response. */
+function describeSaveError(err: unknown): string {
+  const data = (err as { response?: { data?: unknown } })?.response?.data;
+  if (data && typeof data === 'object') {
+    const messages = Object.values(data as Record<string, unknown>).map((value) =>
+      Array.isArray(value) ? value.map(String).join(' ') : String(value)
+    );
+    const joined = messages.join(' ').trim();
+    if (joined) return joined;
+  }
+  return 'Failed to create health record.';
+}
 
 export default function HealthRecordsPage() {
   const [records, setRecords] = useState<HealthRecord[]>([]);
@@ -10,14 +23,17 @@ export default function HealthRecordsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
+  const emptyForm = {
     pet: '',
-    record_type: 'checkup',
-    date: '',
-    vet_name: '',
-    vet_contact: '',
+    record_date: '',
+    diagnosis: '',
+    treatment: '',
+    veterinarian_name: '',
+    veterinary_clinic: '',
+    next_checkup_date: '',
     notes: '',
-  });
+  };
+  const [form, setForm] = useState({ ...emptyForm });
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
@@ -41,15 +57,20 @@ export default function HealthRecordsPage() {
     setSubmitError('');
     setSuccess('');
     setSubmitting(true);
+    // The API treats a blank next check-up as "no value", so omit it instead
+    // of sending an empty string the date field would reject.
+    const { next_checkup_date, ...rest } = form;
+    const payload: Record<string, unknown> = { ...rest };
+    if (next_checkup_date) payload.next_checkup_date = next_checkup_date;
     healthService
-      .create(form)
+      .create(payload)
       .then(() => {
         setSuccess('Health record created.');
         setShowForm(false);
-        setForm({ pet: '', record_type: 'checkup', date: '', vet_name: '', vet_contact: '', notes: '' });
+        setForm({ ...emptyForm });
         load();
       })
-      .catch(() => setSubmitError('Failed to create health record.'))
+      .catch((err: unknown) => setSubmitError(describeSaveError(err)))
       .finally(() => setSubmitting(false));
   };
 
@@ -72,33 +93,38 @@ export default function HealthRecordsPage() {
               onChange={(e) => setForm({ ...form, pet: e.target.value })}
               options={[{ value: '', label: 'Select pet' }, ...pets.map((p) => ({ value: p.id, label: p.name }))]}
             />
-            <Select
-              label="Record Type"
-              value={form.record_type}
-              onChange={(e) => setForm({ ...form, record_type: e.target.value })}
-              options={[
-                { value: 'checkup', label: 'Checkup' },
-                { value: 'treatment', label: 'Treatment' },
-                { value: 'surgery', label: 'Surgery' },
-                { value: 'vaccination', label: 'Vaccination' },
-                { value: 'other', label: 'Other' },
-              ]}
+            <Input
+              label="Record Date"
+              type="date"
+              required
+              value={form.record_date}
+              onChange={(e) => setForm({ ...form, record_date: e.target.value })}
             />
             <Input
-              label="Date"
-              type="date"
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              label="Diagnosis"
+              value={form.diagnosis}
+              onChange={(e) => setForm({ ...form, diagnosis: e.target.value })}
+            />
+            <Textarea
+              label="Treatment"
+              value={form.treatment}
+              onChange={(e) => setForm({ ...form, treatment: e.target.value })}
             />
             <Input
               label="Veterinarian Name"
-              value={form.vet_name}
-              onChange={(e) => setForm({ ...form, vet_name: e.target.value })}
+              value={form.veterinarian_name}
+              onChange={(e) => setForm({ ...form, veterinarian_name: e.target.value })}
             />
             <Input
-              label="Veterinarian Contact"
-              value={form.vet_contact}
-              onChange={(e) => setForm({ ...form, vet_contact: e.target.value })}
+              label="Veterinary Clinic"
+              value={form.veterinary_clinic}
+              onChange={(e) => setForm({ ...form, veterinary_clinic: e.target.value })}
+            />
+            <Input
+              label="Next Checkup Date"
+              type="date"
+              value={form.next_checkup_date}
+              onChange={(e) => setForm({ ...form, next_checkup_date: e.target.value })}
             />
             <Textarea
               label="Notes"
@@ -123,13 +149,13 @@ export default function HealthRecordsPage() {
         <Card><Empty message="No health records found." /></Card>
       ) : (
         <Card>
-          <Table headers={['Pet', 'Record Type', 'Date', 'Veterinarian', 'Notes', 'Created']}>
+          <Table headers={['Pet', 'Record Date', 'Diagnosis', 'Veterinarian', 'Notes', 'Created']}>
             {records.map((rec) => (
               <tr key={rec.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">{rec.pet_name}</td>
-                <td className="px-4 py-3"><StatusBadge status={rec.record_type || 'other'} /></td>
-                <td className="px-4 py-3 text-sm text-slate-600">{rec.date}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">{rec.vet_name}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">{rec.record_date}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">{rec.diagnosis || '—'}</td>
+                <td className="px-4 py-3 text-sm text-slate-600">{rec.veterinarian_name || '—'}</td>
                 <td className="px-4 py-3 text-sm text-slate-500">{rec.notes}</td>
                 <td className="px-4 py-3 text-sm text-slate-500">
                   {rec.created_at ? new Date(rec.created_at).toLocaleDateString() : 'N/A'}

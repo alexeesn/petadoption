@@ -21,6 +21,20 @@ export interface PetImage {
   is_primary: boolean
 }
 
+/**
+ * Adopter-safe summary of a pet's staff-managed health record, included in the
+ * pet detail payload by `/api/pets/<id>/`. Internal health fields (staff notes,
+ * treatment details, veterinarian information) are never part of it.
+ * `vaccination_status` is null when the pet has no vaccination records yet.
+ */
+export interface PetHealthSummary {
+  has_health_record: boolean
+  vaccination_status: 'up_to_date' | 'due_soon' | 'overdue' | null
+  health_status: string
+  last_checkup_date: string | null
+  next_checkup_date: string | null
+}
+
 export interface Pet {
   id: string
   name: string
@@ -39,6 +53,7 @@ export interface Pet {
   weight_kg?: number
   images?: PetImage[]
   primary_image?: PetImage | null
+  health_summary?: PetHealthSummary | null
   created_at?: string
 }
 
