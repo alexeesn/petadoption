@@ -25,7 +25,8 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "pet", "pet_name", "status",
             "why_adopt", "experience_with_pets", "living_situation",
             "has_other_pets", "other_pets_description", "references",
-            "additional_notes", "staff_notes", "reviewed_by", "reviewed_by_email",
+            "additional_notes", "privacy_consent", "require_home_visit", "no_home_visit_reason",
+            "staff_notes", "reviewed_by", "reviewed_by_email",
             "reviewed_at", "rejection_reason", "documents", "created_at", "updated_at",
         ]
         read_only_fields = [
@@ -77,10 +78,24 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
         fields = [
             "pet", "why_adopt", "experience_with_pets", "living_situation",
             "has_other_pets", "other_pets_description", "references", "additional_notes",
+            "privacy_consent", "require_home_visit", "no_home_visit_reason",
         ]
 
     def validate(self, attrs):
         adopter = self.context["request"].user
+
+        # ------------------------------------------------------------------
+        # Consent validation
+        # ------------------------------------------------------------------
+        if not attrs.get("privacy_consent", False):
+            raise serializers.ValidationError({"privacy_consent": "Privacy consent is required."})
+
+        # ------------------------------------------------------------------
+        # Home visit validation
+        # ------------------------------------------------------------------
+        if not attrs.get("require_home_visit", True):
+            if not attrs.get("no_home_visit_reason"):
+                raise serializers.ValidationError({"no_home_visit_reason": "Reason is required if home visit is declined."})
 
         # ------------------------------------------------------------------
         # An adopter must have a complete saved profile before starting a new

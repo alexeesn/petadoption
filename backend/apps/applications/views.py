@@ -121,22 +121,20 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                     file_size=file_obj.size,
                     uploaded_by=request.user,
                 )
-        headers = self.get_success_headers(serializer.data)
         serializer.instance.refresh_from_db()
         read_serializer = ApplicationSerializer(
             serializer.instance, context=self.get_serializer_context()
         )
+        headers = self.get_success_headers(read_serializer.data)
         return Response(
             read_serializer.data, status=status.HTTP_201_CREATED, headers=headers
         )
 
     def perform_create(self, serializer):
         app = serializer.save(adopter=self.request.user)
-        # The draft → submitted auto-advance and its AuditLog entry are now
-        # handled by Application.save() so that *every* creation path
-        # (API, Django admin, shell, management commands) is covered — see
-        # docs/QA-REPORT-2026-09-09.md section 2 and the model's save()
-        # override in models.py.
+        # Fix Finding §2: Ensure application is submitted
+        app.status = Application.Status.SUBMITTED
+        app.save()
         # Notify the adopter that their application was submitted
         create_notification(
             user=self.request.user,

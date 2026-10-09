@@ -17,10 +17,12 @@ ALLOWED_MIME_TYPES = {
 # *before* it can be submitted.  Keep this list as the single source of truth —
 # the applications API validates against it and the adopter portal renders one
 # upload slot per entry.
-REQUIRED_DOCUMENT_TYPES = ("identification", "proof_of_address")
+REQUIRED_DOCUMENT_TYPES = ("identification", "proof_of_address", "barangay_certification", "cage_photo")
 REQUIRED_DOCUMENT_LABELS = {
     "identification": "Valid ID",
     "proof_of_address": "Proof of Address",
+    "barangay_certification": "Barangay Certification",
+    "cage_photo": "Cage/Kennel Photo",
 }
 
 

@@ -24,6 +24,8 @@ class Document(models.Model):
         ("personal_reference", "Personal Reference"),
         ("home_photos", "Home Photos"),
         ("lease_agreement", "Lease Agreement"),
+        ("barangay_certification", "Barangay Certification"),
+        ("cage_photo", "Cage/Kennel Photo"),
         ("other", "Other"),
     ])
     file = models.FileField(upload_to=document_upload_path)

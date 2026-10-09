@@ -33,16 +33,24 @@ class ApplicationTests(BaseAPITestCase):
             app.refresh_from_db()
         return app
 
+    def make_jpeg(self, name="doc.jpg", content=b"fake-image-content"):
+         return SimpleUploadedFile(name, content, content_type="image/jpeg")
+
     def required_documents(self):
         """The documents an adopter must upload with the application itself."""
         return {
-            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
-            "document_types": ["identification", "proof_of_address"],
+            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf"), self.make_pdf("brgy.pdf"), self.make_jpeg("cage.jpg")],
+            "document_types": ["identification", "proof_of_address", "barangay_certification", "cage_photo"],
         }
 
     def submit_application(self, pet=None, **fields):
         """POST a complete application (fields + required documents)."""
-        payload = {"pet": str((pet or self.pet).id), **fields}
+        payload = {
+            "pet": str((pet or self.pet).id),
+            "privacy_consent": True,
+            "require_home_visit": True,
+            **fields,
+        }
         payload.update(self.required_documents())
         return self.client.post("/api/applications/", payload, format="multipart")
 
@@ -697,4 +705,34 @@ class ProfileCompletenessTests(BaseAPITestCase):
         # Only NEW creations are blocked.
         resp = self.submit_application(why_adopt="Second pet")
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("profile", resp.data)
+    def test_create_application_requires_privacy_consent(self):
+        self.authenticate(self.adopter)
+        # Missing consent
+        payload = {"pet": str(self.pet.id), "why_adopt": "Test", "privacy_consent": False}
+        payload.update(self.required_documents())
+        resp = self.client.post("/api/applications/", payload, format="multipart")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("privacy_consent", resp.data)
+
+    def test_create_application_requires_barangay_and_cage_photo(self):
+        self.authenticate(self.adopter)
+        payload = {"pet": str(self.pet.id), "why_adopt": "Test", "privacy_consent": True}
+        # Missing required docs (barangay_cert and cage_photo are now in REQUIRED_DOCUMENT_TYPES)
+        payload.update({"documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")], "document_types": ["identification", "proof_of_address"]})
+        resp = self.client.post("/api/applications/", payload, format="multipart")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("documents", resp.data)
+
+    def test_create_application_requires_home_visit_reason(self):
+        self.authenticate(self.adopter)
+        payload = {
+             "pet": str(self.pet.id),
+             "why_adopt": "Test",
+             "privacy_consent": True,
+             "require_home_visit": False,
+             "no_home_visit_reason": "" # Missing
+        }
+        payload.update(self.required_documents())
+        resp = self.client.post("/api/applications/", payload, format="multipart")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("no_home_visit_reason", resp.data)

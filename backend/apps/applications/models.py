@@ -52,6 +52,9 @@ class Application(models.Model):
     other_pets_description = models.TextField(blank=True)
     references = models.TextField(blank=True, help_text="Personal or veterinary references")
     additional_notes = models.TextField(blank=True)
+    privacy_consent = models.BooleanField(default=False)
+    require_home_visit = models.BooleanField(default=True)
+    no_home_visit_reason = models.TextField(blank=True)
     staff_notes = models.TextField(blank=True, help_text="Internal staff notes - not visible to adopter")
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
