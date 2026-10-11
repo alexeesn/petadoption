@@ -71,6 +71,9 @@ export interface Application {
   other_pets_description: string
   references: string
   additional_notes: string
+  privacy_consent?: boolean
+  require_home_visit?: boolean
+  no_home_visit_reason?: string
   rejection_reason?: string
   documents?: Document[]
   created_at: string

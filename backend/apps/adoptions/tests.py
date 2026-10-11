@@ -108,11 +108,18 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         from django.core.files.uploadedfile import SimpleUploadedFile
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id), "why_adopt": "New family",
+            "privacy_consent": True,
+            "require_home_visit": True,
             "documents": [
                 SimpleUploadedFile("id.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
                 SimpleUploadedFile("address.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+                SimpleUploadedFile("brgy.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+                SimpleUploadedFile("cage.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
             ],
-            "document_types": ["identification", "proof_of_address"],
+            "document_types": [
+                "identification", "proof_of_address",
+                "barangay_certification", "cage_photo",
+            ],
         }, format="multipart")
         self.assertEqual(resp.status_code, 201)
 

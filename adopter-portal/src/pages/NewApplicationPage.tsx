@@ -14,6 +14,9 @@ interface ApplicationForm {
   other_pets_description: string
   references: string
   additional_notes: string
+  privacy_consent: boolean
+  require_home_visit: boolean | null
+  no_home_visit_reason: string
 }
 
 const EMPTY: ApplicationForm = {
@@ -24,6 +27,9 @@ const EMPTY: ApplicationForm = {
   other_pets_description: '',
   references: '',
   additional_notes: '',
+  privacy_consent: false,
+  require_home_visit: null,
+  no_home_visit_reason: '',
 }
 
 /**
@@ -35,13 +41,25 @@ const DOCUMENT_SLOTS = [
     type: 'identification',
     label: 'Valid ID',
     required: true,
-    hint: 'Government-issued ID (passport, driver’s licence, national ID)',
+    hint: "Government-issued ID (passport, driver's licence, national ID)",
   },
   {
     type: 'proof_of_address',
     label: 'Proof of Address',
     required: true,
     hint: 'Recent utility bill, lease, or bank statement',
+  },
+  {
+    type: 'barangay_certification',
+    label: 'Barangay Certification',
+    required: true,
+    hint: 'Certification from your local barangay confirming residence',
+  },
+  {
+    type: 'cage_photo',
+    label: 'Cage/Kennel Photo',
+    required: true,
+    hint: 'Photo of the cage or kennel where the pet will stay',
   },
   {
     type: 'vet_reference',
@@ -144,6 +162,15 @@ export default function NewApplicationPage() {
       errors.other_pets_description = 'Please describe the other pets in your home.'
     }
     if (!form.references.trim()) errors.references = 'Please provide at least one reference.'
+    if (!form.privacy_consent) {
+      errors.privacy_consent = 'You must agree to the data privacy terms before submitting.'
+    }
+    if (form.require_home_visit === null) {
+      errors.require_home_visit = 'Please select whether you want a City Veterinarian home visit.'
+    }
+    if (form.require_home_visit === false && !form.no_home_visit_reason.trim()) {
+      errors.no_home_visit_reason = 'Please provide a reason for declining the home visit.'
+    }
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -518,6 +545,69 @@ export default function NewApplicationPage() {
               />
               <FieldError message={fieldErrors.additional_notes} />
             </div>
+
+            <div>
+              <label className="field-label mb-1">
+                City Veterinarian home visit <span className="text-red-600">*</span>
+              </label>
+              <div className="flex gap-4" role="radiogroup" aria-label="City Veterinarian home visit">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="require_home_visit"
+                    checked={form.require_home_visit === true}
+                    onChange={() => setForm((prev) => ({ ...prev, require_home_visit: true, no_home_visit_reason: '' }))}
+                    className="h-4 w-4 border-stone-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="require_home_visit"
+                    checked={form.require_home_visit === false}
+                    onChange={() => setForm((prev) => ({ ...prev, require_home_visit: false }))}
+                    className="h-4 w-4 border-stone-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  No
+                </label>
+              </div>
+              <FieldError message={fieldErrors.require_home_visit} />
+            </div>
+
+            {form.require_home_visit === false && (
+              <div>
+                <label htmlFor="no_home_visit_reason" className="field-label mb-1">
+                  Reason for declining home visit <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  id="no_home_visit_reason"
+                  name="no_home_visit_reason"
+                  rows={2}
+                  value={form.no_home_visit_reason}
+                  onChange={handleChange}
+                  className={inputCls}
+                  placeholder="Please explain why a home visit is not possible"
+                />
+                <FieldError message={fieldErrors.no_home_visit_reason} />
+              </div>
+            )}
+
+            <div className="flex items-start gap-2">
+              <input
+                id="privacy_consent"
+                name="privacy_consent"
+                type="checkbox"
+                checked={form.privacy_consent}
+                onChange={handleChange}
+                className="mt-1 h-4 w-4 rounded border-stone-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label htmlFor="privacy_consent" className="text-sm text-stone-700">
+                I consent to the collection and use of my personal information for the purpose of processing
+                this adoption application. <span className="text-red-600">*</span>
+              </label>
+            </div>
+            <FieldError message={fieldErrors.privacy_consent} />
           </div>
         )}
 
@@ -567,6 +657,17 @@ export default function NewApplicationPage() {
             <ReviewItem label="Other pets" value={form.has_other_pets ? form.other_pets_description || 'Yes' : 'No'} />
             <ReviewItem label="References" value={form.references} />
             {form.additional_notes && <ReviewItem label="Additional notes" value={form.additional_notes} />}
+            <ReviewItem
+              label="City Veterinarian home visit"
+              value={
+                form.require_home_visit === null
+                  ? '—'
+                  : form.require_home_visit
+                    ? 'Yes'
+                    : `No — ${form.no_home_visit_reason}`
+              }
+            />
+            <ReviewItem label="Privacy consent" value={form.privacy_consent ? 'Agreed' : 'Not agreed'} />
 
             <div className="border-t border-stone-100 pt-4">
               <h3 className="text-sm font-semibold text-primary-900">Documents</h3>

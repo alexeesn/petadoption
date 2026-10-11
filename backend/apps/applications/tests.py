@@ -298,17 +298,22 @@ class ApplicationTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 201)
         app = Application.objects.get(pk=resp.data["id"])
         self.assertEqual(app.status, "submitted")
-        self.assertEqual(Document.objects.filter(application=app).count(), 2)
+        self.assertEqual(Document.objects.filter(application=app).count(), 4)
         types = set(Document.objects.filter(application=app).values_list("document_type", flat=True))
-        self.assertEqual(types, {"identification", "proof_of_address"})
+        self.assertEqual(
+            types,
+            {"identification", "proof_of_address", "barangay_certification", "cage_photo"},
+        )
         # The create response already carries the documents.
-        self.assertEqual(len(resp.data["documents"]), 2)
+        self.assertEqual(len(resp.data["documents"]), 4)
 
     def test_application_rejected_when_required_documents_missing(self):
         self.authenticate(self.adopter)
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id),
             "why_adopt": "I love dogs",
+            "privacy_consent": True,
+            "require_home_visit": True,
         }, format="multipart")
         self.assertEqual(resp.status_code, 400)
         self.assertIn("documents", resp.data)
@@ -319,11 +324,15 @@ class ApplicationTests(BaseAPITestCase):
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id),
             "why_adopt": "I love dogs",
+            "privacy_consent": True,
+            "require_home_visit": True,
             "documents": [self.make_pdf("id.pdf")],
             "document_types": ["identification"],
         }, format="multipart")
         self.assertEqual(resp.status_code, 400)
         self.assertIn("proof_of_address", resp.data["documents"])
+        self.assertIn("barangay_certification", resp.data["documents"])
+        self.assertIn("cage_photo", resp.data["documents"])
         self.assertEqual(Application.objects.filter(adopter=self.adopter).count(), 0)
 
     def test_invalid_document_blocks_submission_and_rolls_back(self):
@@ -332,6 +341,8 @@ class ApplicationTests(BaseAPITestCase):
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id),
             "why_adopt": "I love dogs",
+            "privacy_consent": True,
+            "require_home_visit": True,
             "documents": [
                 self.make_pdf("id.pdf"),
                 SimpleUploadedFile("proof.exe", b"MZ", content_type="application/x-msdownload"),
@@ -348,15 +359,22 @@ class ApplicationTests(BaseAPITestCase):
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id),
             "why_adopt": "I love dogs",
+            "privacy_consent": True,
+            "require_home_visit": True,
             "documents": [
                 self.make_pdf("id.pdf"),
                 self.make_pdf("address.pdf"),
+                self.make_pdf("brgy.pdf"),
+                self.make_jpeg("cage.jpg"),
                 self.make_pdf("vet.pdf"),
             ],
-            "document_types": ["identification", "proof_of_address", "vet_reference"],
+            "document_types": [
+                "identification", "proof_of_address",
+                "barangay_certification", "cage_photo", "vet_reference",
+            ],
         }, format="multipart")
         self.assertEqual(resp.status_code, 201)
-        self.assertEqual(len(resp.data["documents"]), 3)
+        self.assertEqual(len(resp.data["documents"]), 5)
 
     def test_staff_retrieves_application_with_documents(self):
         self.authenticate(self.adopter)
@@ -365,7 +383,7 @@ class ApplicationTests(BaseAPITestCase):
         self.authenticate(self.staff)
         resp = self.client.get(f"/api/applications/{created.data['id']}/")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(len(resp.data["documents"]), 2)
+        self.assertEqual(len(resp.data["documents"]), 4)
         self.assertTrue(all(d["download_url"] for d in resp.data["documents"]))
 class StaffReviewWorkflowTests(BaseAPITestCase):
     """Staff/Admin review of a submitted application.
@@ -399,8 +417,18 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
             "pet": str(self.pet.id),
             "why_adopt": "I have a large fenced garden.",
             "living_situation": "Own house with fenced yard.",
-            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
-            "document_types": ["identification", "proof_of_address"],
+            "privacy_consent": True,
+            "require_home_visit": True,
+            "documents": [
+                self.make_pdf("id.pdf"),
+                self.make_pdf("address.pdf"),
+                self.make_pdf("brgy.pdf"),
+                self.make_pdf("cage.pdf"),
+            ],
+            "document_types": [
+                "identification", "proof_of_address",
+                "barangay_certification", "cage_photo",
+            ],
         }, format="multipart")
         self.assertEqual(resp.status_code, 201)
         return Application.objects.get(pk=resp.data["id"])
@@ -474,7 +502,7 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
         self.assertEqual(resp.data["pet_name"], "Rex")
         self.assertEqual(
             {d["document_type"] for d in resp.data["documents"]},
-            {"identification", "proof_of_address"},
+            {"identification", "proof_of_address", "barangay_certification", "cage_photo"},
         )
         self.assertTrue(all(d["download_url"] for d in resp.data["documents"]))
 
@@ -520,8 +548,18 @@ class ApprovalEmailTests(BaseAPITestCase):
         resp = self.client.post("/api/applications/", {
             "pet": str(self.pet.id),
             "why_adopt": "I have a fenced yard.",
-            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
-            "document_types": ["identification", "proof_of_address"],
+            "privacy_consent": True,
+            "require_home_visit": True,
+            "documents": [
+                self.make_pdf("id.pdf"),
+                self.make_pdf("address.pdf"),
+                self.make_pdf("brgy.pdf"),
+                self.make_pdf("cage.pdf"),
+            ],
+            "document_types": [
+                "identification", "proof_of_address",
+                "barangay_certification", "cage_photo",
+            ],
         }, format="multipart")
         self.assertEqual(resp.status_code, 201)
         return Application.objects.get(pk=resp.data["id"])
@@ -619,15 +657,28 @@ class ProfileCompletenessTests(BaseAPITestCase):
 
     def required_documents(self):
         return {
-            "documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")],
-            "document_types": ["identification", "proof_of_address"],
+            "documents": [
+                self.make_pdf("id.pdf"),
+                self.make_pdf("address.pdf"),
+                self.make_pdf("brgy.pdf"),
+                self.make_pdf("cage.pdf"),
+            ],
+            "document_types": [
+                "identification", "proof_of_address",
+                "barangay_certification", "cage_photo",
+            ],
         }
 
     def make_pdf(self, name="doc.pdf"):
         return SimpleUploadedFile(name, b"%PDF-1.4 test", content_type="application/pdf")
 
     def submit_application(self, pet=None, **fields):
-        payload = {"pet": str((pet or self.pet).id), **fields}
+        payload = {
+            "pet": str((pet or self.pet).id),
+            "privacy_consent": True,
+            "require_home_visit": True,
+            **fields,
+        }
         payload.update(self.required_documents())
         return self.client.post("/api/applications/", payload, format="multipart")
 
@@ -716,7 +767,12 @@ class ProfileCompletenessTests(BaseAPITestCase):
 
     def test_create_application_requires_barangay_and_cage_photo(self):
         self.authenticate(self.adopter)
-        payload = {"pet": str(self.pet.id), "why_adopt": "Test", "privacy_consent": True}
+        payload = {
+            "pet": str(self.pet.id),
+            "why_adopt": "Test",
+            "privacy_consent": True,
+            "require_home_visit": True,
+        }
         # Missing required docs (barangay_cert and cage_photo are now in REQUIRED_DOCUMENT_TYPES)
         payload.update({"documents": [self.make_pdf("id.pdf"), self.make_pdf("address.pdf")], "document_types": ["identification", "proof_of_address"]})
         resp = self.client.post("/api/applications/", payload, format="multipart")
