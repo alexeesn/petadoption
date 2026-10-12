@@ -73,6 +73,9 @@ export interface Application {
   other_pets_description: string;
   references: string;
   additional_notes: string;
+  privacy_consent?: boolean;
+  require_home_visit?: boolean | null;
+  no_home_visit_reason?: string;
   staff_notes: string;
   reviewed_by?: string;
   reviewed_by_email?: string;

@@ -45,6 +45,8 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 const REQUIRED_DOCUMENTS = [
   { type: 'identification', label: 'Valid ID' },
   { type: 'proof_of_address', label: 'Proof of Address' },
+  { type: 'barangay_certification', label: 'Barangay Certification' },
+  { type: 'cage_photo', label: 'Cage/Kennel Photo' },
 ];
 
 /**
@@ -85,6 +87,37 @@ function todayISO(): string {
 
 function humanise(value: string) {
   return value.replace(/_/g, ' ');
+}
+
+const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  identification: 'Valid ID',
+  proof_of_address: 'Proof of Address',
+  barangay_certification: 'Barangay Certification',
+  cage_photo: 'Cage/Kennel Photo',
+  income_proof: 'Income Proof',
+  vet_reference: 'Veterinary Reference',
+  personal_reference: 'Personal Reference',
+  home_photos: 'Home Photos',
+  lease_agreement: 'Lease Agreement',
+  other: 'Other',
+};
+
+function formatDocumentType(type: string): string {
+  return DOCUMENT_TYPE_LABELS[type] || humanise(type);
+}
+
+function formatPrivacyConsent(consent?: boolean | null): string {
+  if (consent === undefined || consent === null) {
+    return 'Not recorded';
+  }
+  return consent ? 'Consent provided' : 'Consent not provided';
+}
+
+function formatHomeVisit(requireVisit?: boolean | null): string {
+  if (requireVisit === undefined || requireVisit === null) {
+    return 'Not recorded';
+  }
+  return requireVisit ? 'Yes' : 'No';
 }
 
 function Detail({ label, value }: { label: string; value?: ReactNode }) {
@@ -472,6 +505,21 @@ export default function ApplicationDetailPage() {
           />
           <Detail label="References" value={app.references} />
           <Detail label="Additional notes from the adopter" value={app.additional_notes} />
+          <Detail
+            label="Privacy consent"
+            value={formatPrivacyConsent(app.privacy_consent)}
+          />
+          <Detail
+            label="City Veterinarian home visit"
+            value={formatHomeVisit(app.require_home_visit)}
+          />
+          {app.require_home_visit === false &&
+            Boolean(app.no_home_visit_reason && app.no_home_visit_reason.trim()) && (
+              <Detail
+                label="Reason for declining home visit"
+                value={app.no_home_visit_reason}
+              />
+            )}
         </dl>
       </SectionCard>
 
@@ -505,7 +553,7 @@ export default function ApplicationDetailPage() {
               <li key={doc.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900">
-                    {humanise(doc.document_type)}
+                    {formatDocumentType(doc.document_type)}
                   </p>
                   <p className="text-sm text-slate-600 break-all">{doc.original_filename}</p>
                   <p className="text-xs text-slate-500">
