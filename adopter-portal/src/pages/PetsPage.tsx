@@ -125,10 +125,7 @@ export default function PetsPage() {
                   {pet.size && capitalize(pet.size)}
                   {pet.is_vaccinated ? ' · Vaccinated' : ''}
                 </p>
-                <div className="mt-4 flex items-center justify-between border-t border-dashed border-stone-300 pt-4">
-                  <span className="rounded-md bg-accent-100 px-2.5 py-1 text-sm font-bold text-primary-900">
-                    {pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free adoption'}
-                  </span>
+                <div className="mt-4 flex items-center justify-end border-t border-dashed border-stone-300 pt-4">
                   <Icon name="arrowRight" className="h-5 w-5 text-primary-600" />
                 </div>
               </div>

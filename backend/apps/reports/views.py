@@ -66,9 +66,9 @@ class PetInventoryReportView(views.APIView):
             response = HttpResponse(content_type="text/csv")
             response["Content-Disposition"] = 'attachment; filename="pet_inventory_report.csv"'
             writer = csv.writer(response)
-            writer.writerow(["Name", "Species", "Breed", "Status", "Age (years)", "Fee"])
+            writer.writerow(["Name", "Species", "Breed", "Status", "Age (years)"])
             for p in qs:
-                writer.writerow([p.name, p.species, p.breed, p.status, p.age_years, p.adoption_fee])
+                writer.writerow([p.name, p.species, p.breed, p.status, p.age_years])
             return response
 
         return Response({"stats": stats, "total": qs.count()})

@@ -26,7 +26,7 @@ class PetSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "species", "breed", "age_years", "gender", "size",
             "weight_kg", "color", "description", "arrival_date", "status",
-            "is_vaccinated", "is_neutered", "adoption_fee", "images",
+            "is_vaccinated", "is_neutered", "images",
             "health_summary", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -42,7 +42,7 @@ class PetListSerializer(serializers.ModelSerializer):
         model = Pet
         fields = [
             "id", "name", "species", "breed", "age_years", "gender", "size",
-            "color", "status", "is_vaccinated", "is_neutered", "adoption_fee",
+            "color", "status", "is_vaccinated", "is_neutered",
             "arrival_date", "primary_image", "created_at",
         ]
 

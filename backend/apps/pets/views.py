@@ -20,7 +20,7 @@ class PetViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "species", "gender", "size", "is_vaccinated", "is_neutered"]
     search_fields = ["name", "breed", "description"]
-    ordering_fields = ["name", "age_years", "created_at", "adoption_fee"]
+    ordering_fields = ["name", "age_years", "created_at"]
     ordering = ["-created_at"]
 
     def get_permissions(self):

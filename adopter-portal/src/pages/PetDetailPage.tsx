@@ -118,7 +118,6 @@ export default function PetDetailPage() {
             {pet.weight_kg && <InfoRow label="Weight" value={`${pet.weight_kg} kg`} />}
             <InfoRow label="Color" value={pet.color || '—'} />
             <InfoRow label="At the center since" value={pet.arrival_date ? formatDate(pet.arrival_date) : '—'} />
-            <InfoRow label="Adoption fee" value={pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free'} />
           </div>
 
           {pet.description && (

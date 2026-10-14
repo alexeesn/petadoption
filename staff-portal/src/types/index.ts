@@ -51,7 +51,7 @@ export interface Pet {
   status: string;
   is_vaccinated: boolean;
   is_neutered: boolean;
-  adoption_fee: string;
+  adoption_fee?: string;
   images: PetImage[];
   created_at: string;
   updated_at: string;

@@ -49,7 +49,7 @@ export interface Pet {
   status: string
   is_vaccinated: boolean
   is_neutered: boolean
-  adoption_fee: number
+  adoption_fee?: number
   weight_kg?: number
   images?: PetImage[]
   primary_image?: PetImage | null

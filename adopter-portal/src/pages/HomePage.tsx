@@ -94,10 +94,7 @@ export default function HomePage() {
                 <p className="mt-1.5 text-stone-600">
                   {pet.breed || 'Mixed breed'} · {formatPetAge(pet.age_years)}
                 </p>
-                <div className="mt-5 flex items-center justify-between border-t border-dashed border-stone-300 pt-5">
-                  <span className="rounded-md bg-accent-100 px-3 py-1.5 text-sm font-bold text-primary-900">
-                    {pet.adoption_fee > 0 ? formatCurrency(pet.adoption_fee) : 'Free adoption'}
-                  </span>
+                <div className="mt-5 flex items-center justify-end border-t border-dashed border-stone-300 pt-5">
                   <Icon name="arrowRight" className="h-5 w-5 text-primary-600" />
                 </div>
               </div>

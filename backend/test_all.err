@@ -1,0 +1,17 @@
+Using existing test database for alias 'default'...
+......................................................................................................................................................................................................................................................................................................F....................................................................................
+======================================================================
+FAIL: test_application_submission_creates_notifications (apps.notifications.tests.NotificationTests.test_application_submission_creates_notifications)
+Submitting an application should notify the adopter and staff.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\teodo\OneDrive\Documents\test-gemini-petadopt\backend\apps\notifications\tests.py", line 104, in test_application_submission_creates_notifications
+    self.assertEqual(resp.status_code, 201)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 400 != 201
+
+----------------------------------------------------------------------
+Ran 379 tests in 845.709s
+
+FAILED (failures=1)
+Preserving test database for alias 'default'...

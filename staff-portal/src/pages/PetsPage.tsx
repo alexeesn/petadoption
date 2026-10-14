@@ -58,7 +58,7 @@ export default function PetsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Pet | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
-  const [adoptionFee, setAdoptionFee] = useState('');
+
   // Every selected image is kept, so 2, 3, 4+ files can be uploaded at once.
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([]);
   // Photos already saved for the pet being edited, and the ones staff explicitly
@@ -101,7 +101,6 @@ export default function PetsPage() {
   const openNew = () => {
     setEditing(null);
     setForm({ ...emptyForm });
-    setAdoptionFee('');
     clearPhotos();
     setExistingPhotos([]);
     setRemovedPhotos([]);
@@ -115,7 +114,6 @@ export default function PetsPage() {
   const openEdit = (pet: Pet) => {
     setEditing(pet);
     setForm(petToForm(pet));
-    setAdoptionFee(String(pet.adoption_fee));
     clearPhotos();
     setExistingPhotos([]);
     setRemovedPhotos([]);
@@ -128,7 +126,6 @@ export default function PetsPage() {
       .then((res) => {
         const detail = res.data as Pet;
         setForm(petToForm(detail));
-        setAdoptionFee(String(detail.adoption_fee));
         setExistingPhotos(detail.images ?? []);
       })
       .catch(() =>
@@ -194,7 +191,6 @@ export default function PetsPage() {
           ...form,
           age_years: ageYears,
           arrival_date: form.arrival_date || null,
-          adoption_fee: Number(adoptionFee || 0),
         });
         // 2. Delete only the photos staff explicitly marked for removal.
         for (const photo of removedPhotos) {
@@ -441,7 +437,7 @@ export default function PetsPage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  {['Name', 'Species', 'Breed', 'Age', 'Status', 'Fee', ''].map((h) => (
+                  {['Name', 'Species', 'Breed', 'Age', 'Status', ''].map((h) => (
                     <th key={h} scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{h}</th>
                   ))}
                 </tr>
@@ -454,7 +450,6 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.breed}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">₱{pet.adoption_fee}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openEdit(pet)} className="text-primary-600 hover:underline text-sm font-medium">Edit</button>
                     </td>
