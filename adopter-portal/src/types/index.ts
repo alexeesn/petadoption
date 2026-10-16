@@ -41,6 +41,7 @@ export interface Pet {
   species: string
   breed: string
   age_years: number
+  age_months: number
   gender: string
   size: string
   color: string

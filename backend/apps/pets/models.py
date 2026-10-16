@@ -6,6 +6,7 @@ from django.db import models
 # A shelter pet is never realistically older than this; used to validate the
 # staff-entered age (in years) on the model and through the API serializer.
 MAX_PET_AGE_YEARS = 40
+MAX_PET_AGE_MONTHS = 11
 
 
 class Pet(models.Model):
@@ -42,8 +43,14 @@ class Pet(models.Model):
     species = models.CharField(max_length=20, choices=Species.choices)
     breed = models.CharField(max_length=150, blank=True)
     age_years = models.PositiveIntegerField(
+        default=0,
         help_text="Age in years",
         validators=[MinValueValidator(0), MaxValueValidator(MAX_PET_AGE_YEARS)],
+    )
+    age_months = models.PositiveIntegerField(
+        default=0,
+        help_text="Age in months (0-11)",
+        validators=[MinValueValidator(0), MaxValueValidator(MAX_PET_AGE_MONTHS)],
     )
     gender = models.CharField(max_length=10, choices=Gender.choices, default=Gender.UNKNOWN)
     size = models.CharField(max_length=15, choices=Size.choices, default=Size.MEDIUM)
@@ -59,6 +66,18 @@ class Pet(models.Model):
     adoption_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def formatted_age(self) -> str:
+        y = self.age_years
+        m = self.age_months
+        if y > 0 and m > 0:
+            y_str = "1 year" if y == 1 else f"{y} years"
+            m_str = "1 month" if m == 1 else f"{m} months"
+            return f"{y_str} and {m_str}"
+        if y > 0:
+            return "1 year" if y == 1 else f"{y} years"
+        return "1 month" if m == 1 else f"{m} months"
 
     class Meta:
         verbose_name = "Pet"

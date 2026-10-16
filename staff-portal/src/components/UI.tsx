@@ -98,6 +98,8 @@ export function Input({
   required,
   placeholder,
   step,
+  min,
+  max,
 }: {
   label: string;
   type?: string;
@@ -106,6 +108,8 @@ export function Input({
   required?: boolean;
   placeholder?: string;
   step?: string | number;
+  min?: string | number;
+  max?: string | number;
 }) {
   return (
     <label className="block">
@@ -117,6 +121,8 @@ export function Input({
         required={required}
         placeholder={placeholder}
         step={step}
+        min={min}
+        max={max}
         className="field-input"
       />
     </label>

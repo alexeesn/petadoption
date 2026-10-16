@@ -472,7 +472,7 @@ export default function ApplicationDetailPage() {
             <Detail label="Name" value={app.pet_name} />
             <Detail label="Species" value={pet?.species ? humanise(pet.species) : ''} />
             <Detail label="Breed" value={pet?.breed} />
-            <Detail label="Age" value={formatPetAge(pet?.age_years)} />
+            <Detail label="Age" value={formatPetAge(pet?.age_years, pet?.age_months)} />
             <Detail label="Arrived at the center" value={pet?.arrival_date ? formatDate(pet.arrival_date) : ''} />
             <Detail label="Gender" value={pet?.gender ? humanise(pet.gender) : ''} />
             <Detail label="Size" value={pet?.size ? humanise(pet.size) : ''} />

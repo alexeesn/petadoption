@@ -10,6 +10,7 @@ const emptyForm = {
   species: 'dog',
   breed: '',
   age_years: '',
+  age_months: '0',
   gender: 'unknown',
   size: 'medium',
   color: '',
@@ -20,6 +21,7 @@ const emptyForm = {
 };
 
 const MAX_AGE_YEARS = 40;
+const MAX_AGE_MONTHS = 11;
 
 /** Maps a pet record to the editable form fields. */
 function petToForm(pet: Pet) {
@@ -27,7 +29,8 @@ function petToForm(pet: Pet) {
     name: pet.name,
     species: pet.species,
     breed: pet.breed,
-    age_years: String(pet.age_years),
+    age_years: pet.age_years !== undefined && pet.age_years !== null ? String(pet.age_years) : '',
+    age_months: pet.age_months !== undefined && pet.age_months !== null ? String(pet.age_months) : '0',
     gender: pet.gender,
     size: pet.size,
     color: pet.color,
@@ -178,8 +181,13 @@ export default function PetsPage() {
     e.preventDefault();
     setSubmitError('');
     const ageYears = Number(form.age_years);
-    if (!Number.isInteger(ageYears) || ageYears < 0 || ageYears > MAX_AGE_YEARS) {
-      setSubmitError(`Age must be a whole number of years between 0 and ${MAX_AGE_YEARS}.`);
+    if (form.age_years === '' || !Number.isInteger(ageYears) || ageYears < 0 || ageYears > MAX_AGE_YEARS) {
+      setSubmitError(`Age (Years) must be a whole number between 0 and ${MAX_AGE_YEARS}.`);
+      return;
+    }
+    const ageMonths = Number(form.age_months);
+    if (form.age_months === '' || !Number.isInteger(ageMonths) || ageMonths < 0 || ageMonths > MAX_AGE_MONTHS) {
+      setSubmitError(`Age (Months) must be a whole number between 0 and ${MAX_AGE_MONTHS}.`);
       return;
     }
     setSaving(true);
@@ -190,6 +198,7 @@ export default function PetsPage() {
         await petService.update(editing.id, {
           ...form,
           age_years: ageYears,
+          age_months: ageMonths,
           arrival_date: form.arrival_date || null,
         });
         // 2. Delete only the photos staff explicitly marked for removal.
@@ -207,6 +216,7 @@ export default function PetsPage() {
         fd.append('species', form.species);
         fd.append('breed', form.breed);
         fd.append('age_years', String(ageYears));
+        fd.append('age_months', String(ageMonths));
         fd.append('gender', form.gender);
         fd.append('size', form.size);
         fd.append('color', form.color);
@@ -256,7 +266,24 @@ export default function PetsPage() {
               ]}
             />
             <Input label="Breed" value={form.breed} onChange={(e) => setForm({ ...form, breed: e.target.value })} />
-            <Input label="Age (years)" type="number" value={form.age_years} onChange={(e) => setForm({ ...form, age_years: e.target.value })} required />
+            <Input
+              label="Age (Years)"
+              type="number"
+              min="0"
+              max={MAX_AGE_YEARS}
+              value={form.age_years}
+              onChange={(e) => setForm({ ...form, age_years: e.target.value })}
+              required
+            />
+            <Input
+              label="Age (Months)"
+              type="number"
+              min="0"
+              max={MAX_AGE_MONTHS}
+              value={form.age_months}
+              onChange={(e) => setForm({ ...form, age_months: e.target.value })}
+              required
+            />
             <Select
               label="Gender"
               value={form.gender}
@@ -448,7 +475,7 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm font-medium text-slate-900">{pet.name}</td>
                     <td className="px-4 py-3 text-sm text-slate-600 capitalize">{pet.species}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.breed}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years)}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years, pet.age_months)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openEdit(pet)} className="text-primary-600 hover:underline text-sm font-medium">Edit</button>

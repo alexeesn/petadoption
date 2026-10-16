@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.health.services import build_adopter_health_summary
-from .models import MAX_PET_AGE_YEARS, Pet, PetImage
+from .models import MAX_PET_AGE_MONTHS, MAX_PET_AGE_YEARS, Pet, PetImage
 
 
 class PetImageSerializer(serializers.ModelSerializer):
@@ -11,10 +11,15 @@ class PetImageSerializer(serializers.ModelSerializer):
 
 class PetSerializer(serializers.ModelSerializer):
     images = PetImageSerializer(many=True, read_only=True)
-    # Declared explicitly so the year range is validated on every write path
-    # (create, PUT and PATCH) instead of relying on the model validators, which
-    # DRF does not run on its own.
-    age_years = serializers.IntegerField(min_value=0, max_value=MAX_PET_AGE_YEARS)
+    # Declared explicitly so the year and month ranges are validated on every
+    # write path (create, PUT and PATCH) instead of relying on the model
+    # validators, which DRF does not run on its own.
+    age_years = serializers.IntegerField(
+        min_value=0, max_value=MAX_PET_AGE_YEARS, default=0, required=False
+    )
+    age_months = serializers.IntegerField(
+        min_value=0, max_value=MAX_PET_AGE_MONTHS, default=0, required=False
+    )
     # Adopter-safe summary of the staff-managed health record (see
     # apps.health.services). The full record stays behind the staff-only
     # /api/health-records/ endpoints; this field only feeds the adopter-facing
@@ -24,7 +29,7 @@ class PetSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pet
         fields = [
-            "id", "name", "species", "breed", "age_years", "gender", "size",
+            "id", "name", "species", "breed", "age_years", "age_months", "gender", "size",
             "weight_kg", "color", "description", "arrival_date", "status",
             "is_vaccinated", "is_neutered", "images",
             "health_summary", "created_at", "updated_at",
@@ -41,7 +46,7 @@ class PetListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pet
         fields = [
-            "id", "name", "species", "breed", "age_years", "gender", "size",
+            "id", "name", "species", "breed", "age_years", "age_months", "gender", "size",
             "color", "status", "is_vaccinated", "is_neutered",
             "arrival_date", "primary_image", "created_at",
         ]

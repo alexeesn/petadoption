@@ -384,7 +384,7 @@ export default function NewApplicationPage() {
           <div>
             <p className="font-medium text-stone-900">{pet.name}</p>
             <p className="text-sm text-stone-600">
-              {pet.species} &middot; {pet.breed || 'Mixed breed'} &middot; {formatPetAge(pet.age_years)}
+              {pet.species} &middot; {pet.breed || 'Mixed breed'} &middot; {formatPetAge(pet.age_years, pet.age_months)}
             </p>
           </div>
         </div>

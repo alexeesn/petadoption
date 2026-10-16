@@ -36,11 +36,28 @@ export function formatFileSize(bytes: number): string {
 }
 
 /**
- * Pet age is stored as whole years. 0 means the pet is younger than a year,
- * which is displayed as "Under 1 year" rather than a misleading "0 years".
+ * Format pet age in readable text from years and months.
+ *
+ * Examples:
+ *   formatPetAge(0, 6) -> "6 months"
+ *   formatPetAge(1, 0) -> "1 year"
+ *   formatPetAge(2, 3) -> "2 years and 3 months"
+ *   formatPetAge(0, 0) -> "0 months"
  */
-export function formatPetAge(years?: number | null): string {
-  if (years === undefined || years === null) return '—';
-  if (years <= 0) return 'Under 1 year';
-  return years === 1 ? '1 year' : `${years} years`;
+export function formatPetAge(years?: number | null, months?: number | null): string {
+  if ((years === undefined || years === null) && (months === undefined || months === null)) {
+    return '—';
+  }
+  const y = Math.max(0, years ?? 0);
+  const m = Math.max(0, months ?? 0);
+
+  if (y > 0 && m > 0) {
+    const yStr = y === 1 ? '1 year' : `${y} years`;
+    const mStr = m === 1 ? '1 month' : `${m} months`;
+    return `${yStr} and ${mStr}`;
+  }
+  if (y > 0) {
+    return y === 1 ? '1 year' : `${y} years`;
+  }
+  return m === 1 ? '1 month' : `${m} months`;
 }

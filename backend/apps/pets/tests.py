@@ -37,13 +37,25 @@ class PetTests(BaseAPITestCase):
         staff = self.create_staff()
         self.authenticate(staff)
         resp = self.client.post("/api/pets/", {
-            "name": "Luna", "species": "cat", "age_years": 1,
+            "name": "Luna", "species": "cat", "age_years": 1, "age_months": 6,
             "gender": "female", "status": "available",
             "arrival_date": "2026-02-01",
         })
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["age_years"], 1)
+        self.assertEqual(resp.data["age_months"], 6)
         self.assertEqual(resp.data["arrival_date"], "2026-02-01")
+
+    def test_staff_can_create_young_pet_with_zero_years(self):
+        staff = self.create_staff()
+        self.authenticate(staff)
+        resp = self.client.post("/api/pets/", {
+            "name": "Kitten", "species": "cat", "age_years": 0, "age_months": 3,
+            "gender": "female", "status": "available",
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["age_years"], 0)
+        self.assertEqual(resp.data["age_months"], 3)
 
     def test_age_years_is_validated(self):
         self.authenticate(self.create_staff())
@@ -57,6 +69,52 @@ class PetTests(BaseAPITestCase):
         })
         self.assertEqual(negative.status_code, 400)
         self.assertIn("age_years", negative.data)
+
+    def test_age_months_is_validated(self):
+        self.authenticate(self.create_staff())
+        too_high = self.client.post("/api/pets/", {
+            "name": "Luna", "species": "cat", "age_years": 1, "age_months": 12,
+        })
+        self.assertEqual(too_high.status_code, 400)
+        self.assertIn("age_months", too_high.data)
+        negative = self.client.post("/api/pets/", {
+            "name": "Luna", "species": "cat", "age_years": 1, "age_months": -1,
+        })
+        self.assertEqual(negative.status_code, 400)
+        self.assertIn("age_months", negative.data)
+        non_int = self.client.post("/api/pets/", {
+            "name": "Luna", "species": "cat", "age_years": 1, "age_months": 2.5,
+        })
+        self.assertEqual(non_int.status_code, 400)
+        self.assertIn("age_months", non_int.data)
+
+    def test_staff_can_edit_pet_age(self):
+        pet = self.create_pet(age_years=1)
+        staff = self.create_staff()
+        self.authenticate(staff)
+        resp = self.client.patch(f"/api/pets/{pet.id}/", {
+            "age_years": 2, "age_months": 4,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["age_years"], 2)
+        self.assertEqual(resp.data["age_months"], 4)
+        pet.refresh_from_db()
+        self.assertEqual(pet.age_years, 2)
+        self.assertEqual(pet.age_months, 4)
+
+    def test_pet_formatted_age(self):
+        p1 = Pet(name="P1", species="dog", age_years=2, age_months=3)
+        self.assertEqual(p1.formatted_age, "2 years and 3 months")
+        p2 = Pet(name="P2", species="dog", age_years=1, age_months=0)
+        self.assertEqual(p2.formatted_age, "1 year")
+        p3 = Pet(name="P3", species="dog", age_years=0, age_months=6)
+        self.assertEqual(p3.formatted_age, "6 months")
+        p4 = Pet(name="P4", species="dog", age_years=0, age_months=1)
+        self.assertEqual(p4.formatted_age, "1 month")
+        p5 = Pet(name="P5", species="dog", age_years=0, age_months=0)
+        self.assertEqual(p5.formatted_age, "0 months")
+        p6 = Pet(name="P6", species="dog", age_years=1, age_months=1)
+        self.assertEqual(p6.formatted_age, "1 year and 1 month")
 
     def test_adopter_cannot_create_pet(self):
         adopter = self.create_user()
@@ -344,7 +402,12 @@ class PetAgeMigrationTests(TransactionTestCase):
     """
 
     AGE_FIELD_MIGRATION = ("pets", "0002_pet_age_years_and_arrival_date")
+    LATEST_MIGRATION = ("pets", "0003_pet_age_months_alter_pet_age_years")
     OLD_SCHEMA = ("pets", "0001_initial")
+
+    def tearDown(self):
+        self.migrate(self.LATEST_MIGRATION)
+        super().tearDown()
 
     def migrate(self, target):
         executor = MigrationExecutor(connection)
@@ -385,5 +448,18 @@ class PetAgeMigrationTests(TransactionTestCase):
         self.assertEqual(OldPet.objects.get(name="Buddy").age_months, 36)
 
         # Leave the database on the latest schema for any following test.
-        self.migrate(self.AGE_FIELD_MIGRATION)
+        self.migrate(self.LATEST_MIGRATION)
+
+    def test_migration_0003_preserves_existing_pets(self):
+        apps_0002 = self.migrate(self.AGE_FIELD_MIGRATION)
+        Pet_0002 = apps_0002.get_model("pets", "Pet")
+        Pet_0002.objects.create(
+            name="Charlie", species="dog", breed="Poodle", age_years=4,
+            gender="male", size="small", status="available",
+        )
+        apps_0003 = self.migrate(self.LATEST_MIGRATION)
+        Pet_0003 = apps_0003.get_model("pets", "Pet")
+        charlie = Pet_0003.objects.get(name="Charlie")
+        self.assertEqual(charlie.age_years, 4)
+        self.assertEqual(charlie.age_months, 0)
 

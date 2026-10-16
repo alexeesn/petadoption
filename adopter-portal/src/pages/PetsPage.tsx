@@ -119,7 +119,7 @@ export default function PetsPage() {
               <div className="p-5">
                 <h3 className="text-xl font-bold text-primary-900">{pet.name}</h3>
                 <p className="mt-1 text-sm text-stone-600">
-                  {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years)} · {capitalize(pet.gender)}
+                  {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years, pet.age_months)} · {capitalize(pet.gender)}
                 </p>
                 <p className="mt-1 text-sm text-stone-500">
                   {pet.size && capitalize(pet.size)}

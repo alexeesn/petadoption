@@ -92,7 +92,7 @@ export default function HomePage() {
               <div className="p-6">
                 <h3 className="text-2xl font-bold text-primary-900">{pet.name}</h3>
                 <p className="mt-1.5 text-stone-600">
-                  {pet.breed || 'Mixed breed'} · {formatPetAge(pet.age_years)}
+                  {pet.breed || 'Mixed breed'} · {formatPetAge(pet.age_years, pet.age_months)}
                 </p>
                 <div className="mt-5 flex items-center justify-end border-t border-dashed border-stone-300 pt-5">
                   <Icon name="arrowRight" className="h-5 w-5 text-primary-600" />
