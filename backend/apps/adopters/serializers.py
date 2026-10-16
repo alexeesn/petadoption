@@ -1,4 +1,7 @@
+from datetime import date
+
 from rest_framework import serializers
+
 from .models import AdopterProfile
 
 
@@ -36,3 +39,22 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
             "zip_code", "date_of_birth", "housing_type", "owns_or_rents",
             "has_yard", "other_pets", "household_members", "agree_to_terms",
         ]
+
+    def validate_date_of_birth(self, value):
+        """
+        Date of birth is optional (null/blank is accepted).
+        When provided it must:
+        - Not be in the future.
+        - Not be more than 120 years in the past (sanity check).
+        """
+        if value is None:
+            return value
+        today = date.today()
+        if value > today:
+            raise serializers.ValidationError("Date of birth cannot be in the future.")
+        min_date = today.replace(year=today.year - 120)
+        if value < min_date:
+            raise serializers.ValidationError(
+                "Date of birth must be within the last 120 years."
+            )
+        return value

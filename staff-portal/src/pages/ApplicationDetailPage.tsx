@@ -426,7 +426,7 @@ export default function ApplicationDetailPage() {
           <Detail label="Name" value={app.adopter_name} />
           <Detail label="Email" value={app.adopter_email} />
           <Detail label="Phone" value={profile?.phone_number} />
-          <Detail label="Date of birth" value={profile?.date_of_birth} />
+          <Detail label="Date of birth" value={profile?.date_of_birth ? formatDate(profile.date_of_birth) : ''} />
           <Detail label="Address" value={address} />
           <Detail
             label="Housing type"

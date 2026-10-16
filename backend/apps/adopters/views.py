@@ -23,6 +23,22 @@ class AdopterProfileView(generics.RetrieveUpdateAPIView):
             return AdopterProfileSerializer
         return AdopterProfileUpdateSerializer
 
+    def update(self, request, *args, **kwargs):
+        """
+        Persist changes using the write serializer, then return the full read
+        serializer so the response always includes computed fields such as
+        profile_is_complete, user_email, user_name, and timestamps.
+        """
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        write_serializer = AdopterProfileUpdateSerializer(
+            instance, data=request.data, partial=partial
+        )
+        write_serializer.is_valid(raise_exception=True)
+        self.perform_update(write_serializer)
+        read_serializer = AdopterProfileSerializer(instance, context={"request": request})
+        return Response(read_serializer.data)
+
 
 class AdopterListView(generics.ListAPIView):
     """Staff/Admin: list all adopters."""
@@ -38,3 +54,4 @@ class AdopterDetailView(generics.RetrieveAPIView):
     serializer_class = AdopterProfileSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
     queryset = AdopterProfile.objects.select_related("user").order_by("user__email").all()
+

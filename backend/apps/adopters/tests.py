@@ -122,3 +122,188 @@ class ProfileCompletenessTests(BaseAPITestCase):
         # profile error. The profile gate applies to adopters only.
         self.assertEqual(resp.status_code, 400)
         self.assertNotIn("profile", resp.data)
+
+
+# ---------------------------------------------------------------------------
+# DateOfBirth tests
+# ---------------------------------------------------------------------------
+
+class DateOfBirthTests(BaseAPITestCase):
+    """
+    Tests for the date_of_birth field on AdopterProfile.
+
+    The field is already in the model and initial migration (blank=True,
+    null=True).  These tests verify:
+      - Saving and retrieving a valid DOB.
+      - Clearing the DOB (null value is acceptable — it is not a required field).
+      - Rejecting a future date.
+      - Rejecting a date more than 120 years in the past.
+      - Adopters cannot update another user's profile.
+      - Authorized staff can read the adopter's DOB; unauthorized adopter cannot
+        read another adopter's profile at all.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.adopter = self.create_user(email="dob_adopter@example.com")
+        self.other_adopter = self.create_user(email="dob_other@example.com")
+        self.staff = self.create_staff(email="dob_staff@example.com")
+
+    def profile_id(self, user=None):
+        user = user or self.adopter
+        return str(user.adopter_profile.id)
+
+    # -- save / retrieve -----------------------------------------------------
+
+    def test_adopter_can_save_date_of_birth(self):
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"date_of_birth": "1990-06-15"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        profile = self.adopter.adopter_profile
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.date_of_birth)
+        from datetime import date
+        self.assertEqual(profile.date_of_birth, date(1990, 6, 15))
+
+    def test_profile_response_includes_date_of_birth(self):
+        """GET /api/adopters/profile/ must return the date_of_birth field."""
+        self.adopter.adopter_profile.date_of_birth = "1990-06-15"
+        self.adopter.adopter_profile.save()
+        self.authenticate(self.adopter)
+        resp = self.client.get("/api/adopters/profile/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("date_of_birth", resp.data)
+        self.assertEqual(resp.data["date_of_birth"], "1990-06-15")
+
+    def test_adopter_can_clear_date_of_birth(self):
+        """Setting date_of_birth to null is accepted (it is optional)."""
+        self.adopter.adopter_profile.date_of_birth = "1990-06-15"
+        self.adopter.adopter_profile.save()
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"date_of_birth": None},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.adopter.adopter_profile.refresh_from_db()
+        self.assertIsNone(self.adopter.adopter_profile.date_of_birth)
+
+    # -- validation ----------------------------------------------------------
+
+    def test_future_date_of_birth_is_rejected(self):
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"date_of_birth": "2099-01-01"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("date_of_birth", resp.data)
+
+    def test_date_of_birth_too_old_is_rejected(self):
+        """A date more than 120 years in the past is rejected."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"date_of_birth": "1800-01-01"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("date_of_birth", resp.data)
+
+    # -- ownership -----------------------------------------------------------
+
+    def test_adopter_cannot_update_another_adopters_profile(self):
+        """
+        The /api/adopters/profile/ endpoint always resolves to the request
+        user's own profile (via get_object using request.user).  There is no
+        route that allows an adopter to PATCH a different adopter's profile.
+        The staff-facing detail route /api/adopters/<id>/ is GET-only and
+        requires IsStaff — an adopter is blocked by the permission class.
+        """
+        self.authenticate(self.adopter)
+        other_id = self.profile_id(self.other_adopter)
+        resp = self.client.patch(
+            f"/api/adopters/{other_id}/",
+            {"date_of_birth": "1990-06-15"},
+            format="json",
+        )
+        # Staff-only route returns 403 for an adopter.
+        self.assertIn(resp.status_code, [403, 404, 405])
+
+    # -- staff visibility ----------------------------------------------------
+
+    def test_staff_can_read_adopter_date_of_birth(self):
+        """Staff GET /api/adopters/<id>/ includes date_of_birth."""
+        self.adopter.adopter_profile.date_of_birth = "1985-03-20"
+        self.adopter.adopter_profile.save()
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/adopters/{self.profile_id()}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["date_of_birth"], "1985-03-20")
+
+    def test_adopter_cannot_access_staff_adopter_detail_endpoint(self):
+        """An adopter cannot read another adopter's profile via the staff route."""
+        self.adopter.adopter_profile.date_of_birth = "1985-03-20"
+        self.adopter.adopter_profile.save()
+        other_id = self.profile_id(self.other_adopter)
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/adopters/{other_id}/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_dob_in_application_adopter_profile_for_staff(self):
+        """
+        When staff retrieve an application, the nested adopter_profile
+        includes date_of_birth.  This is provided via AdopterProfileSerializer
+        which already includes the field — this test confirms end-to-end.
+        """
+        from apps.pets.models import Pet
+        from apps.applications.models import Application
+        self.adopter.adopter_profile.date_of_birth = "1990-06-15"
+        self.adopter.adopter_profile.save()
+        pet = Pet.objects.create(name="Fluffy", species="cat", age_years=2, status="available")
+        application = Application.objects.create(
+            adopter=self.adopter,
+            pet=pet,
+            status="submitted",
+            why_adopt="love cats",
+            experience_with_pets="owned cats before",
+            living_situation="house",
+            privacy_consent=True,
+        )
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/applications/{application.id}/")
+        self.assertEqual(resp.status_code, 200)
+        profile = resp.data.get("adopter_profile")
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.get("date_of_birth"), "1990-06-15")
+
+
+    def test_dob_not_exposed_to_unauthenticated_requests(self):
+        """Profile endpoint requires authentication."""
+        self.adopter.adopter_profile.date_of_birth = "1990-06-15"
+        self.adopter.adopter_profile.save()
+        # No credentials.
+        resp = self.client.get("/api/adopters/profile/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_clearing_dob_does_not_break_profile_completeness(self):
+        """
+        date_of_birth is not in REQUIRED_PROFILE_FIELDS, so clearing it must
+        not affect profile_is_complete.
+        """
+        self.adopter.adopter_profile.date_of_birth = "1990-06-15"
+        self.adopter.adopter_profile.save()
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"date_of_birth": None},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["profile_is_complete"])
