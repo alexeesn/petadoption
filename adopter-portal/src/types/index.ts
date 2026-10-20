@@ -142,6 +142,15 @@ export interface Appointment {
  * Adopter profile as returned by GET /api/adopters/profile/.
  * `profile_is_complete` is computed server-side from
  * AdopterProfile.REQUIRED_PROFILE_FIELDS and gates new adoption applications.
+ *
+ * Philippine address hierarchy:
+ *   address_line1 → street / house no. / purok (required)
+ *   address_line2 → optional second line
+ *   region        → region name, e.g. "National Capital Region (NCR)"
+ *   state         → province name (blank for NCR)
+ *   city          → city or municipality
+ *   barangay      → barangay
+ *   zip_code      → postal code
  */
 export interface AdopterProfile {
   id: string
@@ -150,8 +159,10 @@ export interface AdopterProfile {
   phone_number: string
   address_line1: string
   address_line2: string
+  region: string
   city: string
   state: string
+  barangay: string
   zip_code: string
   date_of_birth: string | null
   housing_type: string

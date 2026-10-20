@@ -373,7 +373,10 @@ export default function ApplicationDetailPage() {
     ? [
         profile.address_line1,
         profile.address_line2,
-        [profile.city, profile.state, profile.zip_code].filter(Boolean).join(', '),
+        profile.barangay,
+        [profile.city, profile.state].filter(Boolean).join(', '),
+        profile.zip_code,
+        profile.region,
       ]
         .filter((part) => part && part.trim() !== '')
         .join('\n')

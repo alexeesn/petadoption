@@ -93,13 +93,16 @@ class NotificationTests(BaseAPITestCase):
             "why_adopt": "I love pets",
             "experience_with_pets": "Some",
             "living_situation": "House",
-            "has_other_pets": False,
+            "privacy_consent": True,
+            "require_home_visit": True,
             # Required documents are part of the submission itself.
             "documents": [
                 SimpleUploadedFile("id.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
                 SimpleUploadedFile("address.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+                SimpleUploadedFile("brgy.pdf", b"%PDF-1.4 test", content_type="application/pdf"),
+                SimpleUploadedFile("cage.jpg", b"fake-jpg", content_type="image/jpeg"),
             ],
-            "document_types": ["identification", "proof_of_address"],
+            "document_types": ["identification", "proof_of_address", "barangay_certification", "cage_photo"],
         }, format="multipart")
         self.assertEqual(resp.status_code, 201)
         # Adopter got an "Application Submitted" notification

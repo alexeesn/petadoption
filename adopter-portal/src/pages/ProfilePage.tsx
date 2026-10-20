@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { fetchAdopterProfile, updateAdopterProfile } from '../services/apiService'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
+import PhilippineAddressSelector, {
+  type PhilippineAddress,
+  EMPTY_PH_ADDRESS,
+} from '../components/PhilippineAddressSelector'
 import { formatDate } from '../utils/format'
 import type { AdopterProfile } from '../types'
 
@@ -9,8 +13,11 @@ interface ProfileForm {
   phone_number: string
   address_line1: string
   address_line2: string
-  city: string
-  state: string
+  // Philippine cascading address
+  region: string
+  state: string   // province (blank for NCR)
+  city: string    // city or municipality
+  barangay: string
   zip_code: string
   date_of_birth: string
   housing_type: string
@@ -23,8 +30,10 @@ const EMPTY: ProfileForm = {
   phone_number: '',
   address_line1: '',
   address_line2: '',
-  city: '',
+  region: '',
   state: '',
+  city: '',
+  barangay: '',
   zip_code: '',
   date_of_birth: '',
   housing_type: '',
@@ -41,9 +50,10 @@ const EMPTY: ProfileForm = {
  */
 const REQUIRED_FIELDS: Array<{ name: keyof ProfileForm; label: string }> = [
   { name: 'phone_number', label: 'Phone Number' },
-  { name: 'address_line1', label: 'Address Line 1' },
-  { name: 'city', label: 'City' },
-  { name: 'state', label: 'State / Province' },
+  { name: 'address_line1', label: 'Street Address' },
+  { name: 'region', label: 'Region' },
+  { name: 'city', label: 'City / Municipality' },
+  { name: 'barangay', label: 'Barangay' },
   { name: 'zip_code', label: 'ZIP / Postal Code' },
   { name: 'housing_type', label: 'Housing Type' },
   { name: 'owns_or_rents', label: 'Own or Rent' },
@@ -55,8 +65,10 @@ function profileToForm(data: AdopterProfile): ProfileForm {
     phone_number: data.phone_number ?? '',
     address_line1: data.address_line1 ?? '',
     address_line2: data.address_line2 ?? '',
-    city: data.city ?? '',
+    region: data.region ?? '',
     state: data.state ?? '',
+    city: data.city ?? '',
+    barangay: data.barangay ?? '',
     zip_code: data.zip_code ?? '',
     date_of_birth: data.date_of_birth ?? '',
     housing_type: data.housing_type ?? '',
@@ -94,6 +106,22 @@ function ProfileField({ label, value }: { label: string; value?: string | number
       <dd className="mt-1 text-sm text-stone-800">{display}</dd>
     </div>
   )
+}
+
+/**
+ * Format a saved Philippine address into a human-readable multi-line string
+ * for the view mode panel.
+ */
+function formatPhAddress(profile: AdopterProfile): string {
+  const parts: string[] = []
+  if (profile.address_line1) parts.push(profile.address_line1)
+  if (profile.address_line2) parts.push(profile.address_line2)
+  if (profile.barangay) parts.push(profile.barangay)
+  const cityLine = [profile.city, profile.state].filter(Boolean).join(', ')
+  if (cityLine) parts.push(cityLine)
+  if (profile.zip_code) parts.push(profile.zip_code)
+  if (profile.region) parts.push(profile.region)
+  return parts.join('\n')
 }
 
 export default function ProfilePage() {
@@ -143,6 +171,26 @@ export default function ProfilePage() {
       if (!prev[name]) return prev
       const next = { ...prev }
       delete next[name]
+      return next
+    })
+  }
+
+  /** Handle cascading Philippine address selector changes. */
+  const handleAddressChange = (updated: PhilippineAddress) => {
+    setForm((prev) => ({
+      ...prev,
+      region: updated.region,
+      state: updated.state,
+      city: updated.city,
+      barangay: updated.barangay,
+    }))
+    // Clear address-related field errors on any address change.
+    setFieldErrors((prev) => {
+      const next = { ...prev }
+      delete next.region
+      delete next.state
+      delete next.city
+      delete next.barangay
       return next
     })
   }
@@ -229,6 +277,14 @@ export default function ProfilePage() {
 
   const inputCls = 'field-input'
 
+  // Extract PhilippineAddress shape from current form for the selector
+  const phAddress: PhilippineAddress = {
+    region: form.region,
+    state: form.state,
+    city: form.city,
+    barangay: form.barangay,
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-10">
       <div className="flex items-start justify-between gap-4">
@@ -292,13 +348,11 @@ export default function ProfilePage() {
               value={saved.date_of_birth ? formatDate(saved.date_of_birth) : null}
             />
             <div className="sm:col-span-2">
-              <ProfileField label="Address Line 1" value={saved.address_line1} />
+              <dt className="text-xs font-semibold uppercase tracking-wide text-stone-500">Address</dt>
+              <dd className="mt-1 text-sm text-stone-800 whitespace-pre-line">
+                {formatPhAddress(saved) || <span className="text-stone-400 italic">Not set</span>}
+              </dd>
             </div>
-            <div className="sm:col-span-2">
-              <ProfileField label="Address Line 2" value={saved.address_line2 || null} />
-            </div>
-            <ProfileField label="City" value={saved.city} />
-            <ProfileField label="State / Province" value={saved.state} />
             <ProfileField label="ZIP / Postal Code" value={saved.zip_code} />
             <ProfileField
               label="Housing Type"
@@ -316,7 +370,9 @@ export default function ProfilePage() {
 
       {/* ── EDIT MODE ─────────────────────────────────────────────────── */}
       {editing && (
-        <form ref={formRef} onSubmit={handleSubmit} className="panel p-6 space-y-4" noValidate>
+        <form ref={formRef} onSubmit={handleSubmit} className="panel p-6 space-y-6" noValidate>
+
+          {/* ── Contact ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="phone_number" className="field-label mb-1">
@@ -339,38 +395,79 @@ export default function ProfilePage() {
               />
               <FieldError message={fieldErrors.date_of_birth} />
             </div>
+          </div>
+
+          {/* ── Street Address ── */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-stone-700 border-b border-stone-100 pb-1">
+              Philippine Address
+            </h3>
             <div>
-              <label htmlFor="city" className="field-label mb-1">
-                City <span className="text-red-600" aria-hidden="true">*</span>
-              </label>
-              <input id="city" name="city" type="text" required value={form.city} onChange={handleChange} aria-invalid={fieldErrors.city ? true : undefined} className={inputCls} />
-              <FieldError message={fieldErrors.city} />
-            </div>
-            <div className="sm:col-span-2">
               <label htmlFor="address_line1" className="field-label mb-1">
-                Address Line 1 <span className="text-red-600" aria-hidden="true">*</span>
+                House / Unit No., Street, Purok{' '}
+                <span className="text-red-600" aria-hidden="true">*</span>
               </label>
-              <input id="address_line1" name="address_line1" type="text" required value={form.address_line1} onChange={handleChange} aria-invalid={fieldErrors.address_line1 ? true : undefined} className={inputCls} />
+              <input
+                id="address_line1"
+                name="address_line1"
+                type="text"
+                required
+                value={form.address_line1}
+                onChange={handleChange}
+                aria-invalid={fieldErrors.address_line1 ? true : undefined}
+                className={inputCls}
+                placeholder="e.g. 123 Rizal Street"
+              />
               <FieldError message={fieldErrors.address_line1} />
             </div>
-            <div className="sm:col-span-2">
-              <label htmlFor="address_line2" className="field-label mb-1">Address Line 2</label>
-              <input id="address_line2" name="address_line2" type="text" value={form.address_line2} onChange={handleChange} className={inputCls} />
-            </div>
             <div>
-              <label htmlFor="state" className="field-label mb-1">
-                State / Province <span className="text-red-600" aria-hidden="true">*</span>
-              </label>
-              <input id="state" name="state" type="text" required value={form.state} onChange={handleChange} aria-invalid={fieldErrors.state ? true : undefined} className={inputCls} />
-              <FieldError message={fieldErrors.state} />
+              <label htmlFor="address_line2" className="field-label mb-1">Address Line 2 (optional)</label>
+              <input
+                id="address_line2"
+                name="address_line2"
+                type="text"
+                value={form.address_line2}
+                onChange={handleChange}
+                className={inputCls}
+                placeholder="Subdivision, Phase, Block, Lot, etc."
+              />
             </div>
+
+            {/* Cascading Philippine address dropdowns */}
+            <PhilippineAddressSelector
+              value={phAddress}
+              onChange={handleAddressChange}
+              disabled={saving}
+              errors={{
+                region: fieldErrors.region,
+                state: fieldErrors.state,
+                city: fieldErrors.city,
+                barangay: fieldErrors.barangay,
+              }}
+            />
+
             <div>
               <label htmlFor="zip_code" className="field-label mb-1">
                 ZIP / Postal Code <span className="text-red-600" aria-hidden="true">*</span>
               </label>
-              <input id="zip_code" name="zip_code" type="text" required value={form.zip_code} onChange={handleChange} aria-invalid={fieldErrors.zip_code ? true : undefined} className={inputCls} />
+              <input
+                id="zip_code"
+                name="zip_code"
+                type="text"
+                required
+                value={form.zip_code}
+                onChange={handleChange}
+                aria-invalid={fieldErrors.zip_code ? true : undefined}
+                className={inputCls}
+                placeholder="e.g. 1000"
+                maxLength={10}
+              />
               <FieldError message={fieldErrors.zip_code} />
             </div>
+          </div>
+
+          {/* ── Housing ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="housing_type" className="field-label mb-1">
                 Housing Type <span className="text-red-600" aria-hidden="true">*</span>

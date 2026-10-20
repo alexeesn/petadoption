@@ -16,8 +16,10 @@ export interface AdopterProfile {
   phone_number: string;
   address_line1: string;
   address_line2: string;
+  region: string;
   city: string;
   state: string;
+  barangay: string;
   zip_code: string;
   date_of_birth?: string;
   housing_type: string;
