@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+﻿import type { ReactNode } from 'react'
 
 /** Filled paw print used in the logo and as a photo placeholder. */
 export function PawMark({ className = '' }: { className?: string }) {
@@ -83,6 +83,8 @@ const paths: Record<string, ReactNode> = {
     </>
   ),
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+  close: <path d="m6 6 12 12M18 6 6 18" />,
+  expand: <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />,
 }
 
 export type IconName = keyof typeof paths

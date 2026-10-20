@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchPet } from '../services/apiService'
 import type { Pet } from '../types'
@@ -6,6 +6,122 @@ import { formatCurrency, capitalize, formatPetAge, formatDate } from '../utils/f
 import { Spinner, ErrorState } from '../components/UI'
 import { useAuth } from '../context/AuthContext'
 import { Icon, PawMark } from '../components/Icons'
+
+// ---------------------------------------------------------------------------
+// Lightbox
+// ---------------------------------------------------------------------------
+
+interface LightboxProps {
+  src: string
+  alt: string
+  onClose: () => void
+}
+
+/**
+ * Full-viewport lightbox that shows one enlarged pet photo.
+ *
+ * Accessibility contract:
+ *  - The backdrop is a <dialog> rendered via a portal so it sits above every
+ *    other element in the z-stack and receives focus on open.
+ *  - Escape key closes it (native <dialog> behaviour + our own handler for
+ *    Safari < 15.4 where ESC on <dialog> is not guaranteed).
+ *  - Clicking the semi-transparent backdrop area closes it; clicking the image
+ *    itself does NOT close it (stopPropagation on the <img> wrapper).
+ *  - A visible "Close" button with an aria-label provides a pointer/touch target.
+ *  - The dialog carries role="dialog" + aria-label + aria-modal implicitly.
+ */
+function Lightbox({ src, alt, onClose }: LightboxProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+
+  // Open the native dialog and focus it so Escape works without extra wiring.
+  useEffect(() => {
+    const el = dialogRef.current
+    if (!el) return
+    if (!el.open) el.showModal()
+
+    // Fallback ESC listener for browsers that don't fire `cancel` on <dialog>.
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  // The <dialog> `cancel` event fires when the user presses Escape natively.
+  const handleCancel = (e: React.SyntheticEvent<HTMLDialogElement>) => {
+    e.preventDefault()
+    onClose()
+  }
+
+  // Clicking the semi-transparent backdrop (the dialog element itself, outside
+  // the inner content box) closes the lightbox.
+  const handleBackdropClick = () => onClose()
+
+  // Stop clicks that land *on* the image wrapper from propagating to the
+  // backdrop handler above.
+  const handleContentClick = (e: React.MouseEvent) => e.stopPropagation()
+
+  return (
+    <dialog
+      ref={dialogRef}
+      onCancel={handleCancel}
+      onClick={handleBackdropClick}
+      aria-label={`Enlarged photo: ${alt}`}
+      aria-modal="true"
+      className={[
+        // Reset browser dialog chrome
+        'bg-transparent p-0 border-0 outline-none',
+        // Fill the viewport
+        'fixed inset-0 m-0 max-h-none max-w-none w-screen h-screen',
+        // Dark translucent backdrop (::backdrop does not work reliably in all
+        // browsers alongside Tailwind purge, so we replicate it with a full-
+        // screen bg on the dialog itself)
+        'bg-primary-900/85 backdrop-blur-sm',
+        // Flex centre the image
+        'flex items-center justify-center',
+        // Sit on top of everything else
+        'z-50',
+      ].join(' ')}
+    >
+      {/* Content wrapper — stops click events reaching the backdrop */}
+      <div
+        onClick={handleContentClick}
+        className="relative flex max-h-[92dvh] max-w-[92dvw] items-center justify-center sm:max-h-[88dvh] sm:max-w-[88dvw]"
+      >
+        {/* Close button — top-right, always visible */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close photo"
+          className={[
+            'absolute -top-4 -right-4 z-10',
+            'flex h-9 w-9 items-center justify-center rounded-full',
+            'bg-white text-primary-900 shadow-lg',
+            'transition-colors hover:bg-accent-400',
+            'focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-primary-900',
+          ].join(' ')}
+        >
+          <Icon name="close" className="h-5 w-5" />
+        </button>
+
+        {/* The enlarged image — preserves natural aspect ratio, fits viewport */}
+        <img
+          src={src}
+          alt={alt}
+          className="block max-h-[92dvh] max-w-[92dvw] rounded-lg object-contain shadow-2xl sm:max-h-[88dvh] sm:max-w-[88dvw]"
+          draggable={false}
+        />
+      </div>
+    </dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Pet Detail Page
+// ---------------------------------------------------------------------------
 
 export default function PetDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -16,6 +132,9 @@ export default function PetDetailPage() {
   // Index of the photo shown in the main gallery frame. Lets the adopter
   // view EVERY photo of the pet, not just the first one.
   const [activeImageIndex, setActiveImageIndex] = useState(0)
+  // When non-null the lightbox is open showing this image URL.
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
+  const [lightboxAlt, setLightboxAlt] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -36,6 +155,12 @@ export default function PetDetailPage() {
   const activeImage = images[activeIndex]
   const hasMultiple = images.length > 1
 
+  const openLightbox = (src: string, alt: string) => {
+    setLightboxSrc(src)
+    setLightboxAlt(alt)
+  }
+  const closeLightbox = () => setLightboxSrc(null)
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
       <Link to="/pets" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 transition-colors hover:text-primary-900">
@@ -45,13 +170,29 @@ export default function PetDetailPage() {
 
       <div className="mt-6 grid grid-cols-1 gap-10 lg:grid-cols-[1.05fr_1fr]">
         <div data-testid="pet-gallery">
+          {/* Main gallery frame — clicking the photo opens the lightbox */}
           <div data-testid="pet-gallery-main" className="relative aspect-square overflow-hidden rounded-xl border border-stone-200 bg-stone-200">
             {activeImage?.image ? (
-              <img
-                src={activeImage.image}
-                alt={activeImage.caption || pet.name}
-                className="w-full h-full object-cover"
-              />
+              <button
+                type="button"
+                aria-label={`View enlarged photo of ${pet.name}`}
+                onClick={() => openLightbox(activeImage.image, activeImage.caption || pet.name)}
+                className="group block h-full w-full cursor-zoom-in focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+              >
+                <img
+                  src={activeImage.image}
+                  alt={activeImage.caption || pet.name}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                />
+                {/* Subtle expand hint on hover */}
+                <span
+                  className="absolute bottom-12 right-3 flex items-center gap-1 rounded-full bg-primary-900/75 px-2.5 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  aria-hidden="true"
+                >
+                  <Icon name="expand" className="h-3.5 w-3.5" />
+                  Enlarge
+                </span>
+              </button>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-stone-400" aria-hidden="true">
                 <PawMark className="h-24 w-24" />
@@ -148,6 +289,15 @@ export default function PetDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Lightbox — rendered when a photo is clicked */}
+      {lightboxSrc && (
+        <Lightbox
+          src={lightboxSrc}
+          alt={lightboxAlt}
+          onClose={closeLightbox}
+        />
+      )}
     </div>
   )
 }
