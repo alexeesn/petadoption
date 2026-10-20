@@ -120,7 +120,7 @@ export async function fetchAdopterProfile() {
   return data as import('../types').AdopterProfile
 }
 
-export async function updateAdopterProfile(profile: Record<string, string | number | boolean>) {
+export async function updateAdopterProfile(profile: Record<string, string | number | boolean | null>) {
   const { data } = await api.patch('/adopters/profile/', profile)
   return data
 }

@@ -33,6 +33,8 @@ class AdopterProfileSerializer(serializers.ModelSerializer):
             "region", "city", "state", "barangay", "zip_code",
             "date_of_birth", "housing_type", "owns_or_rents", "has_yard",
             "other_pets", "household_members", "agree_to_terms",
+            "has_children", "number_of_children", "children_ages",
+            "has_other_pets",
             "profile_is_complete", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "user_email", "user_name", "created_at", "updated_at"]
@@ -52,6 +54,8 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
             "region", "city", "state", "barangay", "zip_code",
             "date_of_birth", "housing_type", "owns_or_rents",
             "has_yard", "other_pets", "household_members", "agree_to_terms",
+            "has_children", "number_of_children", "children_ages",
+            "has_other_pets",
         ]
 
     def validate_date_of_birth(self, value):
@@ -71,6 +75,18 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Date of birth must be within the last 120 years."
             )
+        return value
+
+    def validate_household_members(self, value):
+        if value is not None and value < 1:
+            raise serializers.ValidationError("Household members must be at least 1.")
+        return value
+
+    def validate_number_of_children(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("Number of children cannot be negative.")
+        if value is not None and value > 50:
+            raise serializers.ValidationError("Number of children must be 50 or fewer.")
         return value
 
     def validate(self, attrs):
@@ -141,5 +157,50 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
                             {"barangay": f"'{barangay}' is not a valid barangay in {city_obj['name']}."}
                         )
 
-        return attrs
+        # ---- Children validation ----
+        has_children = attrs.get("has_children") if "has_children" in attrs else getattr(self.instance, "has_children", False)
+        if not has_children:
+            attrs["number_of_children"] = None
+            attrs["children_ages"] = ""
+        else:
+            num_children = attrs.get("number_of_children") if "number_of_children" in attrs else getattr(self.instance, "number_of_children", None)
+            ages_str = (attrs.get("children_ages") if "children_ages" in attrs else getattr(self.instance, "children_ages", "") or "").strip()
 
+            if num_children is not None:
+                if num_children < 1:
+                    raise serializers.ValidationError({"number_of_children": "Number of children must be at least 1."})
+                if not ages_str:
+                    raise serializers.ValidationError({"children_ages": f"Expected {num_children} ages, but none were provided."})
+                raw_parts = [p.strip() for p in ages_str.split(",")]
+                if any(p == "" for p in raw_parts):
+                    raise serializers.ValidationError({"children_ages": "Blank age entries are not allowed."})
+                if len(raw_parts) != num_children:
+                    raise serializers.ValidationError({
+                        "children_ages": f"Expected {num_children} ages for {num_children} children, but received {len(raw_parts)}."
+                    })
+                parts = raw_parts
+            elif ages_str:
+                raw_parts = [p.strip() for p in ages_str.split(",")]
+                if any(p == "" for p in raw_parts):
+                    raise serializers.ValidationError({"children_ages": "Blank age entries are not allowed."})
+                parts = raw_parts
+            else:
+                parts = []
+
+            for part in parts:
+                try:
+                    age = int(part)
+                    if age < 0 or age > 17:
+                        raise serializers.ValidationError({"children_ages": f"Age '{part}' must be between 0 and 17."})
+                except ValueError:
+                    raise serializers.ValidationError({"children_ages": f"'{part}' is not a valid age. Enter whole numbers separated by commas."})
+
+            if parts:
+                attrs["children_ages"] = ", ".join(parts)
+
+        # ---- Other pets validation ----
+        has_other_pets = attrs.get("has_other_pets") if "has_other_pets" in attrs else getattr(self.instance, "has_other_pets", False)
+        if not has_other_pets:
+            attrs["other_pets"] = ""
+
+        return attrs

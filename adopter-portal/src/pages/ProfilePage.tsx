@@ -24,6 +24,11 @@ interface ProfileForm {
   owns_or_rents: string
   has_yard: boolean
   household_members: number
+  has_children: boolean
+  number_of_children: string
+  children_ages: string
+  has_other_pets: boolean
+  other_pets: string
 }
 
 const EMPTY: ProfileForm = {
@@ -40,6 +45,11 @@ const EMPTY: ProfileForm = {
   owns_or_rents: '',
   has_yard: false,
   household_members: 1,
+  has_children: false,
+  number_of_children: '',
+  children_ages: '',
+  has_other_pets: false,
+  other_pets: '',
 }
 
 /**
@@ -75,6 +85,11 @@ function profileToForm(data: AdopterProfile): ProfileForm {
     owns_or_rents: data.owns_or_rents ?? '',
     has_yard: data.has_yard ?? false,
     household_members: data.household_members ?? 1,
+    has_children: data.has_children ?? false,
+    number_of_children: data.number_of_children != null ? String(data.number_of_children) : '',
+    children_ages: data.children_ages ?? '',
+    has_other_pets: data.has_other_pets ?? false,
+    other_pets: data.other_pets ?? '',
   }
 }
 
@@ -124,6 +139,20 @@ function formatPhAddress(profile: AdopterProfile): string {
   return parts.join('\n')
 }
 
+/** Parse comma-separated ages string into an array of child age strings of length `count`. */
+function parseAges(agesStr?: string | null, count?: number | null): string[] {
+  const n = count && count > 0 ? count : 0
+  const list = (agesStr ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+  const res: string[] = []
+  for (let i = 0; i < n; i++) {
+    res.push(list[i] ?? '')
+  }
+  return res
+}
+
 export default function ProfilePage() {
   const [saved, setSaved] = useState<AdopterProfile | null>(null)
   const [form, setForm] = useState<ProfileForm>(EMPTY)
@@ -134,6 +163,7 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [loadError, setLoadError] = useState('')
+  const [childAges, setChildAges] = useState<string[]>([])
   const location = useLocation() as { state?: { from?: string } | null }
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -148,6 +178,7 @@ export default function ProfilePage() {
       const data = await fetchAdopterProfile()
       setSaved(data)
       setForm(profileToForm(data))
+      setChildAges(parseAges(data.children_ages, data.number_of_children))
     } catch {
       setLoadError('Unable to load your profile.')
     } finally {
@@ -159,7 +190,7 @@ export default function ProfilePage() {
     load()
   }, [load])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target
     setForm((prev) => ({
       ...prev,
@@ -171,6 +202,78 @@ export default function ProfilePage() {
       if (!prev[name]) return prev
       const next = { ...prev }
       delete next[name]
+      return next
+    })
+  }
+
+  /** Handle Yes/No toggle for children in household. */
+  const handleChildrenToggle = (hasChildren: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      has_children: hasChildren,
+      number_of_children: hasChildren ? (prev.number_of_children || '1') : '',
+      children_ages: '',
+    }))
+    if (!hasChildren) {
+      setChildAges([])
+    } else {
+      const count = parseInt(form.number_of_children, 10) || 1
+      setChildAges((prev) => {
+        if (prev.length > 0) return prev
+        return parseAges(form.children_ages, count)
+      })
+    }
+    setFieldErrors((prev) => {
+      const next = { ...prev }
+      delete next.number_of_children
+      delete next.children_ages
+      Object.keys(next).forEach((k) => {
+        if (k.startsWith('child_age_')) delete next[k]
+      })
+      return next
+    })
+  }
+
+  /** When the child count changes, adjust age fields while preserving remaining entries. */
+  const handleChildCountChange = (value: string) => {
+    setForm((prev) => ({ ...prev, number_of_children: value }))
+    setFieldErrors((prev) => {
+      const next = { ...prev }
+      delete next.number_of_children
+      delete next.children_ages
+      return next
+    })
+    const count = parseInt(value, 10)
+    if (isNaN(count) || count <= 0) {
+      setChildAges([])
+      return
+    }
+    const safeCount = Math.min(count, 50)
+    setChildAges((prev) => {
+      if (prev.length > safeCount) {
+        return prev.slice(0, safeCount)
+      }
+      const next = [...prev]
+      while (next.length < safeCount) {
+        next.push('')
+      }
+      return next
+    })
+  }
+
+  /** Update an individual child's age value. */
+  const handleChildAgeChange = (index: number, val: string) => {
+    setChildAges((prev) => {
+      const next = [...prev]
+      next[index] = val
+      return next
+    })
+    setFieldErrors((prev) => {
+      const key = `child_age_${index}`
+      if (!prev[key] && !prev.children_ages) return prev
+      const next = { ...prev }
+      delete next[key]
+      delete next.children_ages
       return next
     })
   }
@@ -204,6 +307,28 @@ export default function ProfilePage() {
         errors[name] = `${label} is required.`
       }
     }
+    if (form.has_children) {
+      const count = parseInt(form.number_of_children, 10)
+      if (!form.number_of_children || isNaN(count) || count < 1) {
+        errors.number_of_children = 'Please enter a valid number of children (at least 1).'
+      } else if (count > 50) {
+        errors.number_of_children = 'Number of children must be 50 or fewer.'
+      } else {
+        for (let i = 0; i < count; i++) {
+          const ageStr = (childAges[i] ?? '').trim()
+          const key = `child_age_${i}`
+          if (ageStr === '') {
+            errors[key] = `Child ${i + 1} age is required.`
+          } else {
+            const ageNum = Number(ageStr)
+            if (!Number.isInteger(ageNum) || ageNum < 0 || ageNum > 17) {
+              errors[key] = `Child ${i + 1} age must be a whole number between 0 and 17.`
+            }
+          }
+        }
+      }
+    }
+
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -213,7 +338,10 @@ export default function ProfilePage() {
     setSuccess('')
     setFieldErrors({})
     // Restore form to last saved values before enabling editing.
-    if (saved) setForm(profileToForm(saved))
+    if (saved) {
+      setForm(profileToForm(saved))
+      setChildAges(parseAges(saved.children_ages, saved.number_of_children))
+    }
     setEditing(true)
     // Scroll to top of the edit area on mobile
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50)
@@ -224,7 +352,10 @@ export default function ProfilePage() {
     setSuccess('')
     setFieldErrors({})
     // Discard unsaved changes and restore last saved values.
-    if (saved) setForm(profileToForm(saved))
+    if (saved) {
+      setForm(profileToForm(saved))
+      setChildAges(parseAges(saved.children_ages, saved.number_of_children))
+    }
     setEditing(false)
   }
 
@@ -239,9 +370,25 @@ export default function ProfilePage() {
     if (saving) return // prevent duplicate submissions
     setSaving(true)
     try {
-      const updated = await updateAdopterProfile(form as unknown as Record<string, string | number | boolean>)
-      setSaved(updated as AdopterProfile)
-      setForm(profileToForm(updated as AdopterProfile))
+      // Build the API payload, converting number_of_children to int/null
+      // and joining individual child ages into comma-separated string.
+      const childCount = form.has_children && form.number_of_children !== ''
+        ? Number(form.number_of_children)
+        : null
+      const agesStr = form.has_children && childCount && childCount > 0
+        ? childAges.slice(0, childCount).map((a) => a.trim()).join(', ')
+        : ''
+      const payload: Record<string, string | number | boolean | null> = {
+        ...form,
+        number_of_children: childCount,
+        children_ages: agesStr,
+        other_pets: form.has_other_pets ? form.other_pets : '',
+      }
+      const updated = await updateAdopterProfile(payload as Record<string, string | number | boolean | null>)
+      const savedData = updated as AdopterProfile
+      setSaved(savedData)
+      setForm(profileToForm(savedData))
+      setChildAges(parseAges(savedData.children_ages, savedData.number_of_children))
       setEditing(false)
       setSuccess('Profile updated successfully. You can now start an adoption application.')
     } catch (err: unknown) {
@@ -364,6 +511,26 @@ export default function ProfilePage() {
             />
             <ProfileField label="Household Members" value={saved.household_members} />
             <ProfileField label="Has a Yard" value={saved.has_yard} />
+            <ProfileField
+              label="Children in Household"
+              value={saved.has_children ? 'Yes' : 'No'}
+            />
+            {saved.has_children && (
+              <>
+                <ProfileField label="Number of Children" value={saved.number_of_children ?? undefined} />
+                <ProfileField label="Children's Ages (years)" value={saved.children_ages || undefined} />
+              </>
+            )}
+            <ProfileField
+              label="Other Pets in Home"
+              value={saved.has_other_pets ? 'Yes' : 'No'}
+            />
+            {saved.has_other_pets && saved.other_pets && (
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-stone-500">Current Pets Description</dt>
+                <dd className="mt-1 text-sm text-stone-800 whitespace-pre-line">{saved.other_pets}</dd>
+              </div>
+            )}
           </dl>
         </div>
       )}
@@ -504,6 +671,136 @@ export default function ProfilePage() {
                 I have a yard
               </label>
             </div>
+          </div>
+
+          {/* ── Household & Pets ── */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-stone-700 border-b border-stone-100 pb-1">
+              Household &amp; Pets
+            </h3>
+
+            {/* Children Yes/No Selection */}
+            <div>
+              <label className="field-label mb-1">
+                Children in the household <span className="text-red-600" aria-hidden="true">*</span>
+              </label>
+              <div className="flex items-center gap-6 mt-1" role="radiogroup" aria-label="Children in the household">
+                <label className="inline-flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="has_children"
+                    checked={form.has_children === true}
+                    onChange={() => handleChildrenToggle(true)}
+                    className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+                  />
+                  Yes
+                </label>
+                <label className="inline-flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="has_children"
+                    checked={form.has_children === false}
+                    onChange={() => handleChildrenToggle(false)}
+                    className="w-4 h-4 text-primary-600 focus:ring-primary-500"
+                  />
+                  No
+                </label>
+              </div>
+            </div>
+
+            {form.has_children && (
+              <div className="space-y-4 pl-4 border-l-2 border-primary-200">
+                <div className="max-w-xs">
+                  <label htmlFor="number_of_children" className="field-label mb-1">
+                    Number of children <span className="text-red-600" aria-hidden="true">*</span>
+                  </label>
+                  <input
+                    id="number_of_children"
+                    name="number_of_children"
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={form.number_of_children}
+                    onChange={(e) => handleChildCountChange(e.target.value)}
+                    aria-invalid={fieldErrors.number_of_children ? true : undefined}
+                    className={inputCls}
+                    placeholder="e.g. 2"
+                  />
+                  <FieldError message={fieldErrors.number_of_children} />
+                </div>
+
+                {fieldErrors.children_ages && (
+                  <FieldError message={fieldErrors.children_ages} />
+                )}
+
+                {/* Dynamically rendered numeric fields based on selected number of children */}
+                {childAges.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-stone-600 mb-2">
+                      Enter the age for each child (0 to 17 years):
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {childAges.map((age, index) => {
+                        const fieldName = `child_age_${index}`
+                        return (
+                          <div key={fieldName}>
+                            <label htmlFor={fieldName} className="field-label mb-1">
+                              Child {index + 1} age (years) <span className="text-red-600" aria-hidden="true">*</span>
+                            </label>
+                            <input
+                              id={fieldName}
+                              name={fieldName}
+                              type="number"
+                              min="0"
+                              max="17"
+                              value={age}
+                              onChange={(e) => handleChildAgeChange(index, e.target.value)}
+                              aria-invalid={fieldErrors[fieldName] ? true : undefined}
+                              className={inputCls}
+                              placeholder="e.g. 5"
+                            />
+                            <FieldError message={fieldErrors[fieldName]} />
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <p className="mt-1 text-xs text-stone-500">Ages only — no names or birthdates.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Other pets */}
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-stone-700">
+                <input
+                  type="checkbox"
+                  name="has_other_pets"
+                  checked={form.has_other_pets}
+                  onChange={handleChange}
+                  className="w-4 h-4 text-primary-600"
+                />
+                I currently have other pets
+              </label>
+            </div>
+            {form.has_other_pets && (
+              <div className="pl-6">
+                <label htmlFor="other_pets" className="field-label mb-1">
+                  Describe your current pets <span className="text-red-600" aria-hidden="true">*</span>
+                </label>
+                <textarea
+                  id="other_pets"
+                  name="other_pets"
+                  rows={3}
+                  value={form.other_pets}
+                  onChange={handleChange}
+                  aria-invalid={fieldErrors.other_pets ? true : undefined}
+                  className={inputCls}
+                  placeholder="Types, counts, e.g. 2 dogs (Labrador, Shih Tzu), 1 cat"
+                />
+                <FieldError message={fieldErrors.other_pets} />
+              </div>
+            )}
           </div>
 
           <div className="pt-4 border-t border-stone-100 flex justify-end gap-3">

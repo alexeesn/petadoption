@@ -27,6 +27,10 @@ export interface AdopterProfile {
   has_yard: boolean;
   other_pets: string;
   household_members: number;
+  has_children: boolean;
+  number_of_children: number | null;
+  children_ages: string;
+  has_other_pets: boolean;
   created_at: string;
   updated_at: string;
 }

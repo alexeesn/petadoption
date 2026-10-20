@@ -487,3 +487,314 @@ class PhilippineAddressTests(BaseAPITestCase):
             format="json",
         )
         self.assertIn(resp.status_code, [403, 404, 405])
+
+
+class HouseholdPetCareTests(BaseAPITestCase):
+    """Tests for household members, children in household, and other pets features."""
+
+    def setUp(self):
+        super().setUp()
+        self.adopter = self.create_user(email="family_adopter@example.com")
+        self.staff = self.create_staff(email="vet_staff@example.com")
+        self.other_adopter = self.create_user(email="other_adopter@example.com")
+
+    def test_household_members_must_be_at_least_one(self):
+        """household_members must be a positive whole number (>= 1)."""
+        self.authenticate(self.adopter)
+        # 0 is rejected
+        resp = self.client.patch("/api/adopters/profile/", {"household_members": 0}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("household_members", resp.data)
+
+        # Negative number is rejected
+        resp = self.client.patch("/api/adopters/profile/", {"household_members": -3}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("household_members", resp.data)
+
+        # Valid positive number succeeds
+        resp = self.client.patch("/api/adopters/profile/", {"household_members": 4}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        profile = AdopterProfile.objects.get(user=self.adopter)
+        self.assertEqual(profile.household_members, 4)
+
+    def test_children_in_household_saved_when_true(self):
+        """When has_children is True, number_of_children and children_ages are saved."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "4, 8",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["has_children"])
+        self.assertEqual(resp.data["number_of_children"], 2)
+        self.assertEqual(resp.data["children_ages"], "4, 8")
+
+        profile = AdopterProfile.objects.get(user=self.adopter)
+        self.assertTrue(profile.has_children)
+        self.assertEqual(profile.number_of_children, 2)
+        self.assertEqual(profile.children_ages, "4, 8")
+
+    def test_children_fields_cleared_when_has_children_false(self):
+        """When has_children is False, number_of_children and children_ages are reset."""
+        self.authenticate(self.adopter)
+        # First set children
+        self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "number_of_children": 1, "children_ages": "6"},
+            format="json",
+        )
+        # Then set has_children to False
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["has_children"])
+        self.assertIsNone(resp.data["number_of_children"])
+        self.assertEqual(resp.data["children_ages"], "")
+
+        profile = AdopterProfile.objects.get(user=self.adopter)
+        self.assertFalse(profile.has_children)
+        self.assertIsNone(profile.number_of_children)
+        self.assertEqual(profile.children_ages, "")
+
+    def test_invalid_children_ages_rejected(self):
+        """Ages must be whole numbers between 0 and 17, comma-separated."""
+        self.authenticate(self.adopter)
+
+        # Age > 17
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "children_ages": "5, 19"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("children_ages", resp.data)
+
+        # Negative age
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "children_ages": "-2, 7"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("children_ages", resp.data)
+
+        # Non-numeric text (e.g. names or words)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "children_ages": "Tommy, 5"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("children_ages", resp.data)
+
+        # Valid ages including infant (0) and 17
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "children_ages": "0, 5, 12, 17"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_invalid_number_of_children_rejected(self):
+        """Number of children cannot be negative or exceed 50."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "number_of_children": -1},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("number_of_children", resp.data)
+
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_children": True, "number_of_children": 55},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("number_of_children", resp.data)
+
+    def test_other_pets_saved_and_cleared(self):
+        """other_pets is preserved when has_other_pets is True, and cleared when False."""
+        self.authenticate(self.adopter)
+        # Save other pets
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_other_pets": True,
+                "other_pets": "2 dogs (Shih Tzu, Poodle), 1 cat",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["has_other_pets"])
+        self.assertEqual(resp.data["other_pets"], "2 dogs (Shih Tzu, Poodle), 1 cat")
+
+        # Clear other pets by setting has_other_pets=False
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {"has_other_pets": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["has_other_pets"])
+        self.assertEqual(resp.data["other_pets"], "")
+
+    def test_staff_application_review_exposes_household_and_pet_care_data(self):
+        """When staff view an application, the nested adopter_profile contains household details."""
+        self.authenticate(self.adopter)
+        self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "household_members": 5,
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "4, 9",
+                "has_other_pets": True,
+                "other_pets": "1 dog (Aspin)",
+            },
+            format="json",
+        )
+
+        from apps.pets.models import Pet
+        from apps.applications.models import Application
+        pet = Pet.objects.create(name="Max", species="dog", age_years=2, status="available")
+        app = Application.objects.create(
+            adopter=self.adopter,
+            pet=pet,
+            status="submitted",
+            why_adopt="Loving companion for our family",
+            experience_with_pets="Grew up with dogs",
+            living_situation="House with fenced yard",
+            privacy_consent=True,
+        )
+
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/applications/{app.id}/")
+        self.assertEqual(resp.status_code, 200)
+        profile_data = resp.data["adopter_profile"]
+        self.assertIsNotNone(profile_data)
+        self.assertEqual(profile_data["household_members"], 5)
+        self.assertTrue(profile_data["has_children"])
+        self.assertEqual(profile_data["number_of_children"], 2)
+        self.assertEqual(profile_data["children_ages"], "4, 9")
+        self.assertTrue(profile_data["has_other_pets"])
+        self.assertEqual(profile_data["other_pets"], "1 dog (Aspin)")
+
+    def test_backward_compatibility_with_older_profiles(self):
+        """Legacy profiles without new fields load and serialize cleanly."""
+        self.authenticate(self.adopter)
+        resp = self.client.get("/api/adopters/profile/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("has_children", resp.data)
+        self.assertIn("number_of_children", resp.data)
+        self.assertIn("children_ages", resp.data)
+        self.assertIn("has_other_pets", resp.data)
+        self.assertIn("household_members", resp.data)
+        # Default state:
+        self.assertFalse(resp.data["has_children"])
+        self.assertIsNone(resp.data["number_of_children"])
+        self.assertEqual(resp.data["children_ages"], "")
+        self.assertFalse(resp.data["has_other_pets"])
+
+    def test_two_children_with_two_ages_succeeds(self):
+        """2 children with 2 ages succeeds."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "4, 8",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["number_of_children"], 2)
+        self.assertEqual(resp.data["children_ages"], "4, 8")
+
+    def test_two_children_with_only_one_age_rejected(self):
+        """2 children with only 1 age is rejected."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "4",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("children_ages", resp.data)
+
+    def test_two_children_with_three_ages_rejected(self):
+        """2 children with 3 ages is rejected."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "4, 8, 12",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("children_ages", resp.data)
+
+    def test_blank_child_age_rejected(self):
+        """Blank age entries when child is counted are rejected."""
+        self.authenticate(self.adopter)
+        resp = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "4, ",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("children_ages", resp.data)
+
+    def test_changing_child_count_from_three_to_two(self):
+        """Changing child count from 3 to 2 persists exactly 2 ages."""
+        self.authenticate(self.adopter)
+        # First save 3 children with 3 ages
+        resp1 = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 3,
+                "children_ages": "3, 7, 12",
+            },
+            format="json",
+        )
+        self.assertEqual(resp1.status_code, 200)
+        profile = AdopterProfile.objects.get(user=self.adopter)
+        self.assertEqual(profile.number_of_children, 3)
+        self.assertEqual(profile.children_ages, "3, 7, 12")
+
+        # Now change count to 2 with 2 ages
+        resp2 = self.client.patch(
+            "/api/adopters/profile/",
+            {
+                "has_children": True,
+                "number_of_children": 2,
+                "children_ages": "3, 7",
+            },
+            format="json",
+        )
+        self.assertEqual(resp2.status_code, 200)
+        profile.refresh_from_db()
+        self.assertEqual(profile.number_of_children, 2)
+        self.assertEqual(profile.children_ages, "3, 7")

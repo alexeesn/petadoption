@@ -444,10 +444,30 @@ export default function ApplicationDetailPage() {
             label="Household members"
             value={profile ? String(profile.household_members) : ''}
           />
+          <Detail
+            label="Children in household"
+            value={profile ? (profile.has_children ? 'Yes' : 'No') : ''}
+          />
+          {profile?.has_children && (
+            <>
+              <Detail
+                label="Number of children"
+                value={profile.number_of_children != null ? String(profile.number_of_children) : ''}
+              />
+              <Detail
+                label="Children's ages"
+                value={profile.children_ages || undefined}
+              />
+            </>
+          )}
+          <Detail
+            label="Other pets in home"
+            value={profile ? (profile.has_other_pets ? 'Yes' : 'No') : ''}
+          />
         </dl>
-        {profile?.other_pets && (
+        {profile?.has_other_pets && profile.other_pets && (
           <dl className="mt-4">
-            <Detail label="Pets already in the home (profile)" value={profile.other_pets} />
+            <Detail label="Current pets description" value={profile.other_pets} />
           </dl>
         )}
         {!profile && (

@@ -144,13 +144,13 @@ export interface Appointment {
  * AdopterProfile.REQUIRED_PROFILE_FIELDS and gates new adoption applications.
  *
  * Philippine address hierarchy:
- *   address_line1 → street / house no. / purok (required)
- *   address_line2 → optional second line
- *   region        → region name, e.g. "National Capital Region (NCR)"
- *   state         → province name (blank for NCR)
- *   city          → city or municipality
- *   barangay      → barangay
- *   zip_code      → postal code
+ *   address_line1 â†’ street / house no. / purok (required)
+ *   address_line2 â†’ optional second line
+ *   region        â†’ region name, e.g. "National Capital Region (NCR)"
+ *   state         â†’ province name (blank for NCR)
+ *   city          â†’ city or municipality
+ *   barangay      â†’ barangay
+ *   zip_code      â†’ postal code
  */
 export interface AdopterProfile {
   id: string
@@ -170,6 +170,10 @@ export interface AdopterProfile {
   has_yard: boolean
   other_pets: string
   household_members: number
+  has_children: boolean
+  number_of_children: number | null
+  children_ages: string
+  has_other_pets: boolean
   agree_to_terms: boolean
   profile_is_complete: boolean
   created_at: string

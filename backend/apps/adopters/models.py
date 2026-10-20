@@ -65,6 +65,24 @@ class AdopterProfile(models.Model):
     has_yard = models.BooleanField(default=False)
     other_pets = models.TextField(blank=True, help_text="Describe any current pets")
     household_members = models.IntegerField(default=1)
+    has_children = models.BooleanField(
+        default=False,
+        help_text="Whether the household has children",
+    )
+    number_of_children = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of children in the household (only when has_children=True)",
+    )
+    children_ages = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Comma-separated ages of children, e.g. '3, 7, 12'",
+    )
+    has_other_pets = models.BooleanField(
+        default=False,
+        help_text="Whether the household currently has other pets",
+    )
     agree_to_terms = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
