@@ -66,6 +66,9 @@ export async function getDashboardStats() {
 export const applicationService = {
   list: (params?: Record<string, unknown>) => api.get('/applications/', { params }),
   retrieve: (id: string) => api.get(`/applications/${id}/`),
+  // Fee totals and turnover eligibility for the onsite workflow (read-only
+  // summary; the backend is the source of truth for fee/paid/eligibility).
+  paymentSummary: (id: string) => api.get(`/applications/${id}/payment-summary/`),
   updateStatus: (id: string, data: Record<string, unknown>) =>
     api.post(`/applications/${id}/update-status/`, data),
   update: (id: string, data: Record<string, unknown>) =>
@@ -191,6 +194,10 @@ export const paymentService = {
   list: (params?: Record<string, unknown>) => api.get('/payments/', { params }),
   create: (data: Record<string, unknown>) => api.post('/payments/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/payments/${id}/`, data),
+  // Staff-only on-site payment recording. The backend forces status=completed,
+  // generates the receipt number, and never trusts client-supplied status or
+  // receipt values — the UI only sends what was actually received.
+  recordOnsite: (data: Record<string, unknown>) => api.post('/payments/record-onsite/', data),
 };
 
 // ----- Reports -----

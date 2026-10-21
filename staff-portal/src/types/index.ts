@@ -213,6 +213,21 @@ export interface Payment {
   updated_at?: string;
 }
 
+/**
+ * Backend GET /api/applications/{id}/payment-summary/ response. Staff-facing
+ * source of truth for the adoption fee, completed-payment total, and payment /
+ * turnover eligibility. The fee is never hardcoded in UI code — it comes from
+ * the backend's adoption_fee field.
+ */
+export interface PaymentSummary {
+  application_id: string;
+  adoption_fee: string;
+  total_paid: string;
+  is_fee_paid: boolean;
+  turnover_eligible: boolean;
+  payments: Payment[];
+}
+
 export interface Notification {
   id: string;
   title: string;
