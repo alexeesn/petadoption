@@ -21,8 +21,15 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_adopter:
-            return self.queryset.filter(adopter=user)
-        return self.queryset
+            qs = self.queryset.filter(adopter=user)
+        else:
+            qs = self.queryset
+        # Optional filter so the staff Adoption Records page can browse by
+        # record status without fetching and filtering pages client-side.
+        status = self.request.query_params.get("status")
+        if status:
+            qs = qs.filter(status=status)
+        return qs
 
     def create(self, request, *args, **kwargs):
         """Create adoption record from approved application.

@@ -1,110 +1,176 @@
 import { useEffect, useState } from 'react';
-import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table } from '../components/UI';
+import {
+  Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select,
+} from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { adoptionService } from '../services/apiService';
-import type { AdoptionRecord } from '../types';
-import { formatDate } from '../utils/format';
+import type { AdoptionRecord, PaginatedResponse } from '../types';
+import { formatDate, formatDateTime } from '../utils/format';
 
-/**
- * Adoption Records are created by the backend when staff confirm an adoption
- * appointment (POST /api/appointments/<id>/approve/): the record arrives here
- * already "Scheduled" with its pet, adopter, application and visit date, so
- * nothing has to be entered by hand.  Staff only move the record on
- * (cancel/return here) or complete the adoption from the application page.
- */
-const STATUS_OPTIONS = [
+/** Matches AdoptionRecord.Status.choices in backend/apps/adoptions/models.py. */
+const STATUS_FILTERS = [
+  { value: '', label: 'All statuses' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'returned', label: 'Returned' },
 ];
 
+function shortId(value: string): string {
+  return value.length > 8 ? `${value.slice(0, 8)}…` : value;
+}
+
+/**
+ * Adoption Records (read-only browsing).
+ *
+ * Records are created server-side when staff confirm an onsite visit date; the
+ * permanent transaction ID is generated and stored by the backend only when a
+ * record is completed — never by this page. The list endpoint is paginated, so
+ * the page fetches one page at a time and filters server-side (?status=) rather
+ * than loading every record into the browser. No editing, deletion, or
+ * completion actions exist here.
+ */
 export default function AdoptionsPage() {
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const [hasNext, setHasNext] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [busyId, setBusyId] = useState('');
 
   const load = () => {
     setLoading(true);
     setError('');
+    const params: Record<string, unknown> = { page };
+    if (statusFilter) params.status = statusFilter;
     adoptionService
-      .list()
-      .then((res) => setRecords(res.data.results))
+      .list(params)
+      .then((res) => {
+        const data = res.data as PaginatedResponse<AdoptionRecord>;
+        setRecords(data.results);
+        setCount(data.count);
+        setHasPrevious(Boolean(data.previous));
+        setHasNext(Boolean(data.next));
+      })
       .catch(() => setError('Failed to load adoption records.'))
       .finally(() => setLoading(false));
   };
 
-  const handleStatusChange = (id: string, status: string) => {
-    setBusyId(id);
-    setError('');
-    setSuccess('');
-    adoptionService
-      .update(id, { status })
-      .then(() => {
-        setSuccess('Adoption status updated.');
-        load();
-      })
-      .catch((e: any) => {
-        const data = e.response?.data;
-        setError(data?.error || data?.detail || 'Failed to update adoption status.');
-      })
-      .finally(() => setBusyId(''));
+  useEffect(load, [page, statusFilter]);
+
+  const clearFilters = () => {
+    setStatusFilter('');
+    setPage(1);
   };
 
-  useEffect(load, []);
-
   return (
-    <div>
+<div>
       <PageHeader
         title="Adoption Records"
-        subtitle="Scheduled automatically when staff confirm an adoption appointment — no manual record needed."
+        subtitle="Created automatically by the backend when staff confirm an onsite visit date. This page is read-only — adoption status is managed through the Schedule and Application workflows."
       />
 
-      {success && <p className="mb-4 text-green-600 text-sm">{success}</p>}
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <Select
+          label="Status"
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          options={STATUS_FILTERS}
+        />
+        {statusFilter && (
+          <Button variant="outline" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </div>
+
+      <p className="mb-2 text-xs text-slate-500">
+        Status legend:{' '}
+        {STATUS_FILTERS.filter((opt) => opt.value).map((opt) => (
+          <StatusBadge key={opt.value} status={opt.value} />
+        ))}
+      </p>
+      <p className="mb-4 text-xs text-slate-500">
+        Only records with status <span className="font-medium text-green-700">Completed</span> are
+        finalized adoptions — they carry a permanent transaction ID and the completion time and
+        staff. Scheduled, cancelled, and returned records are not finalized. Nothing on this page
+        can be edited.
+      </p>
 
       {loading ? (
-        <Loading />
+        <Loading label="Loading adoption records..." />
       ) : error ? (
         <ErrorMessage message={error} />
       ) : records.length === 0 ? (
-        <Card><Empty message="No adoption records found." /></Card>
-      ) : (
         <Card>
-          <Table headers={['Pet', 'Adopter', 'Status', 'Application', 'Scheduled visit', 'Appointment', 'Completed', 'Update status']}>
-            {records.map((rec) => (
-              <tr key={rec.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-sm font-medium text-slate-900">{rec.pet_name}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">{rec.adopter_email}</td>
-                <td className="px-4 py-3"><StatusBadge status={rec.status} /></td>
-                <td className="px-4 py-3 text-xs text-slate-500">{rec.application_id}</td>
-                <td className="px-4 py-3 text-sm text-slate-500">{formatDate(rec.adoption_date ?? undefined)}</td>
-                <td className="px-4 py-3 text-sm text-slate-500">
-                  {rec.appointment_id
-                    ? `${formatDate(rec.appointment_date ?? undefined)} · ${rec.appointment_id}`
-                    : '—'}
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-500">{formatDate(rec.completed_date ?? undefined)}</td>
-                <td className="px-4 py-3">
-                  <select
-                    value={rec.status}
-                    onChange={(e) => handleStatusChange(rec.id, e.target.value)}
-                    disabled={busyId === rec.id}
-                    aria-label={`Update status for the adoption record of ${rec.pet_name}`}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-sm disabled:opacity-60"
-                  >
-                    {STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </Table>
+          <Empty message="No adoption records match these filters." />
         </Card>
+      ) : (
+        <>
+          <Card>
+            <Table
+              headers={[
+                'Transaction ID', 'Pet', 'Adopter', 'Application', 'Status',
+                'Completed', 'Completed by', 'Appointment',
+              ]}
+            >
+              {records.map((rec) => (
+                <tr key={rec.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 text-sm font-semibold text-slate-900">
+                    {rec.transaction_id || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {rec.pet_name}
+                    <span className="ml-1 text-xs text-slate-400">({shortId(rec.pet)})</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {rec.adopter_email}
+                    <span className="ml-1 text-xs text-slate-400">({shortId(rec.adopter)})</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-500" title={rec.application_id}>
+                    {shortId(rec.application_id)}
+                  </td>
+                  <td className="px-4 py-3"><StatusBadge status={rec.status} /></td>
+                  <td className="px-4 py-3 text-sm text-slate-500">
+                    {rec.completed_at
+                      ? formatDateTime(rec.completed_at)
+                      : rec.completed_date
+                        ? formatDate(rec.completed_date)
+                        : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{rec.staff_email || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-500">
+                    {rec.appointment_id && rec.appointment_date
+                      ? `${formatDate(rec.appointment_date)}`
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </Card>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              disabled={!hasPrevious || loading}
+              onClick={() => setPage(Math.max(1, page - 1))}
+            >
+              ← Previous
+            </Button>
+            <span className="text-sm text-slate-600">
+              Page {page} · {count} total record{count === 1 ? '' : 's'}
+            </span>
+            <Button variant="outline" disabled={!hasNext || loading} onClick={() => setPage(page + 1)}>
+              Next →
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );
 }
-

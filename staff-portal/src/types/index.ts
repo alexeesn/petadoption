@@ -154,12 +154,15 @@ export interface AdoptionPackage {
 
 export interface AdoptionRecord {
   id: string;
+  /** Backend-generated permanent transaction ID (only set when completed). */
+  transaction_id?: string | null;
   application_id: string;
   pet: string;
   pet_name: string;
   adopter: string;
   adopter_email: string;
   staff_member?: string | null;
+  /** Staff member recorded as responsible for the completion. */
   staff_email?: string | null;
   /** Confirmed onsite visit this record was scheduled from (null when none). */
   appointment_id?: string | null;
@@ -167,6 +170,8 @@ export interface AdoptionRecord {
   status: string;
   adoption_date: string | null;
   completed_date?: string | null;
+  /** Finalization timestamp (only set when completed). */
+  completed_at?: string | null;
   notes: string;
   return_reason: string;
   created_at: string;

@@ -919,3 +919,63 @@ class Phase21HandoverHardeningTests(BaseAPITestCase):
         self.assertEqual(completion_audit_count(), audit_after_first)
         self.assertEqual(adoption_notification_count(), notif_after_first)
 
+
+class AdoptionRecordsFilterTests(BaseAPITestCase):
+    """Phase 3.3 - the adoption records list endpoint filters by status
+    server-side so the staff records page can paginate correctly."""
+
+    def setUp(self):
+        super().setUp()
+        self.adopter = self.create_user(email="adopter_records_33@example.com")
+        self.staff = self.create_staff(email="staff_records_33@example.com")
+        self.pet1 = Pet.objects.create(name="P1", species="dog", age_years=1, status="adopted")
+        self.pet2 = Pet.objects.create(name="P2", species="cat", age_years=2, status="pending")
+
+    def _make_record(self, pet, status="scheduled"):
+        app = Application.objects.create(adopter=self.adopter, pet=pet, status="approved")
+        return AdoptionRecord.objects.create(
+            application=app, pet=pet, adopter=self.adopter,
+            staff_member=self.staff, status=status,
+        )
+
+    def test_list_filters_by_status(self):
+        """?status= returns only records in that state (paginated response)."""
+        self._make_record(self.pet1, status="completed")
+        self._make_record(self.pet2, status="scheduled")
+        self.authenticate(self.staff)
+
+        resp = self.client.get("/api/adoptions/?status=completed")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+        self.assertEqual(resp.data["results"][0]["status"], "completed")
+        self.assertEqual(resp.data["results"][0]["pet_name"], "P1")
+
+    def test_list_unknown_status_returns_empty(self):
+        """An unknown status matches nothing instead of erroring."""
+        self._make_record(self.pet1, status="completed")
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/adoptions/?status=does_not_exist")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 0)
+
+    def test_list_unfiltered_returns_all_records_paginated(self):
+        """Without a filter, the endpoint is the paginated list of all records."""
+        self._make_record(self.pet1, status="completed")
+        self._make_record(self.pet2, status="cancelled")
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/adoptions/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 2)
+        self.assertIsNone(resp.data["next"])
+        self.assertIsNone(resp.data["previous"])
+
+    def test_adopters_are_blocked_from_adoption_records(self):
+        """The adoption records endpoint stays staff-only; the new status filter
+        does not change access control."""
+        self._make_record(self.pet1, status="completed")
+        self.authenticate(self.adopter)
+        all_resp = self.client.get("/api/adoptions/")
+        self.assertEqual(all_resp.status_code, 403)
+        filtered_resp = self.client.get("/api/adoptions/?status=completed")
+        self.assertEqual(filtered_resp.status_code, 403)
+
