@@ -71,10 +71,17 @@ export const applicationService = {
   update: (id: string, data: Record<string, unknown>) =>
     api.patch(`/applications/${id}/`, data),
   // Completes the onsite adoption. The API only accepts this when the
-  // application is approved, the appointment is confirmed and the onsite
-  // payment has been recorded.
+  // application is approved, the appointment is confirmed, the onsite
+  // payment has been recorded, and the staff member explicitly confirms
+  // that the pet was physically handed over (confirmed: true).  The
+  // confirmation checkbox on the application detail page is the UI that
+  // produces this flag; the backend re-validates it and rejects anything
+  // that is not an actual boolean true.
   completeAdoption: (id: string, notes = '') =>
-    api.post(`/applications/${id}/complete-adoption/`, { notes }),
+    api.post(`/applications/${id}/complete-adoption/`, {
+      notes,
+      confirmed: true,
+    }),
 };
 
 // ----- Pets -----

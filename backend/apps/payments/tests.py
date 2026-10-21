@@ -117,9 +117,11 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
     def complete(self, application=None, payload=None):
         application = application or self.application
         self.authenticate(self.staff)
+        if payload is None:
+            payload = {"confirmed": True}
         return self.client.post(
             f"/api/applications/{application.id}/complete-adoption/",
-            payload or {},
+            payload,
             format="json",
         )
 
@@ -243,7 +245,7 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.assertEqual(self.record_payment().status_code, 201)
 
         resp = self.complete(
-            payload={"notes": "Verified ID and signed agreement onsite."}
+            payload={"notes": "Verified ID and signed agreement onsite.", "confirmed": True}
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["status"], "adoption_completed")
@@ -278,7 +280,7 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.confirm_appointment()
         self.record_payment()
         self.assertEqual(
-            self.complete(payload={"notes": "Internal note"}).status_code, 200
+            self.complete(payload={"notes": "Internal note", "confirmed": True}).status_code, 200
         )
 
         self.authenticate(self.adopter)
@@ -788,7 +790,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
 
         resp = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {"notes": "Turnover complete."},
+            {"confirmed": True, "notes": "Turnover complete."},
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
@@ -824,7 +826,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         # No appointment at all
         resp = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {},
+            {"confirmed": True},
             format="json",
         )
         self.assertEqual(resp.status_code, 400)
@@ -839,7 +841,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         )
         resp2 = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {},
+            {"confirmed": True},
             format="json",
         )
         self.assertEqual(resp2.status_code, 400)
@@ -858,7 +860,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         self.authenticate(self.adopter)
         resp_adopter = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {},
+            {"confirmed": True},
             format="json",
         )
         self.assertEqual(resp_adopter.status_code, 403)
@@ -867,7 +869,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         self.unauthenticate()
         resp_anon = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {},
+            {"confirmed": True},
             format="json",
         )
         self.assertIn(resp_anon.status_code, [401, 403])
@@ -885,7 +887,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
 
         resp1 = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {},
+            {"confirmed": True},
             format="json",
         )
         self.assertEqual(resp1.status_code, 200)
@@ -896,7 +898,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         # Repeated request (idempotent retry)
         resp2 = self.client.post(
             f"/api/applications/{self.application.id}/confirm-turnover/",
-            {},
+            {"confirmed": True},
             format="json",
         )
         self.assertEqual(resp2.status_code, 200)
@@ -921,7 +923,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         with patch.object(Pet, "save", side_effect=RuntimeError("Simulated database failure")):
             with self.assertRaises(RuntimeError):
                 from apps.adoptions.services import complete_application_adoption
-                complete_application_adoption(self.application, self.staff)
+                complete_application_adoption(self.application, self.staff, handover_confirmed=True)
 
         # Atomic rollback check: application and pet remain unaffected
         self.application.refresh_from_db()
@@ -965,3 +967,95 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         self.assertEqual(app_resp.data["total_paid"], "500.00")
         self.assertTrue(app_resp.data["is_fee_paid"])
         self.assertTrue(app_resp.data["turnover_eligible"])
+
+
+class Phase21PaymentReassignmentTests(BaseAPITestCase):
+    """Phase 2.1 - Prevent reassignment of an existing payment to a different application."""
+
+    ADOPTION_FEE = "500.00"
+
+    def setUp(self):
+        super().setUp()
+        self.pet1 = Pet.objects.create(name="ReassignPet1", species="dog", age_years=1, status="pending")
+        self.pet2 = Pet.objects.create(name="ReassignPet2", species="cat", age_years=2, status="pending")
+        self.adopter = self.create_user(email="adopter_ra@example.com")
+        self.staff = self.create_staff(email="staff_ra@example.com")
+        self.app1 = Application.objects.create(adopter=self.adopter, pet=self.pet1, status="approved")
+        self.app2 = Application.objects.create(adopter=self.adopter, pet=self.pet2, status="approved")
+        self.payment = Payment.objects.create(
+            application=self.app1,
+            amount="500.00",
+            method="cash",
+            status="completed",
+            processed_by=self.staff,
+        )
+
+    def test_patch_reassignment_to_different_application_rejected(self):
+        """PATCH /api/payments/{id}/ cannot reassign payment to a different application."""
+        self.authenticate(self.staff)
+        resp = self.client.patch(
+            f"/api/payments/{self.payment.id}/",
+            {"application": str(self.app2.id)},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("application", resp.data)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.application, self.app1)
+
+    def test_put_reassignment_to_different_application_rejected(self):
+        """PUT /api/payments/{id}/ cannot reassign payment to a different application."""
+        self.authenticate(self.staff)
+        resp = self.client.put(
+            f"/api/payments/{self.payment.id}/",
+            {
+                "application": str(self.app2.id),
+                "amount": self.ADOPTION_FEE,
+                "method": "cash",
+                "status": "completed",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("application", resp.data)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.application, self.app1)
+
+    def test_patch_same_application_does_not_trigger_reassignment_error(self):
+        """PATCH with the same application FK is allowed."""
+        self.authenticate(self.staff)
+        resp = self.client.patch(
+            f"/api/payments/{self.payment.id}/",
+            {"application": str(self.app1.id), "notes": "Updated notes."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.application, self.app1)
+
+    def test_patch_without_application_field_is_allowed(self):
+        """PATCH that does not include the application field is always allowed."""
+        self.authenticate(self.staff)
+        resp = self.client.patch(
+            f"/api/payments/{self.payment.id}/",
+            {"notes": "Staff note."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_create_new_payment_for_different_application_is_allowed(self):
+        """Creating a new payment for any application is always allowed."""
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(self.app2.id),
+                "amount": self.ADOPTION_FEE,
+                "method": "gcash",
+                "status": "completed",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        new_payment = Payment.objects.get(application=self.app2)
+        self.assertEqual(new_payment.application, self.app2)

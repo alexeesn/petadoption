@@ -127,13 +127,31 @@ class NotificationTests(BaseAPITestCase):
         )
 
     def test_adoption_completion_creates_notification(self):
+        from django.utils import timezone
+        from apps.appointments.models import Appointment
+        from apps.payments.models import Payment
+
         app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="approved")
+        # The completion workflow requires a confirmed onsite visit and a
+        # completed payment, plus an explicit physical-handover confirmation
+        # (confirmed: true), before the pet can be released.
+        Appointment.objects.create(
+            application=app, pet=self.pet, adopter=self.adopter,
+            requested_date=timezone.localdate(), status=Appointment.Status.CONFIRMED,
+        )
+        Payment.objects.create(
+            application=app, amount="500.00", status=Payment.Status.COMPLETED,
+        )
         adoption = AdoptionRecord.objects.create(
             application=app, pet=self.pet, adopter=self.adopter,
             staff_member=self.staff, status="scheduled",
         )
         self.authenticate(self.staff)
-        resp = self.client.patch(f"/api/adoptions/{adoption.id}/", {"status": "completed"}, format="json")
+        resp = self.client.patch(
+            f"/api/adoptions/{adoption.id}/",
+            {"status": "completed", "confirmed": True},
+            format="json",
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(
             Notification.objects.filter(user=self.adopter, title="Adoption Completed").exists()

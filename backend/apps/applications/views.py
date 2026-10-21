@@ -321,14 +321,13 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Explicit staff confirmation that pet has been physically handed over
-        if request.data.get("confirmed") is False or request.data.get("turnover_confirmed") is False:
-            return Response(
-                {"error": "Physical turnover of the pet must be explicitly confirmed."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        from apps.adoptions.services import complete_application_adoption
+        # Explicit staff confirmation that pet has been physically handed over.
+        # Only an actual JSON boolean true is accepted.  Missing fields, false,
+        # null, strings, and integers are all rejected.
+        from apps.adoptions.services import is_handover_confirmed, complete_application_adoption
+        is_valid, err_msg = is_handover_confirmed(request.data)
+        if not is_valid:
+            return Response({"error": err_msg}, status=status.HTTP_400_BAD_REQUEST)
 
         notes = (request.data.get("notes") or "").strip()
         if notes:
@@ -338,8 +337,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             app.staff_notes = notes
             app.save(update_fields=["staff_notes"])
 
-        with transaction.atomic():
-            complete_application_adoption(app, request.user, notes=notes)
+        complete_application_adoption(app, request.user, notes=notes, handover_confirmed=True)
 
         app.refresh_from_db()
         return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)

@@ -41,4 +41,14 @@ class PaymentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"package": "This is a free package. No payment required."}
                 )
+
+        # Prevent reassigning an existing payment to a different application.
+        # This protects payment-to-application association integrity on both
+        # PATCH and PUT requests.
+        if self.instance is not None and "application" in attrs:
+            if attrs["application"] != self.instance.application:
+                raise serializers.ValidationError(
+                    {"application": "An existing payment cannot be reassigned to a different application."}
+                )
+
         return attrs

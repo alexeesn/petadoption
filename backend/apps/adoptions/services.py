@@ -48,6 +48,51 @@ from apps.payments.models import Payment
 from .models import AdoptionRecord, _generate_transaction_id
 
 
+def is_handover_confirmed(data):
+    """Return (True, None) only when the request payload contains an unambiguous
+    boolean ``True`` for ``confirmed`` or ``turnover_confirmed``.
+
+    Acceptable:
+        {"confirmed": True}
+        {"turnover_confirmed": True}
+        {"confirmed": True, "turnover_confirmed": True}
+
+    Rejected (returns False + error message):
+        {}                                     – field missing
+        {"confirmed": False}                   – explicit denial
+        {"confirmed": null}                    – null
+        {"confirmed": "true"}                  – string, not bool
+        {"confirmed": 1}                       – integer, not bool
+        {"confirmed": True, "turnover_confirmed": False}  – contradictory
+    """
+    if not isinstance(data, dict):
+        return False, "Invalid request payload format."
+
+    has_confirmed = "confirmed" in data
+    has_turnover = "turnover_confirmed" in data
+
+    if not has_confirmed and not has_turnover:
+        return False, "Explicit physical handover confirmation is required (confirmed: true)."
+
+    c_val = data.get("confirmed")
+    t_val = data.get("turnover_confirmed")
+
+    if has_confirmed and has_turnover:
+        # Both provided: both must be exactly boolean True (no contradiction)
+        if type(c_val) is bool and c_val is True and type(t_val) is bool and t_val is True:
+            return True, None
+        return (
+            False,
+            "Physical turnover confirmation fields must both be boolean true and cannot contradict each other.",
+        )
+
+    val = c_val if has_confirmed else t_val
+    if type(val) is bool and val is True:
+        return True, None
+
+    return False, "Physical turnover must be explicitly confirmed with a boolean value of true."
+
+
 def schedule_adoption_record_for_appointment(appointment, staff_user=None):
     """Create or update the AdoptionRecord for a *confirmed* onsite visit.
 
@@ -132,25 +177,59 @@ def schedule_adoption_record_for_appointment(appointment, staff_user=None):
 
 
 @transaction.atomic
-def complete_application_adoption(application, staff_user, notes=""):
+def complete_application_adoption(application, staff_user, notes="", handover_confirmed=None):
     """Finish the adoption for *application* and return its AdoptionRecord.
+
+    Physical Handover Confirmation
+    ------------------------------
+    Physical turnover must be explicitly confirmed by an authenticated staff member
+    with a boolean value of True (handover_confirmed=True). Missing, false, or
+    non-boolean values are rejected. The parameter is required on purpose: a
+    default of ``True`` would let a future caller complete an adoption without
+    deliberately confirming the handover.
+
+    Concurrency & idempotency
+    -------------------------
+    The Application row is locked with ``select_for_update()`` immediately after
+    entering the atomic block.  The locked, reloaded instance is used for all
+    subsequent checks so that two simultaneous requests cannot both pass the
+    guard and create duplicate records or conflicting state.
+
+    If the adoption was already completed by a concurrent request that won the
+    race, the existing AdoptionRecord is returned unchanged — ``transaction_id``,
+    ``completed_at``, and staff attribution remain stable.
 
     Transaction ID
     --------------
     A unique, human-readable ``transaction_id`` is assigned exactly once when
-    the adoption is completed.  If the record was already completed (idempotent
-    retry), the existing record and its ``transaction_id`` are returned unchanged.
+    the adoption is completed and is never regenerated on subsequent retries.
     Uniqueness is enforced at the database level.
     """
-    # Idempotent retry: already completed, return unchanged
-    if application.status == "adoption_completed" and hasattr(application, "adoption_record"):
-        return application.adoption_record
+    if type(handover_confirmed) is not bool or handover_confirmed is not True:
+        raise ValidationError("Physical turnover must be explicitly confirmed with a boolean value of true.")
 
-    if application.status != "approved":
+    from apps.applications.models import Application as ApplicationModel
+    from apps.pets.models import Pet
+
+    # ── Acquire row-level lock and reload under the lock ─────────────────────
+    app = (
+        ApplicationModel.objects.select_for_update()
+        .select_related("pet", "adopter")
+        .get(id=application.id)
+    )
+
+    # ── Idempotent retry: already completed ───────────────────────────────────
+    if app.status == "adoption_completed":
+        try:
+            return app.adoption_record
+        except AdoptionRecord.DoesNotExist:
+            pass  # edge case: status set but no record yet — fall through
+
+    if app.status != "approved":
         raise ValidationError("Only an approved application can be completed as an adoption.")
 
     appointment = (
-        application.appointments.filter(status="confirmed")
+        app.appointments.filter(status="confirmed")
         .order_by("-requested_date")
         .first()
     )
@@ -160,7 +239,7 @@ def complete_application_adoption(application, staff_user, notes=""):
         )
 
     total_completed = (
-        application.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+        app.payments.filter(status=Payment.Status.COMPLETED).aggregate(
             total=Sum("amount")
         )["total"]
         or Decimal("0.00")
@@ -174,19 +253,28 @@ def complete_application_adoption(application, staff_user, notes=""):
     today = timezone.localdate()
     now = timezone.now()
 
-    record, created = AdoptionRecord.objects.get_or_create(
-        application=application,
-        defaults={
-            "pet": application.pet,
-            "adopter": application.adopter,
-            "staff_member": staff_user,
-            "appointment": appointment,
-            "adoption_date": appointment.requested_date if appointment else today,
-            "notes": notes,
-        },
-    )
+    # Lock the Pet row as well under the transaction to ensure pet state remains atomic
+    pet = Pet.objects.select_for_update().get(id=app.pet_id)
 
-    # Idempotent retry: already completed, return unchanged
+    # ── Create or fetch the AdoptionRecord under a savepoint ─────────────────
+    try:
+        with transaction.atomic():
+            record, created = AdoptionRecord.objects.select_for_update().get_or_create(
+                application=app,
+                defaults={
+                    "pet": pet,
+                    "adopter": app.adopter,
+                    "staff_member": staff_user,
+                    "appointment": appointment,
+                    "adoption_date": appointment.requested_date if appointment else today,
+                    "notes": notes,
+                },
+            )
+    except IntegrityError:
+        record = AdoptionRecord.objects.select_for_update().get(application=app)
+        created = False
+
+    # Idempotent retry: already completed under the lock, return unchanged
     if not created and record.status == AdoptionRecord.Status.COMPLETED:
         return record
 
@@ -221,15 +309,15 @@ def complete_application_adoption(application, staff_user, notes=""):
 
     # Attach the recorded onsite payment(s) to the adoption record so the
     # completed adoption keeps its payment history.
-    application.payments.filter(adoption__isnull=True).update(adoption=record)
+    app.payments.filter(adoption__isnull=True).update(adoption=record)
 
-    pet = application.pet
+    pet = app.pet
     if pet.status != "adopted":
         pet.status = "adopted"
         pet.save(update_fields=["status"])
 
-    application.status = "adoption_completed"
-    application.save(update_fields=["status"])
+    app.status = "adoption_completed"
+    app.save(update_fields=["status"])
 
     AuditLog.objects.create(
         user=staff_user,
@@ -243,17 +331,17 @@ def complete_application_adoption(application, staff_user, notes=""):
         user=staff_user,
         action="status_change",
         model_name="Application",
-        object_id=str(application.id),
+        object_id=str(app.id),
         previous_value="approved",
         new_value="adoption_completed",
     )
     create_notification(
-        user=application.adopter,
+        user=app.adopter,
         title="Adoption Completed",
         message=(
-            f"Congratulations! Your adoption of {application.pet.name} is now complete."
+            f"Congratulations! Your adoption of {app.pet.name} is now complete."
         ),
         notification_type="adoption",
-        link=f"/applications/{application.id}",
+        link=f"/applications/{app.id}",
     )
     return record

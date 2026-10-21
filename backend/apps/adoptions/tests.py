@@ -9,6 +9,7 @@ from apps.audit.models import AuditLog
 from apps.pets.models import Pet
 from apps.applications.models import Application
 from apps.adoptions.models import AdoptionRecord
+from apps.notifications.models import Notification
 
 
 class AdoptionBusinessRuleTests(BaseAPITestCase):
@@ -55,7 +56,7 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
             staff_member=self.staff, status="scheduled",
         )
         self.authenticate_staff()
-        resp = self.client.patch(f"/api/adoptions/{adoption.id}/", {"status": "completed"})
+        resp = self.client.patch(f"/api/adoptions/{adoption.id}/", {"status": "completed", "confirmed": True}, format="json")
         self.assertEqual(resp.status_code, 200)
         self.pet.refresh_from_db()
         self.assertEqual(self.pet.status, "adopted")
@@ -107,7 +108,7 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         resp = self.client.post("/api/adoptions/", {"application_id": str(self.app.id)})
         self.assertEqual(resp.status_code, 201)
         adoption_id = resp.data["id"]
-        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {"status": "completed"})
+        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {"status": "completed", "confirmed": True}, format="json")
         self.assertEqual(resp.status_code, 200)
         self.pet.refresh_from_db()
         self.assertEqual(self.pet.status, "adopted")
@@ -209,11 +210,13 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
             format="json",
         )
 
-    def complete(self, application=None):
+    def complete(self, application=None, payload=None):
         self.authenticate(self.staff)
+        if payload is None:
+            payload = {"confirmed": True}
         return self.client.post(
             f"/api/applications/{(application or self.application).id}/complete-adoption/",
-            {},
+            payload,
             format="json",
         )
 
@@ -464,7 +467,7 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
     def test_1_successful_release_creates_or_completes_exactly_one_transaction_record(self):
         self._setup_scheduled_and_paid()
         self.authenticate(self.staff)
-        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True}, format="json")
         self.assertEqual(resp.status_code, 200)
 
         self.assertEqual(AdoptionRecord.objects.filter(application=self.application).count(), 1)
@@ -477,7 +480,7 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         # First adoption
         self._setup_scheduled_and_paid()
         self.authenticate(self.staff)
-        self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True}, format="json")
         rec1 = AdoptionRecord.objects.get(application=self.application)
         self.assertTrue(rec1.transaction_id.startswith("TXN-"))
 
@@ -486,7 +489,7 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         adopter2 = self.create_user(email="adopter_milo@example.com")
         app2 = Application.objects.create(adopter=adopter2, pet=pet2, status="approved")
         self._setup_scheduled_and_paid(app=app2, pet=pet2, adopter=adopter2)
-        self.client.post(f"/api/applications/{app2.id}/complete-adoption/", {}, format="json")
+        self.client.post(f"/api/applications/{app2.id}/complete-adoption/", {"confirmed": True}, format="json")
         rec2 = AdoptionRecord.objects.get(application=app2)
         self.assertTrue(rec2.transaction_id.startswith("TXN-"))
 
@@ -509,7 +512,7 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
     def test_3_completion_date_and_required_relationships_stored_correctly(self):
         self._setup_scheduled_and_paid()
         self.authenticate(self.staff)
-        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True}, format="json")
         self.assertEqual(resp.status_code, 200)
 
         record = AdoptionRecord.objects.get(application=self.application)
@@ -565,14 +568,14 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         self.authenticate(self.staff)
 
         # First completion
-        resp1 = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        resp1 = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True}, format="json")
         self.assertEqual(resp1.status_code, 200)
         record1 = AdoptionRecord.objects.get(application=self.application)
         tx_id1 = record1.transaction_id
         completed_at1 = record1.completed_at
 
         # Repeat completion request (retry / duplicate click)
-        resp2 = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        resp2 = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True}, format="json")
         self.assertEqual(resp2.status_code, 200)
 
         # Must still be exactly one record with unchanged transaction ID
@@ -615,13 +618,13 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 403)
 
         # Adopter cannot complete adoption
-        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {})
+        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True})
         self.assertEqual(resp.status_code, 403)
 
         # Staff cannot tamper with transaction_id through PATCH
         self._setup_scheduled_and_paid()
         self.authenticate(self.staff)
-        self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {"confirmed": True}, format="json")
         rec = AdoptionRecord.objects.get(application=self.application)
         original_tx_id = rec.transaction_id
 
@@ -634,3 +637,285 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         rec.refresh_from_db()
         self.assertEqual(rec.transaction_id, original_tx_id)  # unchanged
         self.assertEqual(rec.notes, "Updated note")
+
+class Phase21HandoverHardeningTests(BaseAPITestCase):
+    """Phase 2.1 - Require explicit physical handover boolean true.
+
+    Every completion route (confirm-turnover, complete-adoption, PATCH /api/adoptions/{id}/)
+    must reject missing, null, string, integer, and false confirmation values.
+    Only an actual JSON boolean true succeeds.
+    """
+
+    PAYMENT_FEE = "500.00"
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Panda", species="cat", age_years=1, status="pending")
+        self.adopter = self.create_user(email="adopter_p21@example.com")
+        self.staff = self.create_staff(email="staff_p21@example.com")
+        self.application = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+        self.visit_date = next_weekday()
+        # Confirm appointment and record payment so only handover blocks completion
+        self.authenticate(self.adopter)
+        apt_resp = self.client.post(
+            "/api/appointments/",
+            {"application_id": str(self.application.id), "requested_date": self.visit_date.isoformat()},
+        )
+        self.authenticate(self.staff)
+        self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
+        self.client.post(
+            "/api/payments/",
+            {"application": str(self.application.id), "amount": self.PAYMENT_FEE,
+             "method": "cash", "status": "completed",
+             "payment_date": timezone.localdate().isoformat()},
+            format="json",
+        )
+        self.record = AdoptionRecord.objects.get(application=self.application)
+
+    def _complete_adoption(self, payload):
+        self.authenticate(self.staff)
+        return self.client.post(
+            f"/api/applications/{self.application.id}/complete-adoption/",
+            payload, format="json",
+        )
+
+    def _patch_adoption_record(self, payload):
+        self.authenticate(self.staff)
+        return self.client.patch(
+            f"/api/adoptions/{self.record.id}/",
+            payload, format="json",
+        )
+
+    # --- confirm-turnover / complete-adoption rejections ---
+
+    def test_missing_confirmed_field_rejected(self):
+        resp = self._complete_adoption({})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.data)
+
+    def test_confirmed_false_rejected(self):
+        resp = self._complete_adoption({"confirmed": False})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_confirmed_null_rejected(self):
+        resp = self._complete_adoption({"confirmed": None})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_confirmed_string_true_rejected(self):
+        resp = self._complete_adoption({"confirmed": "true"})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_confirmed_integer_1_rejected(self):
+        resp = self._complete_adoption({"confirmed": 1})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_contradictory_confirmed_and_turnover_confirmed_rejected(self):
+        resp = self._complete_adoption({"confirmed": True, "turnover_confirmed": False})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_both_true_accepted(self):
+        resp = self._complete_adoption({"confirmed": True, "turnover_confirmed": True})
+        self.assertEqual(resp.status_code, 200)
+
+    def test_turnover_confirmed_true_only_accepted(self):
+        # Re-create application and setup since previous test consumed it
+        pet2 = Pet.objects.create(name="Panda2", species="cat", age_years=1, status="pending")
+        app2 = Application.objects.create(adopter=self.adopter, pet=pet2, status="approved")
+        self.authenticate(self.adopter)
+        apt_resp = self.client.post(
+            "/api/appointments/",
+            {"application_id": str(app2.id), "requested_date": next_weekday(3).isoformat()},
+        )
+        self.authenticate(self.staff)
+        self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
+        self.client.post(
+            "/api/payments/",
+            {"application": str(app2.id), "amount": self.PAYMENT_FEE,
+             "method": "cash", "status": "completed",
+             "payment_date": timezone.localdate().isoformat()},
+            format="json",
+        )
+        resp = self.client.post(
+            f"/api/applications/{app2.id}/complete-adoption/",
+            {"turnover_confirmed": True}, format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    # --- PATCH /api/adoptions/{id}/ -> status=completed also requires confirmation ---
+
+    def test_patch_adoption_record_completed_without_confirmation_rejected(self):
+        resp = self._patch_adoption_record({"status": "completed"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.data)
+        self.application.refresh_from_db()
+        self.assertNotEqual(self.application.status, "adoption_completed")
+
+    def test_patch_adoption_record_completed_with_false_rejected(self):
+        resp = self._patch_adoption_record({"status": "completed", "confirmed": False})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_adoption_record_completed_with_boolean_true_succeeds(self):
+        resp = self._patch_adoption_record({"status": "completed", "confirmed": True})
+        self.assertEqual(resp.status_code, 200)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "adoption_completed")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "adopted")
+
+    def test_patch_adoption_record_non_completion_updates_do_not_require_confirmation(self):
+        """Updating notes on an adoption record does not require a handover confirmation."""
+        resp = self._patch_adoption_record({"notes": "Updated note by staff."})
+        self.assertEqual(resp.status_code, 200)
+
+    # --- confirm-turnover route requires the same explicit confirmation ---
+
+    def test_confirm_turnover_without_confirmation_rejected(self):
+        """POST /api/applications/{id}/confirm-turnover/ needs boolean true."""
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {"notes": "Handed over on site."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.assertEqual(self.record.status, AdoptionRecord.Status.SCHEDULED)
+
+    def test_confirm_turnover_with_boolean_true_succeeds(self):
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {"confirmed": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "adoption_completed")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "adopted")
+
+    # --- update-status route to adoption_completed requires the same confirmation ---
+
+    def test_update_status_completion_without_confirmation_rejected(self):
+        """update-status -> adoption_completed is blocked without boolean true.
+
+        All other prereqs (approved application, confirmed appointment, completed
+        payment) are satisfied in setUp, so only the handover confirmation is
+        missing and must be the reason for the 400.
+        """
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/update-status/",
+            {"status": "adoption_completed"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "pending")
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.status, AdoptionRecord.Status.SCHEDULED)
+
+    def test_update_status_completion_with_boolean_true_succeeds(self):
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/update-status/",
+            {"status": "adoption_completed", "confirmed": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "adoption_completed")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "adopted")
+
+
+    # --- idempotent retry under the row lock ---
+
+    def test_service_retry_under_lock_returns_existing_completed_record(self):
+        """A retry that loses the row lock returns the existing record untouched.
+
+        This exercises the ``select_for_update`` reload path directly: the second
+        call re-reads the application under the lock, sees ``adoption_completed``,
+        and returns the already-completed record without re-running side effects.
+        """
+        from apps.adoptions.services import complete_application_adoption
+
+        record1 = complete_application_adoption(
+            self.application, self.staff, handover_confirmed=True
+        )
+        tx_id = record1.transaction_id
+        completed_at = record1.completed_at
+        self.assertEqual(record1.staff_member, self.staff)
+
+        # A different staff member racing in after the first request committed.
+        staff2 = self.create_staff(email="staff_p21c@example.com")
+        record2 = complete_application_adoption(
+            self.application, staff2, handover_confirmed=True
+        )
+        self.assertEqual(record2.id, record1.id)
+        self.assertEqual(record2.transaction_id, tx_id)
+        self.assertEqual(record2.completed_at, completed_at)
+        # Staff attribution of the original completion is preserved.
+        self.assertEqual(record2.staff_member, self.staff)
+
+    def test_idempotent_retry_keeps_staff_and_does_not_duplicate_audit_or_notifications(self):
+        """HTTP retry of an already-completed adoption is a no-op.
+
+        The transaction_id, completed_at, and staff attribution of the original
+        completion stay unchanged, and no duplicate audit logs or adoption
+        notifications are written.
+        """
+        record_id = str(self.record.id)
+        app_id = str(self.application.id)
+
+        def completion_audit_count():
+            return AuditLog.objects.filter(
+                model_name="AdoptionRecord", action="adoption_completed",
+                object_id=record_id,
+            ).count() + AuditLog.objects.filter(
+                model_name="Application", action="status_change",
+                object_id=app_id, new_value="adoption_completed",
+            ).count()
+
+        def adoption_notification_count():
+            return Notification.objects.filter(
+                user=self.adopter, notification_type="adoption"
+            ).count()
+
+        # Complete with staff1 through the real HTTP endpoint.
+        self.authenticate(self.staff)
+        resp1 = self.client.post(
+            f"/api/applications/{self.application.id}/complete-adoption/",
+            {"confirmed": True}, format="json",
+        )
+        self.assertEqual(resp1.status_code, 200)
+        self.record.refresh_from_db()
+        tx_id = self.record.transaction_id
+        completed_at = self.record.completed_at
+        self.assertEqual(self.record.staff_member, self.staff)
+
+        audit_after_first = completion_audit_count()
+        notif_after_first = adoption_notification_count()
+        self.assertEqual(audit_after_first, 2)  # record completion + application status change
+
+        # Retry as a different staff member (simulates the concurrent loser).
+        staff2 = self.create_staff(email="staff_p21d@example.com")
+        self.authenticate(staff2)
+        resp2 = self.client.post(
+            f"/api/applications/{self.application.id}/complete-adoption/",
+            {"confirmed": True}, format="json",
+        )
+        self.assertEqual(resp2.status_code, 200)
+
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.transaction_id, tx_id)
+        self.assertEqual(self.record.completed_at, completed_at)
+        self.assertEqual(self.record.staff_member, self.staff)
+        self.assertEqual(completion_audit_count(), audit_after_first)
+        self.assertEqual(adoption_notification_count(), notif_after_first)
+

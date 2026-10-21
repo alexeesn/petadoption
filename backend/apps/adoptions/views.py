@@ -1,9 +1,12 @@
 from rest_framework import generics, viewsets, permissions, status
 from rest_framework.response import Response
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from .models import AdoptionRecord, _generate_transaction_id
 from .serializers import AdoptionRecordSerializer, AdoptionCreateSerializer
+from .services import is_handover_confirmed, complete_application_adoption
 from apps.accounts.permissions import IsStaff
 from apps.notifications.models import create_notification
 
@@ -98,51 +101,29 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
             old_status = instance.status
             instance.status = new_status
             if new_status == "completed":
-                app = instance.application
-                from apps.appointments.models import Appointment
-                if not app.appointments.filter(status=Appointment.Status.CONFIRMED).exists():
+                # Require explicit physical handover confirmation — same rule
+                # as the confirm-turnover endpoint.  Route through the service
+                # to get atomic row-locking, idempotency, and all business rules.
+                is_valid, err_msg = is_handover_confirmed(request.data)
+                if not is_valid:
+                    return Response({"error": err_msg}, status=status.HTTP_400_BAD_REQUEST)
+
+                app = getattr(instance, "application", None)
+                if not app:
                     return Response(
-                        {"error": "The onsite visit date must be confirmed before the adoption can be completed."},
+                        {"error": "No associated application found for this adoption record."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
-                from apps.payments.models import Payment
-                from django.db.models import Sum
-                from decimal import Decimal
-                total_completed = (
-                    app.payments.filter(status=Payment.Status.COMPLETED).aggregate(
-                        total=Sum("amount")
-                    )["total"]
-                    or Decimal("0.00")
-                )
-                if total_completed < PROTOTYPE_ADOPTION_FEE:
-                    return Response(
-                        {
-                            "error": (
-                                f"The required adoption fee of ₱{PROTOTYPE_ADOPTION_FEE:.2f} has not been fully paid. "
-                                f"Total completed payment is ₱{total_completed:.2f}."
-                            )
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
+                try:
+                    complete_application_adoption(
+                        app, request.user, notes=request.data.get("notes", ""), handover_confirmed=True
                     )
-                instance.completed_date = timezone.localdate()
-                if not instance.completed_at:
-                    instance.completed_at = timezone.now()
-                if not instance.staff_member:
-                    instance.staff_member = request.user
-                if not instance.transaction_id:
-                    for _ in range(5):
-                        candidate = _generate_transaction_id()
-                        if not AdoptionRecord.objects.filter(transaction_id=candidate).exists():
-                            instance.transaction_id = candidate
-                            break
-                instance.pet.status = "adopted"
-                instance.pet.save(update_fields=["status"])
-                # Update application
-                instance.application.status = "adoption_completed"
-                instance.application.save(update_fields=["status"])
-                # Attach payments
-                app.payments.filter(adoption__isnull=True).update(adoption=instance)
+                except DjangoValidationError as exc:
+                    msg = exc.message if hasattr(exc, "message") else str(exc)
+                    return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+                instance.refresh_from_db()
+                return Response(AdoptionRecordSerializer(instance).data, status=status.HTTP_200_OK)
             if new_status == "returned":
                 instance.return_reason = request.data.get("return_reason", "")
                 instance.pet.status = "available"

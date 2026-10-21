@@ -162,6 +162,11 @@ export default function ApplicationDetailPage() {
   const [onsiteNotes, setOnsiteNotes] = useState('');
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [completionBusy, setCompletionBusy] = useState(false);
+  // Explicit physical-handover confirmation: the Complete Adoption button is
+  // disabled until the staff member ticks this box, and the API call itself
+  // always carries confirmed: true.  The backend re-validates the flag and
+  // rejects completion without it.
+  const [handoverConfirmed, setHandoverConfirmed] = useState(false);
   const [onsiteNotice, setOnsiteNotice] = useState('');
   const [onsiteError, setOnsiteError] = useState('');
 
@@ -307,6 +312,14 @@ export default function ApplicationDetailPage() {
 
   const completeAdoption = () => {
     if (!app) return;
+    if (!handoverConfirmed) {
+      // Defensive: the button is disabled until confirmed, but never rely on
+      // frontend-only gating for a business rule.
+      setOnsiteError(
+        'Confirm that the pet has been physically handed over before completing the adoption.',
+      );
+      return;
+    }
     setCompletionBusy(true);
     setOnsiteError('');
     setOnsiteNotice('');
@@ -690,22 +703,39 @@ export default function ApplicationDetailPage() {
               )}
 
               {app.status === 'approved' && (
-                <div className="mt-5 flex flex-wrap items-center gap-3">
-                  <Button onClick={recordPayment} disabled={paymentBusy || completionBusy}>
-                    {paymentBusy ? 'Saving…' : 'Record Payment'}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={completeAdoption}
-                    disabled={completionBusy || paymentBusy || payments.length === 0}
-                  >
-                    {completionBusy ? 'Completing…' : 'Complete Adoption'}
-                  </Button>
-                  {payments.length === 0 && (
-                    <span className="text-xs text-slate-500">
-                      Record the onsite payment before completing the adoption.
+                <div className="mt-5">
+                  <label className="inline-flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={handoverConfirmed}
+                      onChange={(e) => setHandoverConfirmed(e.target.checked)}
+                      disabled={completionBusy}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span>
+                      I confirm the pet has been <strong>physically handed over</strong> to the
+                      adopter. This is required to complete the adoption.
                     </span>
-                  )}
+                  </label>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <Button onClick={recordPayment} disabled={paymentBusy || completionBusy}>
+                      {paymentBusy ? 'Saving…' : 'Record Payment'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={completeAdoption}
+                      disabled={
+                        completionBusy || paymentBusy || payments.length === 0 || !handoverConfirmed
+                      }
+                    >
+                      {completionBusy ? 'Completing…' : 'Complete Adoption'}
+                    </Button>
+                    {payments.length === 0 && (
+                      <span className="text-xs text-slate-500">
+                        Record the onsite payment before completing the adoption.
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
               {app.status === 'approved' && (
