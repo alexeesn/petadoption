@@ -1059,3 +1059,82 @@ class Phase21PaymentReassignmentTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 201)
         new_payment = Payment.objects.get(application=self.app2)
         self.assertEqual(new_payment.application, self.app2)
+
+
+class PaymentRecordsApiTests(BaseAPITestCase):
+    """Phase 3.2 - server-side list filtering and serialized fields used by the
+    staff Payment Records page."""
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Rex", species="dog", age_years=2, status="available")
+        self.adopter = self.create_user(email="adopter_records@example.com")
+        self.staff = self.create_staff(email="staff_records@example.com")
+        self.app = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+
+    def _make_payment(self, status, amount="100.00", method="cash"):
+        return Payment.objects.create(
+            application=self.app,
+            amount=amount,
+            method=method,
+            status=status,
+            processed_by=self.staff,
+        )
+
+    def test_payment_response_includes_pet_name(self):
+        """Payment records expose the associated pet name, not just the UUID."""
+        pay = self._make_payment(status="completed")
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/payments/{pay.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["pet_name"], "Rex")
+
+    def test_payment_list_can_be_filtered_by_status(self):
+        """?status= filters server-side so the records page never has to fetch
+        and filter unbounded pages in the browser."""
+        self._make_payment(status="completed")
+        self._make_payment(status="completed")
+        self._make_payment(status="pending")
+        self._make_payment(status="failed")
+        self.authenticate(self.staff)
+
+        completed = self.client.get("/api/payments/?status=completed")
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.data["count"], 2)
+        self.assertTrue(all(r["status"] == "completed" for r in completed.data["results"]))
+
+        pending = self.client.get("/api/payments/?status=pending")
+        self.assertEqual(pending.status_code, 200)
+        self.assertEqual(pending.data["count"], 1)
+        self.assertEqual(pending.data["results"][0]["status"], "pending")
+
+        # An unknown status matches nothing instead of erroring.
+        unknown = self.client.get("/api/payments/?status=does_not_exist")
+        self.assertEqual(unknown.status_code, 200)
+        self.assertEqual(unknown.data["count"], 0)
+
+        # Without a filter, all records are returned (paginated).
+        all_records = self.client.get("/api/payments/")
+        self.assertEqual(all_records.status_code, 200)
+        self.assertEqual(all_records.data["count"], 4)
+
+    def test_payment_list_status_filter_is_combined_with_application_filter(self):
+        """The status filter composes with the existing ?application= filter."""
+        other_pet = Pet.objects.create(name="Bella", species="cat", age_years=1, status="available")
+        other_app = Application.objects.create(
+            adopter=self.adopter, pet=other_pet, status="approved"
+        )
+        Payment.objects.create(
+            application=other_app, amount="500.00", method="gcash",
+            status="completed", processed_by=self.staff,
+        )
+        self._make_payment(status="completed")
+        self.authenticate(self.staff)
+
+        resp = self.client.get(f"/api/payments/?status=completed&application={other_app.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+        self.assertEqual(str(resp.data["results"][0]["application"]), str(other_app.id))
+        self.assertEqual(resp.data["results"][0]["pet_name"], "Bella")

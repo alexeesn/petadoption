@@ -56,7 +56,7 @@ const navSections: NavSection[] = [
     title: 'Adoption Records',
     items: [
       { to: '/adoptions', label: 'Adoption Records', icon: 'home' },
-      { to: '/payments', label: 'Payments', icon: 'card' },
+      { to: '/payments', label: 'Payment Records', icon: 'card' },
     ],
   },
   {

@@ -27,6 +27,11 @@ class PaymentViewSet(viewsets.ModelViewSet):
         application_id = self.request.query_params.get("application")
         if application_id:
             qs = qs.filter(application_id=application_id)
+        # Optional filter so the staff Payment Records page can browse by
+        # payment status without fetching and filtering pages client-side.
+        status = self.request.query_params.get("status")
+        if status:
+            qs = qs.filter(status=status)
         return qs
 
     def get_permissions(self):

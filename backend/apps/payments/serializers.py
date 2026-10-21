@@ -7,6 +7,11 @@ from .models import Payment
 class PaymentSerializer(serializers.ModelSerializer):
     application_id = serializers.UUIDField(source="application.id", read_only=True)
     adopter_email = serializers.EmailField(source="application.adopter.email", read_only=True)
+    # The adopted pet's name, for payment-record listings (the payment itself
+    # only stores the application FK; the pet is reached through it).
+    pet_name = serializers.CharField(
+        source="application.pet.name", read_only=True, default=None
+    )
     processed_by_email = serializers.EmailField(source="processed_by.email", read_only=True, default=None)
     package_name = serializers.CharField(source="package.name", read_only=True, default=None)
     adoption_fee = serializers.SerializerMethodField()
@@ -17,12 +22,12 @@ class PaymentSerializer(serializers.ModelSerializer):
             "id", "application", "application_id", "adopter_email", "adoption",
             "package", "package_name", "amount", "adoption_fee", "method", "status",
             "payment_date", "receipt_number", "reference_number", "notes", "processed_by",
-            "processed_by_email", "created_at", "updated_at",
+            "processed_by_email", "pet_name", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "application_id", "adopter_email", "adoption", "processed_by",
             "processed_by_email", "package_name", "receipt_number", "adoption_fee",
-            "created_at", "updated_at",
+            "pet_name", "created_at", "updated_at",
         ]
 
     def get_adoption_fee(self, obj):

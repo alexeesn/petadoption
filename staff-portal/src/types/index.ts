@@ -209,6 +209,8 @@ export interface Payment {
   processed_by?: string;
   processed_by_email?: string | null;
   package_name?: string | null;
+  /** Pet associated with the payment's application (backend serialized field). */
+  pet_name?: string | null;
   created_at: string;
   updated_at?: string;
 }

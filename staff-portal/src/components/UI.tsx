@@ -39,6 +39,7 @@ const statusStyles: Record<string, keyof typeof PILL> = {
   paid: 'green',
   partial: 'blue',
   refunded: 'gray',
+  failed: 'red',
   scheduled: 'blue',
   completed: 'green',
   returned: 'purple',

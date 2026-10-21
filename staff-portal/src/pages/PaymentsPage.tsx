@@ -1,273 +1,214 @@
 import { useEffect, useState } from 'react';
-import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select, Input, Textarea } from '../components/UI';
+import {
+  Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select, Input,
+} from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
-import { paymentService, applicationService } from '../services/apiService';
-import type { Payment, Application } from '../types';
-import { formatDate, formatDateTime } from '../utils/format';
-
-/** Matches Payment.Method.choices in backend/apps/payments/models.py. */
-const PAYMENT_METHODS = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'gcash', label: 'GCash' },
-  { value: 'paymaya', label: 'PayMaya' },
-  { value: 'credit_card', label: 'Credit Card' },
-  { value: 'online', label: 'Online' },
-];
+import { paymentService } from '../services/apiService';
+import type { Payment, PaginatedResponse } from '../types';
+import { formatDate, formatDateTime, formatCurrency } from '../utils/format';
 
 /** Matches Payment.Status.choices in backend/apps/payments/models.py. */
-const PAYMENT_STATUSES = [
-  { value: 'pending', label: 'Pending' },
+const PAYMENT_STATUS_FILTERS = [
+  { value: '', label: 'All statuses' },
   { value: 'completed', label: 'Completed' },
+  { value: 'pending', label: 'Pending' },
   { value: 'failed', label: 'Failed' },
   { value: 'refunded', label: 'Refunded' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-/** Fixed onsite adoption fee. */
-const ADOPTION_FEE = '500.00';
+/** Rough UUID shape guard: the backend filters application_id as a UUID. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function todayISO(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
-}
-
-function humanise(value: string) {
+function humanise(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
-/**
- * Extract a user-friendly error message from a DRF error response.
- */
-function extractErrorMessage(error: unknown, fallback: string): string {
-  const data = (error as { response?: { data?: Record<string, unknown> } })?.response?.data;
-  if (!data || typeof data !== 'object') return fallback;
-  if (typeof data.error === 'string') return data.error;
-  if (typeof data.detail === 'string') return data.detail;
-  const messages: string[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (Array.isArray(val)) {
-      const fieldLabel = key === 'non_field_errors' ? '' : `${humanise(key)}: `;
-      messages.push(...val.map((v) => `${fieldLabel}${v}`));
-    } else if (typeof val === 'string') {
-      const fieldLabel = key === 'non_field_errors' ? '' : `${humanise(key)}: `;
-      messages.push(`${fieldLabel}${val}`);
-    }
-  }
-  return messages.length > 0 ? messages.join(' · ') : fallback;
+function shortId(value: string): string {
+  return value.length > 8 ? `${value.slice(0, 8)}…` : value;
 }
 
-const INITIAL_FORM = {
-  application: '',
-  amount: ADOPTION_FEE,
-  method: 'cash',
-  status: 'completed',
-  payment_date: todayISO(),
-  reference_number: '',
-  notes: '',
-};
-
+/**
+ * Payment Records (read-only browsing).
+ *
+ * Payment creation happens inside the onsite schedule/application workflow
+ * (Schedule and Application detail), not here. The backend list endpoint is
+ * paginated (PageNumberPagination), so this page fetches one page at a time
+ * and filters server-side (?status=, ?application=) instead of loading every
+ * record into the browser. Payments are never edited or reassigned from this
+ * page.
+ */
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [apps, setApps] = useState<Application[]>([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const [hasNext, setHasNext] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [appInput, setAppInput] = useState('');
+  const [appFilter, setAppFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ ...INITIAL_FORM });
-  const [submitError, setSubmitError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState('');
 
   const load = () => {
     setLoading(true);
     setError('');
-    Promise.all([paymentService.list(), applicationService.list()])
-      .then(([payRes, appRes]) => {
-        setPayments(payRes.data.results);
-        setApps(appRes.data.results);
+    const params: Record<string, unknown> = { page };
+    if (statusFilter) params.status = statusFilter;
+    if (appFilter) params.application = appFilter;
+    paymentService
+      .list(params)
+      .then((res) => {
+        const data = res.data as PaginatedResponse<Payment>;
+        setPayments(data.results);
+        setCount(data.count);
+        setHasPrevious(Boolean(data.previous));
+        setHasNext(Boolean(data.next));
       })
-      .catch(() => setError('Failed to load payments.'))
+      .catch(() => setError('Failed to load payment records.'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(load, [page, statusFilter, appFilter]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitError('');
-    setSuccess('');
+  const appInputValue = appInput.trim();
+  const appInputInvalid = appInputValue !== '' && !UUID_PATTERN.test(appInputValue);
 
-    if (!form.application) {
-      setSubmitError('Select the application this payment belongs to.');
+  const applyApplicationFilter = () => {
+    if (appInputInvalid) {
+      setError('Enter a valid application ID (UUID) or leave the field empty.');
       return;
     }
-    if (!form.amount || parseFloat(form.amount) <= 0) {
-      setSubmitError('Enter a valid payment amount.');
-      return;
-    }
-
-    setSubmitting(true);
-
-    // Build payload — only include non-empty optional fields.
-    const payload: Record<string, unknown> = {
-      application: form.application,
-      amount: form.amount,
-      method: form.method,
-      status: form.status,
-    };
-    if (form.payment_date) payload.payment_date = form.payment_date;
-    if (form.reference_number.trim()) payload.reference_number = form.reference_number.trim();
-    if (form.notes.trim()) payload.notes = form.notes.trim();
-
-    paymentService
-      .create(payload)
-      .then(() => {
-        setSuccess('Payment recorded successfully.');
-        setShowForm(false);
-        setForm({ ...INITIAL_FORM, payment_date: todayISO() });
-        load();
-      })
-      .catch((err) => setSubmitError(extractErrorMessage(err, 'Failed to record payment.')))
-      .finally(() => setSubmitting(false));
+    setError('');
+    setAppFilter(appInputValue);
+    setPage(1);
   };
 
-  const handleStatusChange = (id: string, newStatus: string) => {
-    paymentService
-      .update(id, { status: newStatus })
-      .then(() => {
-        setSuccess('Payment status updated.');
-        load();
-      })
-      .catch((err) => setError(extractErrorMessage(err, 'Failed to update payment status.')))
-      .finally(() => {});
+  const clearFilters = () => {
+    setStatusFilter('');
+    setAppFilter('');
+    setAppInput('');
+    setError('');
+    setPage(1);
   };
 
   return (
     <div>
-      <PageHeader title="Payments" subtitle="Record and manage onsite adoption payments" />
-      <div className="mb-4">
-        <Button onClick={() => { setShowForm(!showForm); setSubmitError(''); }}>
-          {showForm ? 'Cancel' : 'Record Payment'}
+      <PageHeader
+        title="Payment Records"
+        subtitle="Recorded adoption payments. Payments are recorded during the onsite workflow (Schedule or Application detail); this page is read-only."
+      />
+
+      <form
+        className="mb-4 flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          applyApplicationFilter();
+        }}
+      >
+        <Select
+          label="Status"
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(1);
+          }}
+          options={PAYMENT_STATUS_FILTERS}
+        />
+        <Input
+          label="Application ID"
+          value={appInput}
+          onChange={(e) => setAppInput(e.target.value)}
+          placeholder="Filter by application UUID"
+        />
+        <Button type="submit" variant="outline">
+          Apply
         </Button>
-      </div>
-
-      {showForm && (
-        <Card className="mb-6 p-6">
-          <h3 className="text-lg font-medium text-primary-900 mb-4">Record Onsite Payment</h3>
-          <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
-            <Select
-              label="Application"
-              value={form.application}
-              onChange={(e) => setForm({ ...form, application: e.target.value })}
-              options={[
-                { value: '', label: 'Select application' },
-                ...apps.map((a) => ({
-                  value: a.id,
-                  label: `${a.pet_name} — ${a.adopter_email} (${humanise(a.status)})`,
-                })),
-              ]}
-            />
-            <Input
-              label="Adoption Fee (₱)"
-              type="number"
-              step="0.01"
-              value={form.amount}
-              onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            />
-            <Select
-              label="Payment Method"
-              value={form.method}
-              onChange={(e) => setForm({ ...form, method: e.target.value })}
-              options={PAYMENT_METHODS}
-            />
-            <Select
-              label="Payment Status"
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
-              options={[
-                { value: '', label: 'Select status' },
-                ...PAYMENT_STATUSES,
-              ]}
-            />
-            <Input
-              label="Payment Date"
-              type="date"
-              value={form.payment_date}
-              onChange={(e) => setForm({ ...form, payment_date: e.target.value })}
-            />
-            <Input
-              label="Reference / OR No. (optional)"
-              value={form.reference_number}
-              onChange={(e) => setForm({ ...form, reference_number: e.target.value })}
-              placeholder="e.g. OR-2026-0001"
-            />
-            <Textarea
-              label="Staff Notes (optional)"
-              value={form.notes}
-              onChange={(e) => setForm({ ...form, notes: e.target.value })}
-              rows={3}
-              placeholder="Internal notes about the onsite transaction"
-            />
-            {submitError && (
-              <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                {submitError}
-              </div>
-            )}
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Saving…' : 'Record Payment'}
-            </Button>
-          </form>
-        </Card>
+        {(statusFilter || appFilter) && (
+          <Button type="button" variant="outline" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </form>
+      {appInputInvalid && (
+        <p role="alert" className="mb-3 text-sm text-red-600">
+          Enter a valid application ID (UUID) or leave the field empty.
+        </p>
       )}
 
-      {success && (
-        <div role="status" className="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-          {success}
-        </div>
-      )}
+      <p className="mb-2 text-xs text-slate-500">
+        Status legend:{' '}
+        {PAYMENT_STATUS_FILTERS
+          .filter((opt) => opt.value)
+          .map((opt) => <StatusBadge key={opt.value} status={opt.value} />)}
+      </p>
+      <p className="mb-4 text-xs text-slate-500">
+        Only <span className="font-medium text-green-700">Completed</span> payments count as money
+        received. Pending, failed, refunded, and cancelled records have not been received. Payments
+        cannot be edited or reassigned from this page.
+      </p>
 
       {loading ? (
-        <Loading />
+        <Loading label="Loading payment records..." />
       ) : error ? (
         <ErrorMessage message={error} />
       ) : payments.length === 0 ? (
-        <Card><Empty message="No payments recorded." /></Card>
-      ) : (
         <Card>
-          <Table headers={['Application', 'Amount', 'Method', 'Status', 'Date', 'Reference', 'Actions']}>
-            {payments.map((pay) => (
-              <tr key={pay.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-sm text-slate-600">
-                  {pay.adopter_email || pay.application}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-slate-900">
-                  ₱{parseFloat(pay.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-600 capitalize">{humanise(pay.method)}</td>
-                <td className="px-4 py-3"><StatusBadge status={pay.status} /></td>
-                <td className="px-4 py-3 text-sm text-slate-500">
-                  {pay.payment_date ? formatDate(pay.payment_date) : formatDateTime(pay.created_at)}
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-500">{pay.reference_number || '—'}</td>
-                <td className="px-4 py-3">
-                  <select
-                    value={pay.status}
-                    onChange={(e) => handleStatusChange(pay.id, e.target.value)}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-sm"
-                    aria-label={`Change status for payment ₱${pay.amount}`}
-                  >
-                    {PAYMENT_STATUSES.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </Table>
+          <Empty message="No payment records match these filters." />
         </Card>
+      ) : (
+        <>
+          <Card>
+            <Table
+              headers={[
+                'Receipt', 'Pet', 'Adopter', 'Application', 'Amount',
+                'Method', 'Status', 'Payment date', 'Processed by',
+              ]}
+            >
+              {payments.map((pay) => (
+                <tr key={pay.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                    {pay.receipt_number || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{pay.pet_name || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600">
+                    {pay.adopter_email || pay.application}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-500" title={pay.application}>
+                    {shortId(pay.application_id || pay.application)}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                    {formatCurrency(pay.amount)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600 capitalize">
+                    {humanise(pay.method)}
+                  </td>
+                  <td className="px-4 py-3"><StatusBadge status={pay.status} /></td>
+                  <td className="px-4 py-3 text-sm text-slate-500">
+                    {pay.payment_date ? formatDate(pay.payment_date) : formatDateTime(pay.created_at)}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{pay.processed_by_email || '—'}</td>
+                </tr>
+              ))}
+            </Table>
+          </Card>
+
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              disabled={!hasPrevious || loading}
+              onClick={() => setPage(Math.max(1, page - 1))}
+            >
+              ← Previous
+            </Button>
+            <span className="text-sm text-slate-600">
+              Page {page} · {count} total record{count === 1 ? '' : 's'}
+            </span>
+            <Button variant="outline" disabled={!hasNext || loading} onClick={() => setPage(page + 1)}>
+              Next →
+            </Button>
+          </div>
+        </>
       )}
     </div>
   );
