@@ -42,6 +42,14 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         self.assertEqual(AdoptionRecord.objects.count(), 1)
 
     def test_completing_adoption_sets_pet_adopted(self):
+        Appointment.objects.create(
+            application=self.app, pet=self.pet, adopter=self.adopter,
+            requested_date=timezone.localdate(), status="confirmed",
+        )
+        from apps.payments.models import Payment
+        Payment.objects.create(
+            application=self.app, amount="500.00", status="completed",
+        )
         adoption = AdoptionRecord.objects.create(
             application=self.app, pet=self.pet, adopter=self.adopter,
             staff_member=self.staff, status="scheduled",
@@ -83,6 +91,14 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         self.assertEqual(self.pet.status, "available")
 
     def test_completed_to_returned_reverts_pet_and_allows_reapply(self):
+        Appointment.objects.create(
+            application=self.app, pet=self.pet, adopter=self.adopter,
+            requested_date=timezone.localdate(), status="confirmed",
+        )
+        from apps.payments.models import Payment
+        Payment.objects.create(
+            application=self.app, amount="500.00", status="completed",
+        )
         # scheduled -> completed (pet adopted) -> returned (pet available),
         # then a NEW adopter can apply for the returned pet.
         self.pet.status = "pending"
@@ -390,3 +406,231 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
         self.assertEqual(record.completed_date, timezone.localdate())
         self.assertEqual(str(record.appointment_id), appointment["id"])
         self.assertEqual(record.adoption_date, self.visit_date)
+
+
+class CompletedAdoptionTransactionTests(BaseAPITestCase):
+    """Regression tests for completed adoption transactions (pet release).
+
+    Verifies the business rule that a completed transaction is defined by a
+    successful pet release/turnover, carrying a unique, immutable transaction ID,
+    release date, completion timestamp, staff member, pet, and adopter.
+    """
+
+    PAYMENT_FEE = "500.00"
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Luna", species="cat", age_years=2, status="pending")
+        self.adopter = self.create_user(email="adopter_luna@example.com")
+        self.staff = self.create_staff(email="staff_luna@example.com")
+        self.application = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+        self.visit_date = next_weekday()
+
+    def _setup_scheduled_and_paid(self, app=None, pet=None, adopter=None):
+        target_app = app or self.application
+        target_adopter = adopter or self.adopter
+        # Request appointment
+        self.authenticate(target_adopter)
+        apt_resp = self.client.post(
+            "/api/appointments/",
+            {
+                "application_id": str(target_app.id),
+                "requested_date": self.visit_date.isoformat(),
+            },
+        )
+        self.assertEqual(apt_resp.status_code, 201)
+        apt_id = apt_resp.data["id"]
+        # Approve appointment
+        self.authenticate(self.staff)
+        appr_resp = self.client.post(f"/api/appointments/{apt_id}/approve/")
+        self.assertEqual(appr_resp.status_code, 200)
+        # Record payment
+        pay_resp = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(target_app.id),
+                "amount": self.PAYMENT_FEE,
+                "method": "cash",
+                "status": "completed",
+                "payment_date": timezone.localdate().isoformat(),
+                "reference_number": "OR-TEST-1",
+            },
+            format="json",
+        )
+        self.assertEqual(pay_resp.status_code, 201)
+
+    def test_1_successful_release_creates_or_completes_exactly_one_transaction_record(self):
+        self._setup_scheduled_and_paid()
+        self.authenticate(self.staff)
+        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(AdoptionRecord.objects.filter(application=self.application).count(), 1)
+        record = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record.status, AdoptionRecord.Status.COMPLETED)
+        self.assertIsNotNone(record.transaction_id)
+        self.assertTrue(record.transaction_id.startswith("TXN-"))
+
+    def test_2_transaction_id_is_populated_and_unique(self):
+        # First adoption
+        self._setup_scheduled_and_paid()
+        self.authenticate(self.staff)
+        self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        rec1 = AdoptionRecord.objects.get(application=self.application)
+        self.assertTrue(rec1.transaction_id.startswith("TXN-"))
+
+        # Second adoption with a different pet and adopter
+        pet2 = Pet.objects.create(name="Milo", species="dog", age_years=1, status="pending")
+        adopter2 = self.create_user(email="adopter_milo@example.com")
+        app2 = Application.objects.create(adopter=adopter2, pet=pet2, status="approved")
+        self._setup_scheduled_and_paid(app=app2, pet=pet2, adopter=adopter2)
+        self.client.post(f"/api/applications/{app2.id}/complete-adoption/", {}, format="json")
+        rec2 = AdoptionRecord.objects.get(application=app2)
+        self.assertTrue(rec2.transaction_id.startswith("TXN-"))
+
+        # Unique across records
+        self.assertNotEqual(rec1.transaction_id, rec2.transaction_id)
+
+        # Database-level uniqueness enforcement
+        from django.db import IntegrityError
+        with self.assertRaises(IntegrityError):
+            AdoptionRecord.objects.create(
+                application=Application.objects.create(
+                    adopter=self.adopter, pet=Pet.objects.create(name="Extra", species="dog"), status="approved"
+                ),
+                pet=self.pet,
+                adopter=self.adopter,
+                transaction_id=rec1.transaction_id,
+                status=AdoptionRecord.Status.COMPLETED,
+            )
+
+    def test_3_completion_date_and_required_relationships_stored_correctly(self):
+        self._setup_scheduled_and_paid()
+        self.authenticate(self.staff)
+        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        self.assertEqual(resp.status_code, 200)
+
+        record = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record.pet, self.pet)
+        self.assertEqual(record.adopter, self.adopter)
+        self.assertEqual(record.staff_member, self.staff)
+        self.assertEqual(record.adoption_date, self.visit_date)
+        self.assertEqual(record.completed_date, timezone.localdate())
+        self.assertIsNotNone(record.completed_at)
+        self.assertEqual(record.completed_at.date(), timezone.localdate())
+
+    def test_4_approval_without_successful_release_does_not_create_completed_transaction(self):
+        # Application is approved, but release is not performed
+        self.assertEqual(self.application.status, "approved")
+        # No adoption records or any completed transaction records
+        self.assertEqual(AdoptionRecord.objects.filter(status=AdoptionRecord.Status.COMPLETED).count(), 0)
+
+        # Even with scheduled appointment, record is not completed
+        self.authenticate(self.adopter)
+        apt_resp = self.client.post(
+            "/api/appointments/",
+            {
+                "application_id": str(self.application.id),
+                "requested_date": self.visit_date.isoformat(),
+            },
+        )
+        self.authenticate(self.staff)
+        self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
+
+        record = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record.status, AdoptionRecord.Status.SCHEDULED)
+        self.assertIsNone(record.transaction_id)
+        self.assertIsNone(record.completed_date)
+        self.assertIsNone(record.completed_at)
+
+    def test_5_payment_recording_alone_does_not_mark_adoption_completed(self):
+        self._setup_scheduled_and_paid()
+
+        # Payment has been recorded, but release completion has not been triggered
+        record = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record.status, AdoptionRecord.Status.SCHEDULED)
+        self.assertIsNone(record.transaction_id)
+        self.assertIsNone(record.completed_date)
+        self.assertIsNone(record.completed_at)
+
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "pending")
+
+    def test_6_retrying_or_repeating_completion_does_not_duplicate_or_change_id(self):
+        self._setup_scheduled_and_paid()
+        self.authenticate(self.staff)
+
+        # First completion
+        resp1 = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        self.assertEqual(resp1.status_code, 200)
+        record1 = AdoptionRecord.objects.get(application=self.application)
+        tx_id1 = record1.transaction_id
+        completed_at1 = record1.completed_at
+
+        # Repeat completion request (retry / duplicate click)
+        resp2 = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        self.assertEqual(resp2.status_code, 200)
+
+        # Must still be exactly one record with unchanged transaction ID
+        self.assertEqual(AdoptionRecord.objects.filter(application=self.application).count(), 1)
+        record2 = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record2.transaction_id, tx_id1)
+        self.assertEqual(record2.completed_at, completed_at1)
+
+    def test_7_existing_completed_records_without_transaction_id_remain_readable(self):
+        # Historical record created before transaction_id existed
+        historical = AdoptionRecord.objects.create(
+            application=self.application,
+            pet=self.pet,
+            adopter=self.adopter,
+            staff_member=self.staff,
+            status=AdoptionRecord.Status.COMPLETED,
+            adoption_date=self.visit_date,
+            completed_date=timezone.localdate(),
+            transaction_id=None,
+        )
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/adoptions/{historical.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data["transaction_id"])
+        self.assertEqual(resp.data["status"], "completed")
+
+        # Listing also works
+        list_resp = self.client.get("/api/adoptions/")
+        self.assertEqual(list_resp.status_code, 200)
+
+    def test_8_unauthorized_users_cannot_create_or_alter_transaction_records(self):
+        # Anonymous user cannot create
+        self.unauthenticate()
+        resp = self.client.post("/api/adoptions/", {"application_id": str(self.application.id)})
+        self.assertEqual(resp.status_code, 403)
+
+        # Adopter cannot create
+        self.authenticate(self.adopter)
+        resp = self.client.post("/api/adoptions/", {"application_id": str(self.application.id)})
+        self.assertEqual(resp.status_code, 403)
+
+        # Adopter cannot complete adoption
+        resp = self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {})
+        self.assertEqual(resp.status_code, 403)
+
+        # Staff cannot tamper with transaction_id through PATCH
+        self._setup_scheduled_and_paid()
+        self.authenticate(self.staff)
+        self.client.post(f"/api/applications/{self.application.id}/complete-adoption/", {}, format="json")
+        rec = AdoptionRecord.objects.get(application=self.application)
+        original_tx_id = rec.transaction_id
+
+        patch_resp = self.client.patch(
+            f"/api/adoptions/{rec.id}/",
+            {"transaction_id": "TXN-TAMPERED-ID", "notes": "Updated note"},
+            format="json",
+        )
+        self.assertEqual(patch_resp.status_code, 200)
+        rec.refresh_from_db()
+        self.assertEqual(rec.transaction_id, original_tx_id)  # unchanged
+        self.assertEqual(rec.notes, "Updated note")

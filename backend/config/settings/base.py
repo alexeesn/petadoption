@@ -119,6 +119,10 @@ MEDIA_ROOT = BASE_DIR / "media"
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Adoption Reference Fee (Quezon City-based prototype)
+from decimal import Decimal
+PROTOTYPE_ADOPTION_FEE = Decimal("500.00")
+
 # Custom user model
 AUTH_USER_MODEL = "accounts.User"
 

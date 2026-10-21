@@ -1,7 +1,13 @@
+from decimal import Decimal
+from django.db.models import Sum
 from rest_framework import serializers
+
 from apps.adopters.serializers import AdopterProfileSerializer
 from apps.adopters.models import AdopterProfile
 from apps.documents.serializers import DocumentSerializer
+from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
+from apps.payments.models import Payment
+from apps.appointments.models import Appointment
 from .models import Application
 
 
@@ -17,6 +23,10 @@ class ApplicationSerializer(serializers.ModelSerializer):
     # Documents are uploaded as part of the application, so they travel with it
     # for both the adopter's confirmation view and the staff review view.
     documents = DocumentSerializer(many=True, read_only=True)
+    adoption_fee = serializers.SerializerMethodField()
+    total_paid = serializers.SerializerMethodField()
+    is_fee_paid = serializers.SerializerMethodField()
+    turnover_eligible = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -27,12 +37,16 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "has_other_pets", "other_pets_description", "references",
             "additional_notes", "privacy_consent", "require_home_visit", "no_home_visit_reason",
             "staff_notes", "reviewed_by", "reviewed_by_email",
-            "reviewed_at", "rejection_reason", "documents", "created_at", "updated_at",
+            "reviewed_at", "rejection_reason", "documents",
+            "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible",
+            "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "adopter", "adopter_email", "adopter_name", "adopter_profile",
             "pet_name", "reviewed_by",
-            "reviewed_by_email", "reviewed_at", "documents", "created_at", "updated_at",
+            "reviewed_by_email", "reviewed_at", "documents",
+            "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible",
+            "created_at", "updated_at",
         ]
 
     def get_adopter_profile(self, obj):
@@ -44,6 +58,41 @@ class ApplicationSerializer(serializers.ModelSerializer):
         if profile is None:
             return None
         return AdopterProfileSerializer(profile, context=self.context).data
+
+    def get_adoption_fee(self, obj):
+        return str(PROTOTYPE_ADOPTION_FEE)
+
+    def get_total_paid(self, obj):
+        total = (
+            obj.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+                total=Sum("amount")
+            )["total"]
+            or Decimal("0.00")
+        )
+        return f"{total:.2f}"
+
+    def get_is_fee_paid(self, obj):
+        total = (
+            obj.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+                total=Sum("amount")
+            )["total"]
+            or Decimal("0.00")
+        )
+        return total >= PROTOTYPE_ADOPTION_FEE
+
+    def get_turnover_eligible(self, obj):
+        if obj.status != Application.Status.APPROVED:
+            return False
+        has_confirmed = obj.appointments.filter(status=Appointment.Status.CONFIRMED).exists()
+        if not has_confirmed:
+            return False
+        total = (
+            obj.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+                total=Sum("amount")
+            )["total"]
+            or Decimal("0.00")
+        )
+        return total >= PROTOTYPE_ADOPTION_FEE
 
     def validate(self, attrs):
         status_val = attrs.get("status", self.instance.status if self.instance else None)

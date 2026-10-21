@@ -425,3 +425,543 @@ class PaymentCreationRegressionTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["count"], 1)
 
+
+
+class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
+    """Focused tests for Phase 2: backend business rules, on-site payment hardening,
+    and safe pet turnover confirmation.
+    """
+
+    REFERENCE_FEE = "500.00"
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(
+            name="Max", species="dog", age_years=2, status="pending"
+        )
+        self.adopter = self.create_user(email="adopter_phase2@example.com")
+        self.staff = self.create_staff(email="staff_phase2@example.com")
+        self.application = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+        self.visit_date = next_weekday()
+
+    def confirm_appointment(self, app=None):
+        target = app or self.application
+        return Appointment.objects.create(
+            application=target,
+            adopter=target.adopter,
+            pet=target.pet,
+            requested_date=self.visit_date,
+            status=Appointment.Status.CONFIRMED,
+        )
+
+    # -------------------------------------------------------------------------
+    # Payment Tests
+    # -------------------------------------------------------------------------
+
+    def test_valid_onsite_payment_recorded_as_completed_with_permanent_unique_reference(self):
+        """Staff records an on-site payment; it is completed with a permanent unique receipt_number."""
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/record-payment/",
+            {
+                "amount": "500.00",
+                "method": "cash",
+                "payment_received": True,
+                "reference_number": "OR-2026-QC-001",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data["status"], "completed")
+        self.assertTrue(resp.data["receipt_number"].startswith("REC-"))
+
+        # Verify database record
+        payment = Payment.objects.get(application=self.application)
+        self.assertEqual(payment.status, Payment.Status.COMPLETED)
+        self.assertEqual(payment.amount, Decimal("500.00"))
+        self.assertEqual(payment.receipt_number, resp.data["receipt_number"])
+        self.assertEqual(payment.processed_by, self.staff)
+
+        # Permanent reference stability on view / refresh
+        resp2 = self.client.get(f"/api/payments/{payment.id}/")
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(resp2.data["receipt_number"], payment.receipt_number)
+
+    def test_zero_and_negative_payment_amounts_rejected(self):
+        """Zero and negative amounts for payment receipts are strictly rejected."""
+        self.authenticate(self.staff)
+
+        # Zero amount on record-payment
+        resp_zero = self.client.post(
+            f"/api/applications/{self.application.id}/record-payment/",
+            {"amount": "0.00", "method": "cash"},
+            format="json",
+        )
+        self.assertEqual(resp_zero.status_code, 400)
+
+        # Negative amount on record-payment
+        resp_neg = self.client.post(
+            f"/api/applications/{self.application.id}/record-payment/",
+            {"amount": "-100.00", "method": "cash"},
+            format="json",
+        )
+        self.assertEqual(resp_neg.status_code, 400)
+
+        # Zero amount on generic /api/payments/
+        resp_gen_zero = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(self.application.id),
+                "amount": "0.00",
+                "method": "cash",
+                "status": "completed",
+            },
+            format="json",
+        )
+        self.assertEqual(resp_gen_zero.status_code, 400)
+
+        # Negative amount on generic /api/payments/
+        resp_gen_neg = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(self.application.id),
+                "amount": "-500.00",
+                "method": "cash",
+                "status": "completed",
+            },
+            format="json",
+        )
+        self.assertEqual(resp_gen_neg.status_code, 400)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_staff_cannot_record_payment_if_money_not_received(self):
+        """Staff can record a payment only after actually receiving the money."""
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/record-payment/",
+            {"amount": "500.00", "payment_received": False},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.data)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_client_supplied_status_and_reference_fields_cannot_forge_completed_receipt(self):
+        """Backend does not trust client-supplied receipt_number or status forgery."""
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(self.application.id),
+                "amount": "500.00",
+                "method": "cash",
+                "status": "completed",
+                "receipt_number": "FORGED-REC-FAKE123",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        # The client-supplied receipt_number was ignored/overwritten by the server
+        self.assertNotEqual(resp.data["receipt_number"], "FORGED-REC-FAKE123")
+        self.assertTrue(resp.data["receipt_number"].startswith("REC-"))
+
+    def test_unauthorized_users_cannot_record_payments(self):
+        """Adopters and anonymous users cannot record payments or mark payments completed."""
+        # Anonymous
+        self.unauthenticate()
+        resp_anon = self.client.post(
+            f"/api/applications/{self.application.id}/record-payment/",
+            {"amount": "500.00"},
+            format="json",
+        )
+        self.assertIn(resp_anon.status_code, [401, 403])
+
+        # Adopter
+        self.authenticate(self.adopter)
+        resp_adopter = self.client.post(
+            f"/api/applications/{self.application.id}/record-payment/",
+            {"amount": "500.00"},
+            format="json",
+        )
+        self.assertEqual(resp_adopter.status_code, 403)
+
+        resp_adopter_gen = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(self.application.id),
+                "amount": "500.00",
+                "method": "cash",
+                "status": "completed",
+            },
+            format="json",
+        )
+        self.assertEqual(resp_adopter_gen.status_code, 403)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_existing_payment_records_and_supported_workflows_remain_compatible(self):
+        """Generic payment endpoint still supports other payment statuses like pending."""
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            "/api/payments/",
+            {
+                "application": str(self.application.id),
+                "amount": "500.00",
+                "method": "bank_transfer",
+                "status": "pending",
+                "reference_number": "BANK-TXN-777",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        payment = Payment.objects.get(id=resp.data["id"])
+        self.assertEqual(payment.status, "pending")
+        self.assertEqual(payment.receipt_number, "")
+
+        # Central fee endpoint is accessible
+        fee_resp = self.client.get("/api/payments/fee/")
+        self.assertEqual(fee_resp.status_code, 200)
+        self.assertEqual(fee_resp.data["adoption_fee"], "500.00")
+
+    # -------------------------------------------------------------------------
+    # Turnover Tests
+    # -------------------------------------------------------------------------
+
+    def test_turnover_rejected_when_no_payment(self):
+        """No payment: turnover rejected."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.assertEqual(AdoptionRecord.objects.count(), 0)
+
+    def test_turnover_rejected_when_only_pending_or_failed_payments(self):
+        """Only pending or failed payments: turnover rejected."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="bank_transfer",
+            status="pending",
+        )
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="failed",
+        )
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.assertEqual(AdoptionRecord.objects.count(), 0)
+
+    def test_turnover_rejected_when_partial_payment(self):
+        """Partial payment (e.g. ₱200.00): turnover rejected."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("200.00"),
+            method="cash",
+            status="completed",
+        )
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.assertEqual(AdoptionRecord.objects.count(), 0)
+
+    def test_turnover_rejected_when_completed_payments_below_500(self):
+        """Completed payments below ₱500 (e.g. ₱499.50): turnover rejected."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("499.50"),
+            method="cash",
+            status="completed",
+        )
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.assertEqual(AdoptionRecord.objects.count(), 0)
+
+    def test_turnover_succeeds_when_completed_payments_total_at_least_500_with_explicit_confirmation(self):
+        """Completed payments totaling at least ₱500: turnover proceeds after explicit confirmation."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+
+        # Split payment: ₱250 + ₱250 = ₱500
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("250.00"),
+            method="cash",
+            status="completed",
+        )
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("250.00"),
+            method="gcash",
+            status="completed",
+        )
+
+        # If staff explicitly denies handover, turnover rejected
+        resp_denied = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {"confirmed": False},
+            format="json",
+        )
+        self.assertEqual(resp_denied.status_code, 400)
+        self.assertEqual(AdoptionRecord.objects.count(), 0)
+
+        # Explicit confirmation
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {"confirmed": True, "notes": "Handed over leash and starter food."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "adoption_completed")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "adopted")
+
+    def test_payment_recorded_but_turnover_does_not_occur_leaves_records_intact(self):
+        """A paid adoption with an unsuccessful or postponed turnover remains incomplete,
+        and its legitimate payment history remains intact."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        pay = Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+        receipt = pay.receipt_number
+
+        # Turnover does not occur
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "pending")
+        self.assertEqual(AdoptionRecord.objects.count(), 0)
+
+        # Payment remains intact
+        pay.refresh_from_db()
+        self.assertEqual(pay.status, "completed")
+        self.assertEqual(pay.receipt_number, receipt)
+        self.assertIsNone(pay.adoption)
+
+    def test_successful_turnover_finalizes_one_record_stable_txn_id_staff_pet_adopted(self):
+        """Successful confirmation finalizes exactly one AdoptionRecord, persists its permanent
+        transaction ID and completion timestamp, and records responsible staff."""
+        appointment = self.confirm_appointment()
+        self.authenticate(self.staff)
+        pay = Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {"notes": "Turnover complete."},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertEqual(AdoptionRecord.objects.filter(application=self.application).count(), 1)
+        record = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record.status, AdoptionRecord.Status.COMPLETED)
+        self.assertTrue(record.transaction_id.startswith("TXN-"))
+        self.assertEqual(record.completed_date, timezone.localdate())
+        self.assertIsNotNone(record.completed_at)
+        self.assertEqual(record.staff_member, self.staff)
+        self.assertEqual(record.pet, self.pet)
+        self.assertEqual(record.adopter, self.adopter)
+        self.assertEqual(record.appointment, appointment)
+
+        # Pet is adopted and unavailable
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "adopted")
+
+        # Payment linked to record
+        pay.refresh_from_db()
+        self.assertEqual(pay.adoption, record)
+
+    def test_turnover_rejected_when_appointment_not_confirmed(self):
+        """Appointment not confirmed: turnover rejected."""
+        self.authenticate(self.staff)
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+        # No appointment at all
+        resp = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+        # Unconfirmed appointment (pending_confirmation)
+        Appointment.objects.create(
+            application=self.application,
+            adopter=self.adopter,
+            pet=self.pet,
+            requested_date=self.visit_date,
+            status=Appointment.Status.PENDING_CONFIRMATION,
+        )
+        resp2 = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp2.status_code, 400)
+
+    def test_adopter_or_unauthorized_user_cannot_confirm_turnover(self):
+        """Adopter or unauthorized user cannot confirm turnover."""
+        self.confirm_appointment()
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+
+        # Adopter
+        self.authenticate(self.adopter)
+        resp_adopter = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp_adopter.status_code, 403)
+
+        # Anonymous
+        self.unauthenticate()
+        resp_anon = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertIn(resp_anon.status_code, [401, 403])
+
+    def test_repeated_completion_requests_idempotent_no_duplicate_or_regenerated_id(self):
+        """Repeated completion requests do not create duplicate records or regenerate IDs."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+
+        resp1 = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp1.status_code, 200)
+        record1 = AdoptionRecord.objects.get(application=self.application)
+        original_txn_id = record1.transaction_id
+        original_completed_at = record1.completed_at
+
+        # Repeated request (idempotent retry)
+        resp2 = self.client.post(
+            f"/api/applications/{self.application.id}/confirm-turnover/",
+            {},
+            format="json",
+        )
+        self.assertEqual(resp2.status_code, 200)
+        self.assertEqual(AdoptionRecord.objects.filter(application=self.application).count(), 1)
+        record2 = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record2.transaction_id, original_txn_id)
+        self.assertEqual(record2.completed_at, original_completed_at)
+
+    def test_failed_atomic_operation_leaves_related_records_in_consistent_state(self):
+        """A failed atomic operation leaves related records in a consistent state."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+
+        from unittest.mock import patch
+        # Simulate a crash right when Pet.save() is called during turnover
+        with patch.object(Pet, "save", side_effect=RuntimeError("Simulated database failure")):
+            with self.assertRaises(RuntimeError):
+                from apps.adoptions.services import complete_application_adoption
+                complete_application_adoption(self.application, self.staff)
+
+        # Atomic rollback check: application and pet remain unaffected
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.status, "approved")
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "pending")
+        self.assertFalse(AdoptionRecord.objects.filter(status=AdoptionRecord.Status.COMPLETED).exists())
+
+    def test_fee_and_payment_totals_exposed_in_serializers_and_endpoints(self):
+        """Central adoption fee, total_paid, is_fee_paid, and turnover_eligible are exposed."""
+        self.confirm_appointment()
+        self.authenticate(self.staff)
+
+        # Before payment
+        summary_resp1 = self.client.get(f"/api/applications/{self.application.id}/payment-summary/")
+        self.assertEqual(summary_resp1.status_code, 200)
+        self.assertEqual(summary_resp1.data["adoption_fee"], "500.00")
+        self.assertEqual(summary_resp1.data["total_paid"], "0.00")
+        self.assertFalse(summary_resp1.data["is_fee_paid"])
+        self.assertFalse(summary_resp1.data["turnover_eligible"])
+
+        # Record payment
+        Payment.objects.create(
+            application=self.application,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+        )
+
+        # After payment
+        summary_resp2 = self.client.get(f"/api/applications/{self.application.id}/payment-summary/")
+        self.assertEqual(summary_resp2.status_code, 200)
+        self.assertEqual(summary_resp2.data["total_paid"], "500.00")
+        self.assertTrue(summary_resp2.data["is_fee_paid"])
+        self.assertTrue(summary_resp2.data["turnover_eligible"])
+
+        # Exposed in ApplicationSerializer
+        app_resp = self.client.get(f"/api/applications/{self.application.id}/")
+        self.assertEqual(app_resp.status_code, 200)
+        self.assertEqual(app_resp.data["adoption_fee"], "500.00")
+        self.assertEqual(app_resp.data["total_paid"], "500.00")
+        self.assertTrue(app_resp.data["is_fee_paid"])
+        self.assertTrue(app_resp.data["turnover_eligible"])

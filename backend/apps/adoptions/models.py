@@ -1,6 +1,18 @@
+import secrets
 import uuid
 from django.db import models
 from django.conf import settings
+
+
+def _generate_transaction_id():
+    """Generate a stable unique transaction ID.
+
+    Format: TXN-<12 uppercase hex chars>
+    Example: TXN-4A2F8B1C9D0E
+
+    Generated once when an adoption is finalized and stored permanently.
+    """
+    return "TXN-" + secrets.token_hex(6).upper()
 
 
 class AdoptionRecord(models.Model):
@@ -17,6 +29,11 @@ class AdoptionRecord(models.Model):
         -> AdoptionRecord auto-created/updated with status "scheduled"
         -> staff record the onsite payment
         -> staff complete the adoption (AdoptionRecord "completed")
+
+    When the record moves to "completed", ``transaction_id`` is populated with
+    a stable unique reference code that identifies the completed transaction.
+    It is generated once, persisted immediately, and never regenerated on view,
+    refresh, or export.
     """
 
     class Status(models.TextChoices):
@@ -50,9 +67,27 @@ class AdoptionRecord(models.Model):
         related_name="adoption_records",
         help_text="Confirmed onsite visit this adoption record was scheduled from",
     )
+    # Human-readable unique transaction ID for completed adoptions.
+    # Populated when status transitions to "completed"; NULL for scheduled /
+    # cancelled records that have not yet been released.  Enforced unique at
+    # the DB level so no two completed transactions share an ID.
+    transaction_id = models.CharField(
+        max_length=32,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text=(
+            "Stable unique reference code for the completed adoption transaction. "
+            "Generated once when the adoption is completed and never changed."
+        ),
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.SCHEDULED)
     adoption_date = models.DateField(blank=True, null=True)
     completed_date = models.DateField(blank=True, null=True)
+    completed_at = models.DateTimeField(
+        blank=True, null=True,
+        help_text="Timestamp when the adoption transaction was finalized.",
+    )
     notes = models.TextField(blank=True)
     return_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

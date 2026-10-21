@@ -15,28 +15,37 @@ record that belongs to the application.
 
 Completion
 ----------
-The onsite visit (physical verification, paperwork, payment) happens outside
-the system.  PawConnect only records the result of that visit, so completion
-is a single, explicit staff action with these side effects:
+The onsite visit (physical verification, paperwork, payment, handover) happens outside
+the system.  PawConnect records the result of that visit, so completion
+is an explicit staff action with these side effects:
 
     AdoptionRecord -> completed
+    AdoptionRecord.transaction_id -> generated once and persisted
+    AdoptionRecord.completed_at -> timestamp finalized
+    AdoptionRecord.completed_date -> date finalized
     Payment.adoption -> linked to the adoption record
     Pet.status -> adopted          (existing business rule: an adopted pet is
                                     never presented as available)
     Application.status -> adoption_completed
 
-Callers must validate the business rules *before* calling this helper (the
-application is approved, the onsite visit date is confirmed and the onsite
-payment has been recorded).  The API view owns those checks; keeping the side
-effects here means there is one place that finishes an adoption.
+Callers and the service both enforce the business rules:
+- The application is approved
+- The onsite visit date is confirmed
+- The required adoption fee (₱500.00) is fully paid through completed payment records
+- Concurrency and retries are idempotent and safe
 """
+from decimal import Decimal
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.audit.models import AuditLog
 from apps.notifications.models import create_notification
+from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
+from apps.payments.models import Payment
 
-from .models import AdoptionRecord
+from .models import AdoptionRecord, _generate_transaction_id
 
 
 def schedule_adoption_record_for_appointment(appointment, staff_user=None):
@@ -122,14 +131,48 @@ def schedule_adoption_record_for_appointment(appointment, staff_user=None):
     return record
 
 
+@transaction.atomic
 def complete_application_adoption(application, staff_user, notes=""):
-    """Finish the adoption for *application* and return its AdoptionRecord."""
+    """Finish the adoption for *application* and return its AdoptionRecord.
+
+    Transaction ID
+    --------------
+    A unique, human-readable ``transaction_id`` is assigned exactly once when
+    the adoption is completed.  If the record was already completed (idempotent
+    retry), the existing record and its ``transaction_id`` are returned unchanged.
+    Uniqueness is enforced at the database level.
+    """
+    # Idempotent retry: already completed, return unchanged
+    if application.status == "adoption_completed" and hasattr(application, "adoption_record"):
+        return application.adoption_record
+
+    if application.status != "approved":
+        raise ValidationError("Only an approved application can be completed as an adoption.")
+
     appointment = (
         application.appointments.filter(status="confirmed")
         .order_by("-requested_date")
         .first()
     )
+    if not appointment:
+        raise ValidationError(
+            "The onsite visit date must be confirmed before turnover can be completed."
+        )
+
+    total_completed = (
+        application.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+            total=Sum("amount")
+        )["total"]
+        or Decimal("0.00")
+    )
+    if total_completed < PROTOTYPE_ADOPTION_FEE:
+        raise ValidationError(
+            f"The required adoption fee of ₱{PROTOTYPE_ADOPTION_FEE:.2f} has not been fully paid. "
+            f"Total completed: ₱{total_completed:.2f}."
+        )
+
     today = timezone.localdate()
+    now = timezone.now()
 
     record, created = AdoptionRecord.objects.get_or_create(
         application=application,
@@ -137,10 +180,16 @@ def complete_application_adoption(application, staff_user, notes=""):
             "pet": application.pet,
             "adopter": application.adopter,
             "staff_member": staff_user,
+            "appointment": appointment,
             "adoption_date": appointment.requested_date if appointment else today,
             "notes": notes,
         },
     )
+
+    # Idempotent retry: already completed, return unchanged
+    if not created and record.status == AdoptionRecord.Status.COMPLETED:
+        return record
+
     previous_record_status = record.status
 
     if not created and notes:
@@ -148,9 +197,26 @@ def complete_application_adoption(application, staff_user, notes=""):
 
     record.status = AdoptionRecord.Status.COMPLETED
     record.completed_date = today
+    if not record.completed_at:
+        record.completed_at = now
     record.staff_member = staff_user
+    if not record.appointment and appointment:
+        record.appointment = appointment
     if record.adoption_date is None:
         record.adoption_date = appointment.requested_date if appointment else today
+
+    # Generate unique transaction ID if not already assigned
+    if not record.transaction_id:
+        for _ in range(5):
+            candidate = _generate_transaction_id()
+            if not AdoptionRecord.objects.filter(transaction_id=candidate).exists():
+                record.transaction_id = candidate
+                break
+        else:
+            raise IntegrityError(
+                "Could not generate a unique transaction_id after 5 attempts."
+            )
+
     record.save()
 
     # Attach the recorded onsite payment(s) to the adoption record so the

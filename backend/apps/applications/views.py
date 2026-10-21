@@ -32,7 +32,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         # Write access to an application (status, staff_notes, etc.) is
         # staff/admin-only.  Without this, an adopter could PATCH their own
         # application's `status` to "approved" directly (see AGENTS.md #14).
-        if self.action in ("update", "partial_update", "destroy"):
+        if self.action in (
+            "update", "partial_update", "destroy",
+            "confirm_turnover", "complete_adoption", "record_payment",
+        ):
             return [permissions.IsAuthenticated(), IsStaff()]
         return [permissions.IsAuthenticated()]
 
@@ -171,8 +174,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             # Completing an adoption requires the confirmed onsite visit and a
             # recorded onsite payment, and has adoption-specific side effects,
             # so it goes through the same guarded path as the
-            # "complete-adoption" action instead of the generic status update.
-            return self._complete_adoption(app, request)
+            # "confirm-turnover" action instead of the generic status update.
+            return self._confirm_turnover(app, request)
         rejection_reason = serializer.validated_data.get("rejection_reason", "").strip()
         if new_status == "rejected" and not rejection_reason:
             # The staff portal already disables Reject until a reason is typed;
@@ -226,7 +229,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         )
 
         # Sync pet status on approval.  (adoption_completed is handled by
-        # _complete_adoption above, which owns the adoption side effects.)
+        # _confirm_turnover, which owns the adoption side effects.)
         if new_status == "approved":
             app.pet.status = "pending"
             app.pet.save(update_fields=["status"])
@@ -237,23 +240,28 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
         return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
 
-    def _complete_adoption(self, app, request):
-        """Complete the onsite adoption for *app*.
+    def _confirm_turnover(self, app, request):
+        """Confirm pet turnover and finalize the adoption transaction for *app*.
 
-        Shared by the ``complete-adoption`` action and the generic
-        ``update-status`` endpoint so ``adoption_completed`` cannot be reached
-        without the onsite requirements being satisfied:
+        Shared by the ``confirm-turnover`` action, legacy ``complete-adoption``
+        action, and the generic ``update-status`` endpoint.
 
-        * the application is approved,
-        * the onsite visit date has been confirmed by staff, and
-        * the onsite payment has been recorded.
-
-        Recording the payment and completing the adoption are deliberately two
-        separate staff actions: this method is only reached when staff ask for
-        completion.
+        Enforces all of the following:
+        1. Only staff or administrator can confirm turnover.
+        2. Application must be approved (idempotent if already completed).
+        3. Appointment must be confirmed.
+        4. The required adoption fee (₱500.00) must be fully paid via completed payment records.
+           Pending, failed, or partial payments do not count.
+        5. Physical turnover must be explicitly confirmed by staff.
+        6. Updates Application, AdoptionRecord, and Pet atomically.
         """
         if not (request.user.is_staff_role or request.user.is_admin_role):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Idempotent retry: already completed, return serialized data
+        if app.status == Application.Status.ADOPTION_COMPLETED:
+            if hasattr(app, "adoption_record"):
+                return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
 
         if app.status != Application.Status.APPROVED:
             return Response(
@@ -274,9 +282,49 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
+        from apps.payments.models import Payment
+        from django.db.models import Sum
+        from decimal import Decimal
+
         if not app.payments.exists():
             return Response(
                 {"error": "Record the onsite payment before completing the adoption."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        completed_payments = app.payments.filter(status=Payment.Status.COMPLETED)
+        total_completed = (
+            completed_payments.aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+
+        if total_completed == Decimal("0.00"):
+            return Response(
+                {
+                    "error": (
+                        "Only completed payments count toward the adoption fee. "
+                        "Pending or failed payments cannot satisfy the adoption fee."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if total_completed < PROTOTYPE_ADOPTION_FEE:
+            return Response(
+                {
+                    "error": (
+                        f"The required adoption fee of ₱{PROTOTYPE_ADOPTION_FEE:.2f} has not been fully paid. "
+                        f"Total completed payment is ₱{total_completed:.2f}."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Explicit staff confirmation that pet has been physically handed over
+        if request.data.get("confirmed") is False or request.data.get("turnover_confirmed") is False:
+            return Response(
+                {"error": "Physical turnover of the pet must be explicitly confirmed."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -293,13 +341,98 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             complete_application_adoption(app, request.user, notes=notes)
 
+        app.refresh_from_db()
         return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
+
+    def _complete_adoption(self, app, request):
+        return self._confirm_turnover(app, request)
+
+    @action(detail=True, methods=["post"], url_path="confirm-turnover")
+    def confirm_turnover(self, request, pk=None):
+        """Staff/admin confirms physical pet turnover and finalizes adoption."""
+        app = self.get_object()
+        return self._confirm_turnover(app, request)
 
     @action(detail=True, methods=["post"], url_path="complete-adoption")
     def complete_adoption(self, request, pk=None):
-        """Staff/admin completes the onsite adoption from the application page."""
+        """Staff/admin completes the onsite adoption (backward compatible endpoint)."""
         app = self.get_object()
-        return self._complete_adoption(app, request)
+        return self._confirm_turnover(app, request)
+
+    @action(detail=True, methods=["post"], url_path="record-payment")
+    def record_payment(self, request, pk=None):
+        """Staff action to record an on-site payment for this application."""
+        if not (request.user.is_staff_role or request.user.is_admin_role):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
+        app = self.get_object()
+        payment_received = request.data.get("payment_received", True)
+        if payment_received is False or payment_received == "false":
+            return Response(
+                {"error": "Payment can only be recorded after receiving the money."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        amount = request.data.get("amount")
+        method = request.data.get("method", "cash")
+        payment_date = request.data.get("payment_date")
+        reference_number = request.data.get("reference_number", "")
+        notes = request.data.get("notes", "")
+
+        from apps.payments.services import record_onsite_payment
+        from django.core.exceptions import ValidationError
+        try:
+            payment = record_onsite_payment(
+                application=app,
+                staff_user=request.user,
+                amount=amount,
+                method=method,
+                payment_date=payment_date,
+                reference_number=reference_number,
+                notes=notes,
+                payment_received=True,
+            )
+        except ValidationError as e:
+            msg = e.message if hasattr(e, "message") else str(e)
+            return Response({"error": msg}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.payments.serializers import PaymentSerializer
+        return Response(
+            PaymentSerializer(payment, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["get"], url_path="payment-summary")
+    def payment_summary(self, request, pk=None):
+        """Return fee and payment totals for this application."""
+        app = self.get_object()
+        from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
+        from apps.payments.models import Payment
+        from apps.payments.serializers import PaymentSerializer
+        from apps.appointments.models import Appointment
+        from django.db.models import Sum
+        from decimal import Decimal
+
+        total = (
+            app.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+                total=Sum("amount")
+            )["total"]
+            or Decimal("0.00")
+        )
+        is_paid = total >= PROTOTYPE_ADOPTION_FEE
+        has_appt = app.appointments.filter(status=Appointment.Status.CONFIRMED).exists()
+        eligible = (app.status == Application.Status.APPROVED) and has_appt and is_paid
+
+        return Response({
+            "application_id": str(app.id),
+            "adoption_fee": str(PROTOTYPE_ADOPTION_FEE),
+            "total_paid": f"{total:.2f}",
+            "is_fee_paid": is_paid,
+            "turnover_eligible": eligible,
+            "payments": PaymentSerializer(
+                app.payments.all(), many=True, context=self.get_serializer_context()
+            ).data,
+        })
 
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):

@@ -1,6 +1,18 @@
+import secrets
 import uuid
 from django.db import models
 from django.conf import settings
+
+
+def _generate_receipt_number():
+    """Generate a permanent unique receipt reference code.
+
+    Format: REC-<12 uppercase hex chars>
+    Example: REC-4A2F8B1C9D0E
+
+    Generated once when a payment is marked completed and preserved permanently.
+    """
+    return "REC-" + secrets.token_hex(6).upper()
 
 
 class Payment(models.Model):
@@ -43,7 +55,10 @@ class Payment(models.Model):
     payment_date = models.DateField(
         null=True, blank=True, help_text="Actual date the onsite payment was made"
     )
-    receipt_number = models.CharField(max_length=100, blank=True)
+    receipt_number = models.CharField(
+        max_length=100, blank=True,
+        help_text="Permanent unique receipt identifier generated for completed payments.",
+    )
     reference_number = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
     processed_by = models.ForeignKey(
@@ -57,6 +72,13 @@ class Payment(models.Model):
         verbose_name = "Payment"
         verbose_name_plural = "Payments"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["receipt_number"],
+                condition=~models.Q(receipt_number=""),
+                name="unique_completed_receipt_number",
+            )
+        ]
 
     def __str__(self):
         return f"Payment {self.id}: ₱{self.amount} ({self.status})"
@@ -65,8 +87,20 @@ class Payment(models.Model):
     def is_free(self):
         return self.amount == 0
 
+    def save(self, *args, **kwargs):
+        if self.status == self.Status.COMPLETED and not self.receipt_number:
+            for _ in range(5):
+                candidate = _generate_receipt_number()
+                if not Payment.objects.filter(receipt_number=candidate).exists():
+                    self.receipt_number = candidate
+                    break
+            else:
+                from django.db import IntegrityError
+                raise IntegrityError("Could not generate a unique receipt_number after 5 attempts.")
+        super().save(*args, **kwargs)
+
     def clean(self):
         from django.core.exceptions import ValidationError
-        if self.amount == 0 and self.status == "pending":
-            # Free adoptions don't need payment tracking
-            pass
+        from decimal import Decimal
+        if self.amount is not None and self.amount <= Decimal("0.00"):
+            raise ValidationError({"amount": "Payment amount must be greater than zero."})

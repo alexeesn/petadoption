@@ -2,7 +2,7 @@ from rest_framework import generics, viewsets, permissions, status
 from rest_framework.response import Response
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
-from .models import AdoptionRecord
+from .models import AdoptionRecord, _generate_transaction_id
 from .serializers import AdoptionRecordSerializer, AdoptionCreateSerializer
 from apps.accounts.permissions import IsStaff
 from apps.notifications.models import create_notification
@@ -87,6 +87,9 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         new_status = request.data.get("status")
         if new_status:
+            if new_status == instance.status:
+                # Idempotent retry with same status - do not re-run transitions or regenerate IDs
+                return Response(AdoptionRecordSerializer(instance).data, status=status.HTTP_200_OK)
             if not instance.can_transition_to(new_status):
                 return Response(
                     {"error": f"Cannot transition from '{instance.status}' to '{new_status}'."},
@@ -95,12 +98,51 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
             old_status = instance.status
             instance.status = new_status
             if new_status == "completed":
-                instance.completed_date = timezone.now().date()
+                app = instance.application
+                from apps.appointments.models import Appointment
+                if not app.appointments.filter(status=Appointment.Status.CONFIRMED).exists():
+                    return Response(
+                        {"error": "The onsite visit date must be confirmed before the adoption can be completed."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
+                from apps.payments.models import Payment
+                from django.db.models import Sum
+                from decimal import Decimal
+                total_completed = (
+                    app.payments.filter(status=Payment.Status.COMPLETED).aggregate(
+                        total=Sum("amount")
+                    )["total"]
+                    or Decimal("0.00")
+                )
+                if total_completed < PROTOTYPE_ADOPTION_FEE:
+                    return Response(
+                        {
+                            "error": (
+                                f"The required adoption fee of ₱{PROTOTYPE_ADOPTION_FEE:.2f} has not been fully paid. "
+                                f"Total completed payment is ₱{total_completed:.2f}."
+                            )
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                instance.completed_date = timezone.localdate()
+                if not instance.completed_at:
+                    instance.completed_at = timezone.now()
+                if not instance.staff_member:
+                    instance.staff_member = request.user
+                if not instance.transaction_id:
+                    for _ in range(5):
+                        candidate = _generate_transaction_id()
+                        if not AdoptionRecord.objects.filter(transaction_id=candidate).exists():
+                            instance.transaction_id = candidate
+                            break
                 instance.pet.status = "adopted"
                 instance.pet.save(update_fields=["status"])
                 # Update application
                 instance.application.status = "adoption_completed"
                 instance.application.save(update_fields=["status"])
+                # Attach payments
+                app.payments.filter(adoption__isnull=True).update(adoption=instance)
             if new_status == "returned":
                 instance.return_reason = request.data.get("return_reason", "")
                 instance.pet.status = "available"
