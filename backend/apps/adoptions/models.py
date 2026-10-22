@@ -90,6 +90,21 @@ class AdoptionRecord(models.Model):
     )
     notes = models.TextField(blank=True)
     return_reason = models.TextField(blank=True)
+    # Retain the lifecycle columns already present in deployed databases.
+    # In particular, cancellation_reason is NOT NULL: inserts must supply
+    # Django's empty-string default even when merely scheduling an adoption.
+    cancellation_reason = models.TextField(
+        blank=True, help_text="Why the scheduled adoption was cancelled (recorded by staff)"
+    )
+    cancelled_at = models.DateTimeField(
+        blank=True, null=True, help_text="When the adoption was cancelled"
+    )
+    return_date = models.DateField(
+        blank=True, null=True, help_text="Date the pet was actually returned"
+    )
+    returned_at = models.DateTimeField(
+        blank=True, null=True, help_text="When the completed adoption was recorded as returned"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -176,6 +176,47 @@ class AppointmentWorkflowTests(BaseAPITestCase):
         resp = self.client.post(f"/api/appointments/{appointment['id']}/approve/")
         self.assertEqual(resp.status_code, 400)
 
+    def test_staff_and_admin_approve_without_payment_or_completion(self):
+        """Scheduling must insert into the deployed lifecycle schema without payment."""
+        from apps.adoptions.models import AdoptionRecord
+        from apps.payments.models import Payment
+
+        admin = self.create_admin(email="appointment-admin@example.com")
+        for reviewer in (self.staff, admin):
+            with self.subTest(role=reviewer.role):
+                pet = Pet.objects.create(
+                    name=f"Visit {reviewer.role}", species="dog", age_years=1,
+                    status="pending",
+                )
+                application = Application.objects.create(
+                    adopter=self.adopter, pet=pet, status="approved"
+                )
+                appointment = self.request_appointment(application).data
+                self.authenticate(reviewer)
+                response = self.client.post(
+                    f"/api/appointments/{appointment['id']}/approve/"
+                )
+                self.assertEqual(response.status_code, 200, response.data)
+                self.assertEqual(response.data["status"], "confirmed")
+                record = AdoptionRecord.objects.get(application=application)
+                self.assertEqual(record.status, "scheduled")
+                # The omitted NOT NULL field caused inserts to fail against
+                # PostgreSQL even though the former fresh-schema tests passed.
+                self.assertEqual(record.cancellation_reason, "")
+                self.assertIsNone(record.cancelled_at)
+                self.assertIsNone(record.return_date)
+                self.assertIsNone(record.returned_at)
+                self.assertIsNone(record.transaction_id)
+                self.assertIsNone(record.completed_at)
+                self.assertIsNone(record.completed_date)
+                self.assertEqual(record.staff_member, reviewer)
+                self.assertEqual(str(record.appointment_id), appointment["id"])
+                application.refresh_from_db()
+                pet.refresh_from_db()
+                self.assertEqual(application.status, "approved")
+                self.assertEqual(pet.status, "pending")
+                self.assertFalse(Payment.objects.filter(application=application).exists())
+
     def test_adopter_cannot_confirm_or_reject(self):
         appointment = self.request_appointment().data
         self.authenticate(self.adopter)

@@ -958,6 +958,57 @@ class AdoptionRecordsFilterTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data["count"], 0)
 
+    def test_existing_lifecycle_records_remain_visible_across_pages_and_filters(self):
+        """Reads include Scheduled and historical rows without modifying their data."""
+        from unittest.mock import patch
+        from rest_framework.pagination import PageNumberPagination
+
+        expected = {}
+        for record_status in AdoptionRecord.Status.values:
+            pet = Pet.objects.create(
+                name=f"Historical {record_status}", species="cat", age_years=2,
+                status="pending" if record_status == "scheduled" else "inactive",
+            )
+            record = self._make_record(pet, status=record_status)
+            # Legacy records legitimately have no appointment or transaction ID.
+            # Lifecycle metadata must survive browsing and status filtering.
+            if record_status == "cancelled":
+                record.cancellation_reason = "Existing cancellation reason"
+                record.cancelled_at = timezone.now()
+            elif record_status == "returned":
+                record.return_reason = "Existing return reason"
+                record.return_date = timezone.localdate()
+                record.returned_at = timezone.now()
+            record.save()
+            expected[record_status] = str(record.id)
+
+        before = list(AdoptionRecord.objects.order_by("id").values())
+        self.authenticate(self.staff)
+        with patch.object(PageNumberPagination, "page_size", 2):
+            first = self.client.get("/api/adoptions/")
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.data["count"], 4)
+            self.assertIsNotNone(first.data["next"])
+            second = self.client.get(first.data["next"])
+            self.assertEqual(second.status_code, 200)
+            self.assertIsNone(second.data["next"])
+            rows = first.data["results"] + second.data["results"]
+            self.assertEqual({str(row["id"]) for row in rows}, set(expected.values()))
+            for row in rows:
+                self.assertIsNone(row["appointment_id"])
+                self.assertIsNone(row["transaction_id"])
+                for field in ("pet", "adopter", "application_id"):
+                    self.assertTrue(row[field])
+
+            for record_status, record_id in expected.items():
+                with self.subTest(status=record_status):
+                    response = self.client.get("/api/adoptions/", {"status": record_status})
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.data["count"], 1)
+                    self.assertEqual(str(response.data["results"][0]["id"]), record_id)
+
+        self.assertEqual(list(AdoptionRecord.objects.order_by("id").values()), before)
+
     def test_list_unfiltered_returns_all_records_paginated(self):
         """Without a filter, the endpoint is the paginated list of all records."""
         self._make_record(self.pet1, status="completed")
