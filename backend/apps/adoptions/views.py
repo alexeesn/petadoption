@@ -21,6 +21,16 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
     serializer_class = AdoptionRecordSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
 
+    def get_permissions(self):
+        # Adopters may *read* only their own adoption records (the queryset is
+        # scoped to adopter=user) — the adopter portal's Adoption Record page
+        # retrieves the completed record and its permanent transaction ID.
+        # Every write action, status transition, and the PDF export remain
+        # staff-only.
+        if self.action in ["list", "retrieve"]:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticated(), IsStaff()]
+
     def get_queryset(self):
         user = self.request.user
         if user.is_adopter:

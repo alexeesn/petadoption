@@ -969,15 +969,99 @@ class AdoptionRecordsFilterTests(BaseAPITestCase):
         self.assertIsNone(resp.data["next"])
         self.assertIsNone(resp.data["previous"])
 
-    def test_adopters_are_blocked_from_adoption_records(self):
-        """The adoption records endpoint stays staff-only; the new status filter
-        does not change access control."""
-        self._make_record(self.pet1, status="completed")
+    def test_adopter_can_list_own_records_but_cannot_export_or_edit(self):
+        """Adopters may read their own records (scoped queryset); the status
+        filter composes with that scoping. Export and edits stay staff-only."""
+        completed_id = self._make_record(self.pet1, status="completed").id
+        self._make_record(self.pet2, status="scheduled")
         self.authenticate(self.adopter)
+
         all_resp = self.client.get("/api/adoptions/")
-        self.assertEqual(all_resp.status_code, 403)
+        self.assertEqual(all_resp.status_code, 200)
+        self.assertEqual(all_resp.data["count"], 2)
+
         filtered_resp = self.client.get("/api/adoptions/?status=completed")
-        self.assertEqual(filtered_resp.status_code, 403)
+        self.assertEqual(filtered_resp.status_code, 200)
+        self.assertEqual(filtered_resp.data["count"], 1)
+        self.assertEqual(str(filtered_resp.data["results"][0]["id"]), str(completed_id))
+
+        # Staff-only operations remain blocked for adopters.
+        export_resp = self.client.get("/api/adoptions/export-pdf/")
+        self.assertEqual(export_resp.status_code, 403)
+        patch_resp = self.client.patch(f"/api/adoptions/{completed_id}/", {"notes": "nope"})
+        self.assertEqual(patch_resp.status_code, 403)
+        delete_resp = self.client.delete(f"/api/adoptions/{completed_id}/")
+        self.assertEqual(delete_resp.status_code, 403)
+
+
+class AdopterAdoptionRecordAccessTests(BaseAPITestCase):
+    """Phase 5.1 - adopters can read their own adoption records but nothing else.
+
+    The adopter portal ships an Adoption Record page (``/adoption/:id``) that
+    retrieves the completed/scheduled record and its permanent transaction ID.
+    This was broken by an over-broad ``IsStaff`` permission that returned 403
+    even for the adopter's own record (the queryset already scoped adopters to
+    ``adopter=user`` but the permission never let them reach it).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.adopter = self.create_user(email="adopter_own_record@example.com")
+        self.other_adopter = self.create_user(email="other_own_record@example.com")
+        self.staff = self.create_staff(email="staff_own_record@example.com")
+        self.pet = Pet.objects.create(name="Rusty", species="dog", age_years=3, status="adopted")
+        self.app = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+        self.record = AdoptionRecord.objects.create(
+            application=self.app, pet=self.pet, adopter=self.adopter,
+            staff_member=self.staff, status=AdoptionRecord.Status.COMPLETED,
+            completed_at=timezone.now(), completed_date=timezone.localdate(),
+            transaction_id="TXN-OWN-RECORD-51",
+        )
+        other_pet = Pet.objects.create(name="Coco", species="cat", age_years=1, status="pending")
+        other_app = Application.objects.create(
+            adopter=self.other_adopter, pet=other_pet, status="approved"
+        )
+        self.other_record = AdoptionRecord.objects.create(
+            application=other_app, pet=other_pet, adopter=self.other_adopter,
+            staff_member=self.staff, status=AdoptionRecord.Status.SCHEDULED,
+        )
+
+    def test_adopter_can_retrieve_own_adoption_record(self):
+        """The adopter portal's Adoption Record page reads the completed record."""
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/adoptions/{self.record.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["transaction_id"], "TXN-OWN-RECORD-51")
+        self.assertEqual(resp.data["status"], "completed")
+        self.assertEqual(resp.data["pet_name"], "Rusty")
+        self.assertEqual(resp.data["adopter_email"], self.adopter.email)
+
+    def test_adopter_cannot_retrieve_another_adopters_record(self):
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/adoptions/{self.other_record.id}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_adopter_cannot_create_update_or_delete_adoption_records(self):
+        self.authenticate(self.adopter)
+        create_resp = self.client.post(
+            "/api/adoptions/", {"application_id": str(self.app.id)}
+        )
+        self.assertEqual(create_resp.status_code, 403)
+        patch_resp = self.client.patch(
+            f"/api/adoptions/{self.record.id}/", {"notes": "nope"}
+        )
+        self.assertEqual(patch_resp.status_code, 403)
+        delete_resp = self.client.delete(f"/api/adoptions/{self.record.id}/")
+        self.assertEqual(delete_resp.status_code, 403)
+
+    def test_adopter_can_list_own_records_only(self):
+        self.authenticate(self.adopter)
+        resp = self.client.get("/api/adoptions/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+        self.assertEqual(resp.data["results"][0]["id"], str(self.record.id))
 
 
 def _extract_pdf_text(content):

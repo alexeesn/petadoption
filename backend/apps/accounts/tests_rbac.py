@@ -282,8 +282,17 @@ class AdopterBlockedFromStaffEndpointsTests(RBACTestCaseBase):
         self.assertEqual(resp.status_code, 403)
 
     # --- Adoptions ---
-    def test_adoption_list_denied(self):
+    def test_adoption_list_allowed_for_own_records_only(self):
+        # Adopters may read their *own* adoption records (queryset-scoped to
+        # adopter=user) — the adopter portal's Adoption Record page depends on
+        # this. It is not a staff listing; adopters still cannot create,
+        # modify, delete, or export adoption records.
         resp = self.client.get("/api/adoptions/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["count"], 1)
+
+    def test_adoption_export_denied(self):
+        resp = self.client.get("/api/adoptions/export-pdf/")
         self.assertEqual(resp.status_code, 403)
 
     def test_adoption_create_denied(self):
