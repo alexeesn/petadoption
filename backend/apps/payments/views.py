@@ -1,3 +1,6 @@
+import uuid
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,6 +8,7 @@ from .constants import PROTOTYPE_ADOPTION_FEE
 from .models import Payment
 from .serializers import PaymentSerializer
 from .services import record_onsite_payment
+from .pdf import build_payment_records_pdf
 from apps.accounts.permissions import IsStaff, IsAdopter
 from apps.notifications.models import create_notification
 
@@ -20,7 +24,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         else:
             qs = Payment.objects.all()
         qs = qs.select_related(
-            "application", "application__adopter", "package", "processed_by"
+            "application", "application__adopter", "application__pet", "package", "processed_by"
         )
         # Optional filter so the onsite transaction for a single application can
         # be loaded from the staff application detail page.
@@ -43,6 +47,51 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def fee(self, request):
         """Return the central prototype adoption fee."""
         return Response({"adoption_fee": str(PROTOTYPE_ADOPTION_FEE)})
+
+    @action(detail=False, methods=["get"], url_path="export-pdf")
+    def export_pdf(self, request):
+        """Staff-only A4 PDF export of payment records matching the current
+        filters.
+
+        Uses the exact same queryset/scoping as the list endpoint (including
+        the ``?status=`` and ``?application=`` filters) but is *not* limited to
+        the current pagination page: the whole matching set is rendered
+        server-side into the PDF, so nothing unbounded is ever fetched into the
+        browser.  Filter parameters are validated explicitly so invalid input
+        returns HTTP 400 instead of a server error.  The report only displays
+        persisted payment data — the frontend never supplies amounts, statuses,
+        or receipt numbers.
+        """
+        status_filter = request.query_params.get("status")
+        if status_filter and status_filter not in Payment.Status.values:
+            return Response(
+                {"status": ["Invalid payment status filter."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        application_id = request.query_params.get("application")
+        if application_id:
+            try:
+                uuid.UUID(str(application_id))
+            except (ValueError, TypeError, AttributeError):
+                return Response(
+                    {"application": ["Invalid application ID."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        payments = list(self.filter_queryset(self.get_queryset()).order_by("created_at"))
+
+        filters = []
+        if status_filter:
+            filters.append(f"Status: {status_filter}")
+        if application_id:
+            filters.append(f"Application: {application_id}")
+
+        pdf_bytes = build_payment_records_pdf(payments, filters=filters)
+
+        filename = f"pawconnect-payment-records-{timezone.localdate().isoformat()}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
     @action(detail=False, methods=["post"], url_path="record-onsite")
     def record_onsite(self, request):

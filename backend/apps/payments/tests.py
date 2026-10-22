@@ -1138,3 +1138,168 @@ class PaymentRecordsApiTests(BaseAPITestCase):
         self.assertEqual(resp.data["count"], 1)
         self.assertEqual(str(resp.data["results"][0]["application"]), str(other_app.id))
         self.assertEqual(resp.data["results"][0]["pet_name"], "Bella")
+
+
+def _extract_pdf_text(content):
+    """Return the joined text of the PDF's content streams.
+
+    ReportLab 5.x writes page content as ``/ASCII85Decode /FlateDecode`` by
+    default, so the raw PDF bytes are not directly searchable. This helper
+    decodes every content stream and joins the text strings (PDF breaks long
+    lines into separate ``(text) Tj`` operators, so joining restores the full
+    strings). Standard library only.
+    """
+    import base64
+    import re
+    import zlib
+
+    def _decode(payload):
+        payload = payload.strip()
+        if payload.endswith(b"~>"):
+            payload = payload[:-2].rstrip()
+        attempts = (
+            lambda: zlib.decompress(base64.a85decode(payload)),
+            lambda: zlib.decompress(payload),
+            lambda: zlib.decompress(payload, -15),
+        )
+        for attempt in attempts:
+            try:
+                return attempt()
+            except Exception:
+                continue
+        return payload
+
+    def _strings(stream):
+        tokens = []
+        for m in re.finditer(rb"\((?:[^()\\]|\\.)*\)", stream):
+            token = m.group(0)[1:-1]
+            token = token.replace(b"\\(", b"(").replace(b"\\)", b")").replace(b"\\\\", b"\\")
+            tokens.append(token)
+        return b"".join(tokens)
+
+    pieces = []
+    # Streams end with ``~>endstream`` (no separating newline) in reportlab 5.
+    for match in re.finditer(rb"stream\r?\n(.*?)endstream", content, re.DOTALL):
+        pieces.append(_strings(_decode(match.group(1))))
+    return b"".join(pieces)
+
+
+class PaymentPdfExportTests(BaseAPITestCase):
+    """Phase 4.1 - staff-authorized A4 PDF export of payment records.
+
+    The report is generated server-side from persisted Payment rows and reuses
+    the list endpoint's queryset + filters, so amounts/statuses/receipts are
+    never supplied by the frontend.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.adopter = self.create_user(email="adopter_pdf41@example.com")
+        self.staff = self.create_staff(email="staff_pdf41@example.com")
+        self.pet = Pet.objects.create(name="Bruno", species="dog", age_years=2, status="available")
+        self.app = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+
+    def _make_payment(self, status="completed", reference="OR-UNIQUE", amount="500.00"):
+        return Payment.objects.create(
+            application=self.app,
+            amount=amount,
+            method="cash",
+            status=status,
+            reference_number=reference,
+            processed_by=self.staff,
+        )
+
+    def test_export_pdf_requires_staff_permissions(self):
+        self._make_payment()
+        # Anonymous
+        self.unauthenticate()
+        resp = self.client.get("/api/payments/export-pdf/")
+        self.assertIn(resp.status_code, [401, 403])
+        # Adopter
+        self.authenticate(self.adopter)
+        resp = self.client.get("/api/payments/export-pdf/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_export_pdf_returns_pdf_attachment(self):
+        payment = self._make_payment(status="completed", reference="REF-PRIMARY-1")
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/payments/export-pdf/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp["Content-Type"].startswith("application/pdf"))
+        self.assertTrue(
+            resp["Content-Disposition"].startswith(
+                'attachment; filename="pawconnect-payment-records-'
+            )
+        )
+        self.assertTrue(resp.content.startswith(b"%PDF-1."))
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(b"PawConnect", text)
+        self.assertIn(b"Payment Records Report", text)
+        # Completed payments carry a backend-generated receipt number, which is
+        # what the report displays (preferred over the reference number).
+        self.assertIn(payment.receipt_number.encode("ascii"), text)
+        self.assertIn(b"Bruno", text)
+        self.assertIn(b"adopter_pdf41@example.com", text)
+        self.assertIn(b"staff_pdf41@example.com", text)
+
+    def test_export_pdf_respects_status_filter(self):
+        completed = self._make_payment(status="completed", reference="REF-COMPLETED-1")
+        self._make_payment(status="pending", reference="REF-PENDING-1")
+        self.authenticate(self.staff)
+
+        resp = self.client.get("/api/payments/export-pdf/?status=completed")
+        self.assertEqual(resp.status_code, 200)
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(completed.receipt_number.encode("ascii"), text)
+        # The pending payment has no receipt and was excluded by the filter, so
+        # its reference must not appear anywhere in the report.
+        self.assertNotIn(b"REF-PENDING-1", text)
+
+        total_text = _extract_pdf_text(
+            self.client.get("/api/payments/export-pdf/?status=completed").content
+        )
+        self.assertIn(b"Total completed payments:", total_text)
+
+    def test_export_pdf_respects_application_filter(self):
+        other_pet = Pet.objects.create(name="Luna", species="cat", age_years=1, status="available")
+        other_app = Application.objects.create(
+            adopter=self.adopter, pet=other_pet, status="approved"
+        )
+        p1 = Payment.objects.create(
+            application=self.app, amount="500.00", method="cash",
+            status="completed", reference_number="REF-APP-1", processed_by=self.staff,
+        )
+        p2 = Payment.objects.create(
+            application=other_app, amount="250.00", method="gcash",
+            status="completed", reference_number="REF-APP-2", processed_by=self.staff,
+        )
+        self.authenticate(self.staff)
+
+        resp = self.client.get(f"/api/payments/export-pdf/?application={other_app.id}")
+        self.assertEqual(resp.status_code, 200)
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(b"Luna", text)
+        self.assertNotIn(b"Bruno", text)
+        self.assertIn(p2.receipt_number.encode("ascii"), text)
+        self.assertNotIn(p1.receipt_number.encode("ascii"), text)
+
+    def test_export_pdf_validates_filter_parameters(self):
+        self.authenticate(self.staff)
+        bad_status = self.client.get("/api/payments/export-pdf/?status=nonsense")
+        self.assertEqual(bad_status.status_code, 400)
+        self.assertIn("status", bad_status.data)
+
+        bad_app = self.client.get("/api/payments/export-pdf/?application=not-a-uuid")
+        self.assertEqual(bad_app.status_code, 400)
+        self.assertIn("application", bad_app.data)
+
+    def test_export_pdf_empty_match_still_returns_valid_pdf(self):
+        self._make_payment(status="completed")
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/payments/export-pdf/?status=refunded")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content.startswith(b"%PDF-1."))
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(b"No payment records match the selected filters.", text)

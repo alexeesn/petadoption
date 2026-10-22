@@ -28,6 +28,13 @@ function shortId(value: string): string {
   return value.length > 8 ? `${value.slice(0, 8)}…` : value;
 }
 
+/** Filename convention for the generated report: pawconnect-payment-records-YYYY-MM-DD.pdf */
+function reportFilename(): string {
+  const today = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `pawconnect-payment-records-${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}.pdf`;
+}
+
 /**
  * Payment Records (read-only browsing).
  *
@@ -49,6 +56,8 @@ export default function PaymentsPage() {
   const [appFilter, setAppFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -89,7 +98,57 @@ export default function PaymentsPage() {
     setAppFilter('');
     setAppInput('');
     setError('');
+    setExportError('');
     setPage(1);
+  };
+
+  /** Download the current-filter payment records as a PDF (all matches, not
+   *  just the visible page) generated server-side by the staff-only endpoint. */
+  const exportPdf = () => {
+    setExporting(true);
+    setExportError('');
+    setError('');
+    const params: Record<string, unknown> = {};
+    if (statusFilter) params.status = statusFilter;
+    if (appFilter) params.application = appFilter;
+    paymentService
+      .exportPdf(params)
+      .then((res) => {
+        const blob = res.data as Blob;
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = reportFilename();
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(async (e: unknown) => {
+        let message = 'Failed to export the PDF.';
+        const data = (e as { response?: { data?: unknown } } | undefined)?.response?.data;
+        if (data instanceof Blob) {
+          try {
+            // DRF validation errors arrive as JSON inside the blob.
+            const parsed = JSON.parse(await data.text()) as Record<string, unknown>;
+            if (typeof parsed.detail === 'string') {
+              message = parsed.detail;
+            } else {
+              const parts: string[] = [];
+              for (const [key, val] of Object.entries(parsed)) {
+                const label = key === 'non_field_errors' ? '' : `${key.replace(/_/g, ' ')}: `;
+                if (Array.isArray(val)) parts.push(`${label}${(val as string[]).join(', ')}`);
+                else if (typeof val === 'string') parts.push(`${label}${val}`);
+              }
+              if (parts.length > 0) message = parts.join(' · ');
+            }
+          } catch {
+            // Not JSON — keep the fallback message.
+          }
+        }
+        setExportError(message);
+      })
+      .finally(() => setExporting(false));
   };
 
   return (
@@ -129,10 +188,23 @@ export default function PaymentsPage() {
             Clear filters
           </Button>
         )}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={exportPdf}
+          disabled={exporting}
+        >
+          {exporting ? 'Preparing PDF…' : 'Export PDF'}
+        </Button>
       </form>
       {appInputInvalid && (
         <p role="alert" className="mb-3 text-sm text-red-600">
           Enter a valid application ID (UUID) or leave the field empty.
+        </p>
+      )}
+      {exportError && (
+        <p role="alert" className="mb-3 text-sm text-red-600">
+          {exportError}
         </p>
       )}
 

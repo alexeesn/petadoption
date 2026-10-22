@@ -198,6 +198,12 @@ export const paymentService = {
   // generates the receipt number, and never trusts client-supplied status or
   // receipt values — the UI only sends what was actually received.
   recordOnsite: (data: Record<string, unknown>) => api.post('/payments/record-onsite/', data),
+  // Staff-only PDF export matching the active ?status=/?application= filters.
+  // The backend renders the report server-side for the whole matching set (not
+  // just the current pagination page) and the response is an application/pdf
+  // blob with a Content-Disposition attachment filename.
+  exportPdf: (params?: Record<string, unknown>) =>
+    api.get('/payments/export-pdf/', { params, responseType: 'blob' }),
 };
 
 // ----- Reports -----
