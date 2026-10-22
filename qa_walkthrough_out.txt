@@ -1,0 +1,99 @@
+﻿
+=== 1. Registration + email verification ===
+[PASS] register returns 201 -- got 201 {"message":"Registration successful. Please check your email for verification code."}
+[PASS] unverified login blocked with 403 -- got 403
+[PASS] email verification accepts the OTP -- got 200 {"message":"Email verified successfully.","token":"bbeb86b376ec3af834403bd9355def593ba692ce","user":{"id":"325af9ff-7a05-4d45-8cc0-f281b6ee12b3","email":"qa_adopter_1cc3ad76@example.com","first_name":
+[PASS] login works after verification -- got 200
+
+=== 2. Staff account + available pet ===
+[PASS] staff login works -- got 200
+[PASS] staff creates an available pet -- got 201 {"id":"722b60b7-19d0-4a8f-ae0a-9e8dabdb2215","name":"QA Dog","species":"dog","breed":"","age_years":2,"age_months":0,"gender":"unknown","size":"medium","weight_kg":null,"color":"","description":"","arrival_date":null,"status":"available","is_vaccinated":false,"is_neutered":false,"images":[],"health_
+[PASS] create response returns id and status -- {'id': '722b60b7-19d0-4a8f-ae0a-9e8dabdb2215', 'name': 'QA Dog', 'species': 'dog', 'breed': '', 'age_years': 2, 'age_months': 0, 'gender': 'unknown', 'size': 'medium', 'weight_kg': None, 'color': '', 
+
+=== 3. Adopter profile gate ===
+[PASS] incomplete profile blocks application (400) -- got 400 {"profile":["Your profile information is incomplete. Please update and save your profile before starting an adoption application. Missing: phone_number, address_line1, city, state, zip_code, housing_t
+[PASS] adopter can complete the profile (200) -- got 200 {"id":"e87fa770-1b9b-4ce7-a0cf-ef6a3d3c199b","user_email":"qa_adopter_1cc3ad76@example.com","user_name":"QA Adopter","phone_number":"+63 900 000 0000","address_line1":"123 Test Street","address_line2":"","region":"National Capital Region (NCR)","city":"City of Manila","state":"","barangay":"Barangay
+
+=== 4. Browse + submit application ===
+[PASS] available pet appears in the public listing -- got 200 count=1
+[PASS] application submitted (201) -- got 201 {"id":"152258e2-58e4-42b9-ba2d-99307ac8704c","adopter":"325af9ff-7a05-4d45-8cc0-f281b6ee12b3","adopter_email":"qa_adopter_1cc3ad76@example.com","adopter_name":"QA Adopter","adopter_profile":{"id":"e87fa770-1b9b-4ce7-a0cf-ef6a3d3c199b","user_email":"qa_adopter_1cc3ad76@example.com","user_name":"QA Adopter","phone_number":"+63 900 000 0000","address_line1":"123 Test Street","address_line2":"","regio
+[PASS] create response includes id and status -- {'id': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'adopter': '325af9ff-7a05-4d45-8cc0-f281b6ee12b3', 'adopter_email': 'qa_adopter_1cc3ad76@example.com', 'adopter_name': 'QA Adopter', 'adopter_profile': {'id': 'e87fa770-1b9b-4ce7-a0cf-ef6a3d3c199b', 'use
+[PASS] create response includes the 4 documents -- 4
+
+=== 5. Document privacy + MIME/size validation ===
+[PASS] rejected extension is refused (400) -- got 400 {"file":["File type '.exe' is not allowed."]}
+[PASS] accepted extension with matching MIME is stored (201) -- got 201 {"id":"8c0ce144-bd9a-42f5-a075-bc0cb9e6bb56","application":"152258e2-58e4-42b9-ba2d-99307ac8704c","application_pet":"QA Dog","document_type":"other","file":"http://127.0.0.1:8099/media/documents/15225
+[PASS] adopter only sees documents of their own application -- got 200 count=5
+
+=== 6. RBAC: adopter cannot reach staff resources ===
+[PASS] adopter blocked from /api/reviews/ -- got 403
+[PASS] adopter blocked from /api/health-records/ -- got 403
+[PASS] adopter blocked from /api/reports/adoptions/ -- got 403
+[PASS] adopter blocked from /api/audit/ -- got 403
+[PASS] adopter blocked from /api/adopters/ -- got 403
+[PASS] adopter cannot self-approve an application (403) -- got 403
+
+=== 7. Staff review + approval ===
+[PASS] staff approve returns 201 -- got 201 {"id":"692b71fe-1ccc-41ce-9bcb-8084daddeb22","application":"152258e2-58e4-42b9-ba2d-99307ac8704c","reviewer":"21ddb7ce-68c8-49a7-aef1-1b27587d0ec4","reviewer_email":"qa_staff_1cc3ad76@example.com","decision":"approve","internal_notes":"Internal only"
+[PASS] application status is approved -- approved
+[PASS] pet moved to pending after approval -- pending
+[PASS] internal_notes never serialized to the adopter -- []
+
+=== 8. Appointment + adoption record scheduling ===
+[PASS] adopter books an onsite visit (201) -- got 201 {"id":"1cbd7675-b7ae-40c3-8501-6f89c4c97d77","application":"152258e2-58e4-42b9-ba2d-99307ac8704c","adopter":"325af9ff-7a05-4d45-8cc0-f281b6ee12b3","adopter_email":"qa_adopter_1cc3ad76@example.com","adopter_name":"QA Adopter","pet":"722b60b7-19d0-4a8f-ae0a-9e8dabdb2215","pet_name":"QA Dog","requested
+[PASS] staff confirms the visit (200) -- got 200 {"id":"1cbd7675-b7ae-40c3-8501-6f89c4c97d77","application":"152258e2-58e4-42b9-ba2d-99307ac8704c","adopter":"325af9ff-7a05-4d45-8cc0-f281b6ee12b3","adopter_email":"qa_adopter_1cc3ad76@example.com","adopter_name":"QA Adopter","pet":"722b60b7-19d0-4a8f-ae0a-9e8dabdb2215","pet_name":"QA Dog","requested
+[PASS] exactly one adoption record was created and scheduled -- [{'id': '010b5aa4-8850-4245-8567-f1fcdced6ddf', 'transaction_id': None, 'application_id': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'pet': '722b60b7-19d0-4a8f-ae0a-9e8dabdb2215', 'pet_name': 'QA Dog', 'adopter': '325af9ff-7a05-4d45-8cc0-f281b6ee12b3', 
+
+=== 9. Payment rules (fee required for turnover) ===
+[PASS] payment summary reports the fee as unpaid -- {'application_id': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'adoption_fee': '500.00', 'total_paid': '0.00', 'is_fee_paid': False, 'turnover_eligible': False, 'payments': []}
+[FAIL] turnover blocked while the fee is unpaid (400) -- got 403 {"detail":"You do not have permission to perform this action."}
+[PASS] adopter cannot record a payment (403) -- got 403
+[PASS] staff records the onsite payment (201) -- got 201 {"id":"b348c628-0a65-486b-ad93-178c62af72f7","application":"152258e2-58e4-42b9-ba2d-99307ac8704c","application_id":"152258e2-58e4-42b9-ba2d-99307ac8704c","adopter_email":"qa_adopter_1cc3ad76@example.com","adoption":null,"package":null,"package_name":null,"amount":"500.00","adoption_fee":"500.00","me
+[PASS] completed payment gets a permanent receipt number -- {'id': 'b348c628-0a65-486b-ad93-178c62af72f7', 'application': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'application_id': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'adopter_email': 'qa_adopter_1cc3ad76@example.com', 'adoption': None, 'package': None, 'pa
+[PASS] payment summary now reports the fee as paid -- {'application_id': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'adoption_fee': '500.00', 'total_paid': '500.00', 'is_fee_paid': True, 'turnover_eligible': True, 'payments': [{'id': 'b348c628-0a65-486b-ad93-178c62af72f7', 'application': '152258e2-58e4-42b
+
+=== 10. Handover confirmation + adoption completion ===
+[PASS] turnover without confirmation is refused (400) -- got 400 {"error":"Explicit physical handover confirmation is required (confirmed: true)."}
+[PASS] turnover with confirmation completes the adoption (200) -- got 200 {"id":"152258e2-58e4-42b9-ba2d-99307ac8704c","adopter":"325af9ff-7a05-4d45-8cc0-f281b6ee12b3","adopter_email":"qa_adopter_1cc3ad76@example.com","adopter_name":"QA Adopter","adopter_profile":{"id":"e87fa770-1b9b-4ce7-a0cf-ef6a3d3c199b","user_email":"qa_adopter_1cc3ad76@example.com","user_name":"QA Ad
+[PASS] still exactly one adoption record -- count=1
+[PASS] adoption record is completed with a transaction id -- {'id': '010b5aa4-8850-4245-8567-f1fcdced6ddf', 'transaction_id': 'TXN-1BDCACFBB6CF', 'application_id': '152258e2-58e4-42b9-ba2d-99307ac8704c', 'pet': '722b60b7-19d0-4a8f-ae0a-9e8dabdb2215', 'pet_name': 'QA Dog', 'adopter': '325af9ff-7a05-4d45-8cc0-f2
+[PASS] pet status synced to adopted -- adopted
+[PASS] adopted pet is gone from the available listing -- []
+
+=== 11. Adopter ownership boundaries ===
+[PASS] adopter can read their own adoption record (200) -- got 200
+[PASS] adopter cannot modify the adoption record (403) -- got 403
+[PASS] another adopter cannot read the application (404/403) -- got 404
+[PASS] another adopter cannot read the adoption record (404/403) -- got 404
+[PASS] another adopter sees none of the documents -- got 200 count=0
+
+=== 12. Notifications + audit trail ===
+[PASS] adopter received lifecycle notifications -- ['Adoption Completed', 'Payment Confirmed', 'Appointment Confirmed', 'Application Approved', 'Application Submitted']
+[FAIL] audit log captured the state changes -- []
+
+=== 13. Reports + exports ===
+[PASS] staff can read the adoptions report -- got 200 {"stats":{"total":1,"completed":1,"scheduled":0,"cancelled":0,"returned":0},"results":[{"id":"010b5aa4-8850-4245-8567-f1fcdced6ddf","transaction_id":"
+[PASS] staff can read the pets report -- got 200 {"stats":{"total":1,"by_status":{"adopted":1},"by_species":{"dog":1}},"total":1}
+[PASS] staff can read the adopters report -- got 200 {"stats":{"total_adopters":2,"verified":2}}
+[PASS] staff can read the applications report -- got 200 {"stats":{"total":1,"by_status":{"adoption_completed":1}},"total":1}
+[PASS] staff can read the health report -- got 200 {"stats":{"total_health_records":0,"total_vaccinations":0,"overdue_vaccinations":0}}
+[PASS] staff can read the payments report -- got 200 {"stats":{"total":1,"completed":1,"total_revenue":"500.00"}}
+[PASS] adoption report CSV export works -- got 200 text/csv
+
+=== 14. Free adoption (no package -> no payment required) ===
+[PASS] staff creates a zero-price package -- got 201 {"id":"7f54bf37-481a-436a-b75b-2f3f98154497","name":"QA Free Pack 1cc3ad76","description":"Free","price":"0.00","inclusions":[],"is_active":true,"created_at":"2026-10-22T05:32:02.863970Z","updated_at"
+
+=== 15. Password reset + account lockout ===
+[PASS] forgot password accepted (200) -- got 200 {"message":"If the email exists, a reset code has been sent."}
+[PASS] password reset with a valid OTP works (200) -- got 200 {"message":"Password reset successfully."}
+[PASS] login with the new password works -- got 200
+[FAIL] account is locked after repeated failed logins (403) -- got 423 {"error":"Account locked. Try again in 30 minute(s)."}
+
+=== SUMMARY ===
+
+57/60 checks passed
+FAILED CHECKS:
+  - turnover blocked while the fee is unpaid (400)
+  - audit log captured the state changes
+  - account is locked after repeated failed logins (403)
+CLEANUP IDS: 152258e2-58e4-42b9-ba2d-99307ac8704c 722b60b7-19d0-4a8f-ae0a-9e8dabdb2215 010b5aa4-8850-4245-8567-f1fcdced6ddf 7f54bf37-481a-436a-b75b-2f3f98154497 qa_adopter_1cc3ad76@example.com qa_staff_1cc3ad76@example.com qa_other_1cc3ad76@example.com
