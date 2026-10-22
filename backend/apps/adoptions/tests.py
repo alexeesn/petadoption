@@ -979,3 +979,154 @@ class AdoptionRecordsFilterTests(BaseAPITestCase):
         filtered_resp = self.client.get("/api/adoptions/?status=completed")
         self.assertEqual(filtered_resp.status_code, 403)
 
+
+def _extract_pdf_text(content):
+    """Return the joined text of the PDF's content streams.
+
+    ReportLab 5.x writes page content as ``/ASCII85Decode /FlateDecode`` by
+    default, so the raw PDF bytes are not directly searchable. This helper
+    decodes every content stream and joins the text strings (PDF breaks long
+    lines into separate ``(text) Tj`` operators, so joining restores the full
+    strings). Standard library only. Duplicated from ``apps.payments.tests``
+    to keep the adoption test module self-contained.
+    """
+    import base64
+    import re
+    import zlib
+
+    def _decode(payload):
+        payload = payload.strip()
+        if payload.endswith(b"~>"):
+            payload = payload[:-2].rstrip()
+        attempts = (
+            lambda: zlib.decompress(base64.a85decode(payload)),
+            lambda: zlib.decompress(payload),
+            lambda: zlib.decompress(payload, -15),
+        )
+        for attempt in attempts:
+            try:
+                return attempt()
+            except Exception:
+                continue
+        return payload
+
+    def _strings(stream):
+        tokens = []
+        for m in re.finditer(rb"\((?:[^()\\]|\\.)*\)", stream):
+            token = m.group(0)[1:-1]
+            token = token.replace(b"\\(", b"(").replace(b"\\)", b")").replace(b"\\\\", b"\\")
+            tokens.append(token)
+        return b"".join(tokens)
+
+    pieces = []
+    # Streams end with ``~>endstream`` (no separating newline) in reportlab 5.
+    for match in re.finditer(rb"stream\r?\n(.*?)endstream", content, re.DOTALL):
+        pieces.append(_strings(_decode(match.group(1))))
+    return b"".join(pieces)
+
+
+class AdoptionPdfExportTests(BaseAPITestCase):
+    """Phase 4.2 - staff-authorized A4 PDF export of adoption records.
+
+    The report is generated server-side from persisted AdoptionRecord rows and
+    reuses the list endpoint's queryset + ``?status=`` filter, so transaction
+    IDs and statuses are read-only here (never generated or modified).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.adopter = self.create_user(email="adopter_pdf42@example.com")
+        self.staff = self.create_staff(email="staff_pdf42@example.com")
+        self.pet = Pet.objects.create(name="Max", species="dog", age_years=2, status="adopted")
+        self.app = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+        self.appointment = Appointment.objects.create(
+            application=self.app, pet=self.pet, adopter=self.adopter,
+            requested_date=timezone.localdate(), status=Appointment.Status.CONFIRMED,
+        )
+        self.completed = AdoptionRecord.objects.create(
+            application=self.app, pet=self.pet, adopter=self.adopter,
+            staff_member=self.staff, status=AdoptionRecord.Status.COMPLETED,
+            appointment=self.appointment,
+            completed_at=timezone.now(), completed_date=timezone.localdate(),
+            transaction_id="TXN-ADOPT-42-COMPLETE",
+        )
+        self.scheduled_pet = Pet.objects.create(
+            name="Bella", species="cat", age_years=1, status="pending"
+        )
+        self.scheduled_app = Application.objects.create(
+            adopter=self.adopter, pet=self.scheduled_pet, status="approved"
+        )
+        self.scheduled = AdoptionRecord.objects.create(
+            application=self.scheduled_app, pet=self.scheduled_pet, adopter=self.adopter,
+            staff_member=self.staff, status=AdoptionRecord.Status.SCHEDULED,
+            adoption_date=timezone.localdate(),
+        )
+    def test_export_pdf_requires_staff_permissions(self):
+        self.unauthenticate()
+        resp = self.client.get("/api/adoptions/export-pdf/")
+        self.assertIn(resp.status_code, [401, 403])
+        # Adopters are blocked by IsStaff (this is a staff-only endpoint).
+        self.authenticate(self.adopter)
+        resp = self.client.get("/api/adoptions/export-pdf/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_export_pdf_returns_pdf_attachment_with_fields(self):
+        self.authenticate(self.staff)
+        snapshot = (
+            self.completed.transaction_id, self.completed.status, self.completed.completed_at,
+        )
+        resp = self.client.get("/api/adoptions/export-pdf/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp["Content-Type"].startswith("application/pdf"))
+        self.assertTrue(
+            resp["Content-Disposition"].startswith(
+                'attachment; filename="pawconnect-adoption-records-'
+            )
+        )
+        self.assertTrue(resp.content.startswith(b"%PDF-1."))
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(b"PawConnect", text)
+        self.assertIn(b"Adoption Records Report", text)
+        self.assertIn(b"TXN-ADOPT-42-COMPLETE", text)
+        self.assertIn(b"Max", text)
+        self.assertIn(b"adopter_pdf42@example.com", text)
+        self.assertIn(b"staff_pdf42@example.com", text)
+        # The appointment date is included when a record has a stored visit.
+        self.assertIn(timezone.localdate().isoformat().encode("ascii"), text)
+        # Real statuses are displayed, and the summary reports both statuses.
+        self.assertIn(b"Scheduled", text)
+        self.assertIn(b"Completed", text)
+        self.assertIn(b"Total adoption records: 2", text)
+        # The export must never mutate records or invent transaction IDs.
+        self.completed.refresh_from_db()
+        self.assertEqual(
+            (self.completed.transaction_id, self.completed.status, self.completed.completed_at),
+            snapshot,
+        )
+        self.scheduled.refresh_from_db()
+        self.assertIsNone(self.scheduled.transaction_id)
+    def test_export_pdf_respects_status_filter(self):
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/adoptions/export-pdf/?status=completed")
+        self.assertEqual(resp.status_code, 200)
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(b"TXN-ADOPT-42-COMPLETE", text)
+        self.assertNotIn(b"Bella", text)  # scheduled pet excluded by the filter
+        self.assertIn(b"Total adoption records: 1", text)
+
+    def test_export_pdf_validates_status_filter(self):
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/adoptions/export-pdf/?status=not-a-real-status")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+
+    def test_export_pdf_empty_match_still_returns_valid_pdf(self):
+        self.authenticate(self.staff)
+        resp = self.client.get("/api/adoptions/export-pdf/?status=returned")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.content.startswith(b"%PDF-1."))
+        text = _extract_pdf_text(resp.content)
+        self.assertIn(b"No adoption records match the selected filters.", text)
+

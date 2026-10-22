@@ -20,6 +20,13 @@ function shortId(value: string): string {
   return value.length > 8 ? `${value.slice(0, 8)}…` : value;
 }
 
+/** Filename convention for the generated report: pawconnect-adoption-records-YYYY-MM-DD.pdf */
+function reportFilename(): string {
+  const today = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `pawconnect-adoption-records-${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}.pdf`;
+}
+
 /**
  * Adoption Records (read-only browsing).
  *
@@ -39,6 +46,8 @@ export default function AdoptionsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const load = () => {
     setLoading(true);
@@ -62,7 +71,56 @@ export default function AdoptionsPage() {
 
   const clearFilters = () => {
     setStatusFilter('');
+    setExportError('');
     setPage(1);
+  };
+
+  /** Download the current-filter adoption records as a PDF (all matches, not
+   *  just the visible page) generated server-side by the staff-only endpoint. */
+  const exportPdf = () => {
+    setExporting(true);
+    setExportError('');
+    setError('');
+    const params: Record<string, unknown> = {};
+    if (statusFilter) params.status = statusFilter;
+    adoptionService
+      .exportPdf(params)
+      .then((res) => {
+        const blob = res.data as Blob;
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = reportFilename();
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(async (e: unknown) => {
+        let message = 'Failed to export the PDF.';
+        const data = (e as { response?: { data?: unknown } } | undefined)?.response?.data;
+        if (data instanceof Blob) {
+          try {
+            // DRF validation errors arrive as JSON inside the blob.
+            const parsed = JSON.parse(await data.text()) as Record<string, unknown>;
+            if (typeof parsed.detail === 'string') {
+              message = parsed.detail;
+            } else {
+              const parts: string[] = [];
+              for (const [key, val] of Object.entries(parsed)) {
+                const label = key === 'non_field_errors' ? '' : `${key.replace(/_/g, ' ')}: `;
+                if (Array.isArray(val)) parts.push(`${label}${(val as string[]).join(', ')}`);
+                else if (typeof val === 'string') parts.push(`${label}${val}`);
+              }
+              if (parts.length > 0) message = parts.join(' · ');
+            }
+          } catch {
+            // Not JSON — keep the fallback message.
+          }
+        }
+        setExportError(message);
+      })
+      .finally(() => setExporting(false));
   };
 
   return (
@@ -87,7 +145,19 @@ export default function AdoptionsPage() {
             Clear filters
           </Button>
         )}
+        <Button
+          variant="secondary"
+          onClick={exportPdf}
+          disabled={exporting}
+        >
+          {exporting ? 'Preparing PDF…' : 'Export PDF'}
+        </Button>
       </div>
+      {exportError && (
+        <p role="alert" className="mb-4 text-sm text-red-600">
+          {exportError}
+        </p>
+      )}
 
       <p className="mb-2 text-xs text-slate-500">
         Status legend:{' '}

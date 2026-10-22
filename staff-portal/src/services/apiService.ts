@@ -169,6 +169,11 @@ export const adoptionService = {
   create: (data: Record<string, unknown>) => api.post('/adoptions/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/adoptions/${id}/`, data),
   retrieve: (id: string) => api.get(`/adoptions/${id}/`),
+  // Staff-only PDF export matching the active ?status= filter. The backend
+  // renders the whole matching set server-side (not just the current page) and
+  // returns an application/pdf blob with a Content-Disposition attachment name.
+  exportPdf: (params?: Record<string, unknown>) =>
+    api.get('/adoptions/export-pdf/', { params, responseType: 'blob' }),
 };
 
 // ----- Appointments (onsite visit dates) -----

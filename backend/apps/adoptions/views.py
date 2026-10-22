@@ -1,12 +1,15 @@
 from rest_framework import generics, viewsets, permissions, status
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.http import HttpResponse
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from .models import AdoptionRecord, _generate_transaction_id
 from .serializers import AdoptionRecordSerializer, AdoptionCreateSerializer
 from .services import is_handover_confirmed, complete_application_adoption
+from .pdf import build_adoption_records_pdf
 from apps.accounts.permissions import IsStaff
 from apps.notifications.models import create_notification
 
@@ -30,6 +33,34 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
         if status:
             qs = qs.filter(status=status)
         return qs
+
+    @action(detail=False, methods=["get"], url_path="export-pdf")
+    def export_pdf(self, request):
+        """Staff-only A4 PDF export of adoption records matching ``?status=``.
+
+        Mirrors the payment records export: the same queryset/scoping as the
+        list endpoint is reused (staff see all records; adopters are blocked by
+        ``IsStaff``), the whole matching set is rendered server-side (not just
+        the current pagination page), and nothing is ever mutated — in
+        particular, transaction IDs are only read here, never generated or
+        modified (that happens exclusively in the completion service).
+        """
+        status_filter = request.query_params.get("status")
+        if status_filter and status_filter not in AdoptionRecord.Status.values:
+            return Response(
+                {"status": ["Invalid adoption record status filter."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        records = list(self.filter_queryset(self.get_queryset()).order_by("created_at"))
+        filters = [f"Status: {status_filter}"] if status_filter else []
+
+        pdf_bytes = build_adoption_records_pdf(records, filters=filters)
+
+        filename = f"pawconnect-adoption-records-{timezone.localdate().isoformat()}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
 
     def create(self, request, *args, **kwargs):
         """Create adoption record from approved application.
