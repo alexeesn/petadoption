@@ -98,16 +98,17 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
             status=Appointment.Status.CONFIRMED,
         )
 
-    def record_payment(self, application=None, status_value="completed"):
+    def record_payment(self, application=None):
+        """Record the onsite fee through the canonical staff-only endpoint."""
         application = application or self.application
         self.authenticate(self.staff)
         return self.client.post(
-            "/api/payments/",
+            "/api/payments/record-onsite/",
             {
                 "application": str(application.id),
                 "amount": self.ADOPTION_FEE,
                 "method": "cash",
-                "status": status_value,
+                "payment_received": True,
                 "payment_date": timezone.localdate().isoformat(),
                 "reference_number": "OR-1234",
             },
@@ -128,14 +129,19 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
     # ----- recording the onsite payment ---------------------------------
 
     def test_recording_onsite_payment_persists_details_only(self):
-        resp = self.record_payment(status_value="pending")
+        """The canonical onsite flow stores the payment without completing the
+        adoption by itself; the backend forces status=completed and generates
+        the receipt number server-side."""
+        resp = self.record_payment()
         self.assertEqual(resp.status_code, 201)
 
         payment = Payment.objects.get()
         self.assertEqual(payment.amount, Decimal(self.ADOPTION_FEE))
         self.assertEqual(payment.method, "cash")
-        # The staff member's explicit choice is stored, not assumed.
-        self.assertEqual(payment.status, "pending")
+        # status is decided by the canonical flow (money received), never by
+        # the client.
+        self.assertEqual(payment.status, "completed")
+        self.assertTrue(payment.receipt_number.startswith("REC-"))
         self.assertEqual(payment.payment_date, timezone.localdate())
         self.assertEqual(payment.reference_number, "OR-1234")
         self.assertIsNone(payment.adoption_id)
@@ -316,7 +322,6 @@ class PaymentCreationRegressionTests(BaseAPITestCase):
             "application": str(self.application.id),
             "amount": self.ADOPTION_FEE,
             "method": "cash",
-            "status": "completed",
             "payment_date": timezone.localdate().isoformat(),
             "reference_number": "OR-2026-0001",
             "notes": "Onsite cash payment",
@@ -326,12 +331,14 @@ class PaymentCreationRegressionTests(BaseAPITestCase):
         return self.client.post("/api/payments/", payload, format="json")
 
     def test_valid_cash_payment_creation(self):
-        resp = self._create_payment(method="cash", status="completed")
+        # Generic create without a status stores the model default ("pending");
+        # completion is reserved for the canonical onsite flow.
+        resp = self._create_payment(method="cash")
         self.assertEqual(resp.status_code, 201)
         payment = Payment.objects.get()
         self.assertEqual(payment.amount, Decimal("500.00"))
         self.assertEqual(payment.method, "cash")
-        self.assertEqual(payment.status, "completed")
+        self.assertEqual(payment.status, "pending")
         self.assertEqual(payment.payment_date, timezone.localdate())
         self.assertEqual(payment.reference_number, "OR-2026-0001")
         self.assertEqual(payment.notes, "Onsite cash payment")
@@ -351,11 +358,25 @@ class PaymentCreationRegressionTests(BaseAPITestCase):
             resp = self._create_payment(method=method)
             self.assertEqual(resp.status_code, 201, f"method='{method}' rejected: {resp.data}")
 
-    def test_all_valid_statuses_accepted(self):
-        for status in ["pending", "completed", "failed", "refunded", "cancelled"]:
+    def test_completed_status_rejected_on_generic_create(self):
+        """Generic create cannot mark a payment completed (that is reserved for
+        the canonical onsite flow after the money is actually received)."""
+        self.authenticate(self.staff)
+        resp = self._create_payment(status="completed")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_other_statuses_accepted_on_generic_create(self):
+        """Non-completed statuses remain valid for generic create so staff can
+        record pending/failed/refunded/cancelled records; none of them count as
+        money received."""
+        for status in ["pending", "failed", "refunded", "cancelled"]:
             Payment.objects.all().delete()
             resp = self._create_payment(status=status)
             self.assertEqual(resp.status_code, 201, f"status='{status}' rejected: {resp.data}")
+            self.assertEqual(Payment.objects.get().status, status)
+            self.assertEqual(Payment.objects.get().receipt_number, "")
 
     def test_payment_without_optional_fields(self):
         resp = self._create_payment(payment_date=None, reference_number="", notes="")
@@ -551,9 +572,16 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         self.assertEqual(Payment.objects.count(), 0)
 
     def test_client_supplied_status_and_reference_fields_cannot_forge_completed_receipt(self):
-        """Backend does not trust client-supplied receipt_number or status forgery."""
+        """Receipt numbers stay server-controlled and client input cannot forge
+        a completed payment through the generic endpoint.
+
+        Generic create rejects the completion attempt entirely (Phase 5.2); the
+        canonical onsite endpoint accepts the client's amount/method but always
+        generates its own receipt and forces status=completed.
+        """
         self.authenticate(self.staff)
-        resp = self.client.post(
+        # Generic create: the forged-completed attempt is rejected outright.
+        resp_gen = self.client.post(
             "/api/payments/",
             {
                 "application": str(self.application.id),
@@ -564,10 +592,29 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
             },
             format="json",
         )
+        self.assertEqual(resp_gen.status_code, 400)
+        self.assertEqual(Payment.objects.count(), 0)
+
+        # Canonical onsite flow: a client-supplied receipt_number is ignored and
+        # the backend generates the permanent receipt.
+        resp = self.client.post(
+            "/api/payments/record-onsite/",
+            {
+                "application": str(self.application.id),
+                "amount": "500.00",
+                "method": "cash",
+                "payment_received": True,
+                "notes": "client tries to downgrade status",
+                "status": "pending",  # ignored
+                "receipt_number": "FORGED-REC-FAKE123",  # ignored
+            },
+            format="json",
+        )
         self.assertEqual(resp.status_code, 201)
-        # The client-supplied receipt_number was ignored/overwritten by the server
-        self.assertNotEqual(resp.data["receipt_number"], "FORGED-REC-FAKE123")
-        self.assertTrue(resp.data["receipt_number"].startswith("REC-"))
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, "completed")
+        self.assertNotEqual(payment.receipt_number, "FORGED-REC-FAKE123")
+        self.assertTrue(payment.receipt_number.startswith("REC-"))
 
     def test_unauthorized_users_cannot_record_payments(self):
         """Adopters and anonymous users cannot record payments or mark payments completed."""
@@ -1044,21 +1091,23 @@ class Phase21PaymentReassignmentTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_create_new_payment_for_different_application_is_allowed(self):
-        """Creating a new payment for any application is always allowed."""
+        """Creating a new payment for any application is always allowed
+        (through the canonical onsite flow)."""
         self.authenticate(self.staff)
         resp = self.client.post(
-            "/api/payments/",
+            "/api/payments/record-onsite/",
             {
                 "application": str(self.app2.id),
                 "amount": self.ADOPTION_FEE,
                 "method": "gcash",
-                "status": "completed",
+                "payment_received": True,
             },
             format="json",
         )
         self.assertEqual(resp.status_code, 201)
         new_payment = Payment.objects.get(application=self.app2)
         self.assertEqual(new_payment.application, self.app2)
+        self.assertEqual(new_payment.status, "completed")
 
 
 class PaymentRecordsApiTests(BaseAPITestCase):
@@ -1303,3 +1352,144 @@ class PaymentPdfExportTests(BaseAPITestCase):
         self.assertTrue(resp.content.startswith(b"%PDF-1."))
         text = _extract_pdf_text(resp.content)
         self.assertIn(b"No payment records match the selected filters.", text)
+
+
+class PaymentIntegrityGateTests(BaseAPITestCase):
+    """Phase 5.2 - payment integrity.
+
+    Only the canonical onsite flow (``record-onsite`` / ``record_onsite_payment``)
+    may mark a payment completed, after staff confirm the money was actually
+    received. Client input cannot complete a payment through the generic create
+    or PATCH/PUT updates, receipts and totals stay server-controlled, and only
+    completed payments count toward the fee and turnover eligibility.
+    """
+
+    ADOPTION_FEE = "500.00"
+
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Pongo", species="dog", age_years=2, status="pending")
+        self.adopter = self.create_user(email="adopter_pi52@example.com")
+        self.staff = self.create_staff(email="staff_pi52@example.com")
+        self.app = Application.objects.create(
+            adopter=self.adopter, pet=self.pet, status="approved"
+        )
+
+    def _pending(self):
+        return Payment.objects.create(
+            application=self.app, amount="100.00", method="cash",
+            status="pending", processed_by=self.staff,
+        )
+
+    def _completed(self):
+        return Payment.objects.create(
+            application=self.app, amount="500.00", method="cash",
+            status="completed", processed_by=self.staff,
+        )
+
+    def test_generic_create_cannot_mark_payment_completed(self):
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            "/api/payments/",
+            {"application": str(self.app.id), "amount": "500.00",
+             "method": "cash", "status": "completed"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("status", resp.data)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_patch_cannot_mark_pending_payment_completed(self):
+        payment = self._pending()
+        self.authenticate(self.staff)
+        resp = self.client.patch(
+            f"/api/payments/{payment.id}/", {"status": "completed"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 400)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "pending")
+        self.assertEqual(payment.receipt_number, "")
+
+    def test_put_cannot_mark_pending_payment_completed(self):
+        payment = self._pending()
+        self.authenticate(self.staff)
+        resp = self.client.put(
+            f"/api/payments/{payment.id}/",
+            {"application": str(self.app.id), "amount": "100.00",
+             "method": "cash", "status": "completed"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "pending")
+
+    def test_completed_to_refunded_remains_allowed(self):
+        payment = self._completed()
+        self.authenticate(self.staff)
+        resp = self.client.patch(
+            f"/api/payments/{payment.id}/", {"status": "refunded"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 200)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "refunded")
+
+    def test_pending_to_failed_remains_allowed(self):
+        payment = self._pending()
+        self.authenticate(self.staff)
+        resp = self.client.patch(
+            f"/api/payments/{payment.id}/", {"status": "failed"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 200)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "failed")
+
+    def test_only_completed_payments_count_toward_totals(self):
+        self._pending()  # ₱100 pending - never counts
+        Payment.objects.create(
+            application=self.app, amount="50.00", method="cash",
+            status="failed", processed_by=self.staff,
+        )  # ₱50 failed - never counts
+        self._completed()  # ₱500 completed - counts
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/applications/{self.app.id}/payment-summary/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["total_paid"], "500.00")
+        self.assertTrue(resp.data["is_fee_paid"])
+        # No confirmed appointment yet, so turnover is not eligible.
+        self.assertFalse(resp.data["turnover_eligible"])
+
+    def test_pending_only_application_is_not_fee_paid(self):
+        self._pending()
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/applications/{self.app.id}/payment-summary/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["total_paid"], "0.00")
+        self.assertFalse(resp.data["is_fee_paid"])
+
+    def test_canonical_onsite_flow_still_records_completed_with_server_receipt(self):
+        self.authenticate(self.staff)
+        resp = self.client.post(
+            "/api/payments/record-onsite/",
+            {"application": str(self.app.id), "amount": self.ADOPTION_FEE,
+             "method": "cash", "payment_received": True},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, "completed")
+        self.assertTrue(payment.receipt_number.startswith("REC-"))
+
+    def test_adopter_cannot_complete_or_create_payments(self):
+        self._pending()
+        self.authenticate(self.adopter)
+        resp = self.client.post(
+            "/api/payments/",
+            {"application": str(self.app.id), "amount": "500.00",
+             "method": "cash", "status": "completed"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+        resp2 = self.client.patch(
+            f"/api/payments/{Payment.objects.get().id}/", {"status": "completed"}
+        )
+        self.assertEqual(resp2.status_code, 403)

@@ -198,12 +198,12 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
     def record_payment(self, application=None):
         self.authenticate(self.staff)
         return self.client.post(
-            "/api/payments/",
+            "/api/payments/record-onsite/",
             {
                 "application": str((application or self.application).id),
                 "amount": self.PAYMENT_FEE,
                 "method": "cash",
-                "status": "completed",
+                "payment_received": True,
                 "payment_date": timezone.localdate().isoformat(),
                 "reference_number": "OR-1",
             },
@@ -449,14 +449,14 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         self.authenticate(self.staff)
         appr_resp = self.client.post(f"/api/appointments/{apt_id}/approve/")
         self.assertEqual(appr_resp.status_code, 200)
-        # Record payment
+        # Record payment through the canonical onsite flow
         pay_resp = self.client.post(
-            "/api/payments/",
+            "/api/payments/record-onsite/",
             {
                 "application": str(target_app.id),
                 "amount": self.PAYMENT_FEE,
                 "method": "cash",
-                "status": "completed",
+                "payment_received": True,
                 "payment_date": timezone.localdate().isoformat(),
                 "reference_number": "OR-TEST-1",
             },
@@ -666,9 +666,9 @@ class Phase21HandoverHardeningTests(BaseAPITestCase):
         self.authenticate(self.staff)
         self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
         self.client.post(
-            "/api/payments/",
+            "/api/payments/record-onsite/",
             {"application": str(self.application.id), "amount": self.PAYMENT_FEE,
-             "method": "cash", "status": "completed",
+             "method": "cash", "payment_received": True,
              "payment_date": timezone.localdate().isoformat()},
             format="json",
         )
@@ -731,9 +731,9 @@ class Phase21HandoverHardeningTests(BaseAPITestCase):
         self.authenticate(self.staff)
         self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
         self.client.post(
-            "/api/payments/",
+            "/api/payments/record-onsite/",
             {"application": str(app2.id), "amount": self.PAYMENT_FEE,
-             "method": "cash", "status": "completed",
+             "method": "cash", "payment_received": True,
              "payment_date": timezone.localdate().isoformat()},
             format="json",
         )

@@ -70,15 +70,6 @@ const PAYMENT_METHODS = [
   { value: 'online', label: 'Online' },
 ];
 
-/** Reuses the existing Payment.Status choices in backend/apps/payments/models.py. */
-const PAYMENT_STATUSES = [
-  { value: 'pending', label: 'Pending (not paid yet)' },
-  { value: 'completed', label: 'Completed (paid)' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'refunded', label: 'Refunded' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
 function todayISO(): string {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -156,10 +147,12 @@ export default function ApplicationDetailPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [payMethod, setPayMethod] = useState('cash');
-  const [payStatus, setPayStatus] = useState('');
   const [payDate, setPayDate] = useState(todayISO());
   const [payReference, setPayReference] = useState('');
   const [onsiteNotes, setOnsiteNotes] = useState('');
+  // The canonical onsite payment flow records completion only after the money
+  // has actually been received; the backend re-validates this flag.
+  const [paymentReceived, setPaymentReceived] = useState(false);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [completionBusy, setCompletionBusy] = useState(false);
   // Explicit physical-handover confirmation: the Complete Adoption button is
@@ -253,8 +246,10 @@ export default function ApplicationDetailPage() {
 
   const recordPayment = () => {
     if (!app) return;
-    if (!payStatus) {
-      setOnsiteError('Select the payment status that was recorded onsite.');
+    if (!paymentReceived) {
+      setOnsiteError(
+        'Confirm that the payment has actually been received onsite before recording it.',
+      );
       return;
     }
     if (!payDate) {
@@ -266,21 +261,27 @@ export default function ApplicationDetailPage() {
     setOnsiteNotice('');
     saveOnsiteNotes()
       .then(() =>
-        paymentService.create({
+        paymentService.recordOnsite({
           application: app.id,
           amount: ADOPTION_FEE,
           method: payMethod,
-          status: payStatus,
           payment_date: payDate,
           reference_number: payReference.trim(),
+          notes: onsiteNotes.trim(),
+          // Explicit staff confirmation: the backend forces status=completed
+          // and generates the receipt number; the client never supplies either.
+          payment_received: true,
         }),
       )
-      .then(() => {
+      .then((res: { data: { receipt_number?: string } }) => {
         setOnsiteNotice(
-          'Payment recorded. Recording the payment does not complete the adoption.',
+          `Payment of ${ADOPTION_FEE} recorded` +
+            (res.data.receipt_number ? ` · Receipt ${res.data.receipt_number}` : '') +
+            '. Recording the payment does not complete the adoption.',
         );
         setOnsiteNotes('');
         setPayReference('');
+        setPaymentReceived(false);
         loadPayments(app.id);
       })
       .catch((e) => {
@@ -654,21 +655,14 @@ export default function ApplicationDetailPage() {
                       onChange={(e) => setPayMethod(e.target.value)}
                       options={PAYMENT_METHODS}
                     />
-                    <Select
-                      label="Payment Status"
-                      value={payStatus}
-                      onChange={(e) => setPayStatus(e.target.value)}
-                      options={[
-                        { value: '', label: 'Select the recorded status' },
-                        ...PAYMENT_STATUSES,
-                      ]}
-                    />
                     <Input
                       label="Payment Date"
                       type="date"
                       value={payDate}
                       onChange={(e) => setPayDate(e.target.value)}
                     />
+                  </div>
+                  <div className="mt-3 max-w-2xl">
                     <Input
                       label="Reference / OR No. (optional)"
                       value={payReference}
@@ -685,6 +679,19 @@ export default function ApplicationDetailPage() {
                       placeholder="Internal notes about the onsite transaction (not visible to the adopter)"
                     />
                   </div>
+                  <label className="mt-3 inline-flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={paymentReceived}
+                      onChange={(e) => setPaymentReceived(e.target.checked)}
+                      disabled={paymentBusy || completionBusy}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span>
+                      I confirm the payment has <strong>actually been received</strong> onsite. The
+                      payment will be recorded as completed with a backend-generated receipt.
+                    </span>
+                  </label>
                 </>
               )}
 
@@ -718,7 +725,10 @@ export default function ApplicationDetailPage() {
                     </span>
                   </label>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <Button onClick={recordPayment} disabled={paymentBusy || completionBusy}>
+                    <Button
+                      onClick={recordPayment}
+                      disabled={paymentBusy || completionBusy || !paymentReceived}
+                    >
                       {paymentBusy ? 'Saving…' : 'Record Payment'}
                     </Button>
                     <Button

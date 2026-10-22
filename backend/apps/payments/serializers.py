@@ -56,4 +56,23 @@ class PaymentSerializer(serializers.ModelSerializer):
                     {"application": "An existing payment cannot be reassigned to a different application."}
                 )
 
+        # Payment integrity gate (Phase 5.2): client input must not be able to
+        # mark a payment completed without the intended onsite receipt workflow
+        # (record_onsite_payment), which requires staff confirmation that the
+        # money was actually received.  Completed is therefore not an
+        # acceptable client-supplied status on generic create, and an existing
+        # payment cannot be moved *into* completed through PATCH/PUT (moving a
+        # completed payment to refunded/failed/cancelled stays allowed).
+        if attrs.get("status") == Payment.Status.COMPLETED and (
+            self.instance is None or self.instance.status != Payment.Status.COMPLETED
+        ):
+            raise serializers.ValidationError(
+                {
+                    "status": (
+                        "A payment can only be marked completed through the onsite "
+                        "payment flow after the money has actually been received."
+                    )
+                }
+            )
+
         return attrs
