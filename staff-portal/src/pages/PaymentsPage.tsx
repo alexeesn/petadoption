@@ -87,7 +87,6 @@ export default function PaymentsPage() {
   const [selectedAppointmentId, setSelectedAppointmentId] = useState('');
   const [selectedSummary, setSelectedSummary] = useState<PaymentSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState('cash');
   const [payReference, setPayReference] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
@@ -143,32 +142,27 @@ export default function PaymentsPage() {
 
   // When selected appointment changes, load its payment summary
   useEffect(() => {
-    if (!selectedAppointmentId) {
-      setSelectedSummary(null);
-      return;
-    }
+    if (!showRecordModal || !selectedAppointmentId) return;
     const appt = appointments.find((a) => a.id === selectedAppointmentId);
     if (!appt) return;
 
+    let active = true;
+    setSelectedSummary(null);
     setLoadingSummary(true);
     setFormError('');
+    setFormSuccess('');
+    setPayReceived(false);
     applicationService
       .paymentSummary(appt.application)
       .then((res) => {
-        const summary = res.data as PaymentSummary;
-        setSelectedSummary(summary);
-        const fee = Number(summary.adoption_fee || '500');
-        const paid = Number(summary.total_paid || '0');
-        const balance = Math.max(fee - paid, 0);
-        // Default to remaining balance if > 0, otherwise full fee
-        setPayAmount(balance > 0 ? String(balance) : String(fee));
+        if (active) setSelectedSummary(res.data as PaymentSummary);
       })
       .catch(() => {
-        setSelectedSummary(null);
-        setPayAmount('500.00');
+        if (active) setFormError('Could not verify payment eligibility. Close and reopen payment entry to retry.');
       })
-      .finally(() => setLoadingSummary(false));
-  }, [selectedAppointmentId, appointments]);
+      .finally(() => { if (active) setLoadingSummary(false); });
+    return () => { active = false; };
+  }, [showRecordModal, selectedAppointmentId, appointments]);
 
   const handleRecordPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,9 +175,9 @@ export default function PaymentsPage() {
       return;
     }
 
-    const val = Number(payAmount);
-    if (!payAmount || !Number.isFinite(val) || val <= 0) {
-      setFormError('Enter a valid payment amount greater than zero.');
+    if (!selectedSummary || selectedSummary.application_id !== appt.application ||
+        !selectedSummary.can_record_payment || selectedSummary.payments.some((p) => p.status === 'completed')) {
+      setFormError('This application is not eligible for another onsite payment.');
       return;
     }
 
@@ -196,18 +190,22 @@ export default function PaymentsPage() {
     paymentService
       .recordOnsite({
         application: appt.application,
-        amount: payAmount,
         method: payMethod,
         payment_date: payDate || undefined,
         reference_number: payReference.trim(),
         notes: payNotes.trim(),
         payment_received: true,
       })
-      .then((res: { data: { receipt_number?: string } }) => {
-        const rcpt = res.data.receipt_number;
+      .then((res) => {
+        const payment = res.data as Payment;
+        // The returned transaction is persisted backend data. Hide entry
+        // immediately, then re-read the same summary used on return/refresh.
+        setSelectedSummary((current) => current && current.application_id === appt.application
+          ? { ...current, can_record_payment: false, payments: [payment, ...current.payments] }
+          : current);
         setFormSuccess(
-          `Payment of ${formatCurrency(val)} recorded successfully` +
-            (rcpt ? ` · Receipt ID: ${rcpt}` : '') +
+          `Payment of ${formatCurrency(payment.amount)} recorded successfully` +
+            (payment.receipt_number ? ` · Receipt ID: ${payment.receipt_number}` : '') +
             '. Note: Recording the payment does not complete the adoption.',
         );
         setPayReceived(false);
@@ -215,9 +213,10 @@ export default function PaymentsPage() {
         setPayReference('');
         load();
         // Refresh summary for this appointment
-        applicationService.paymentSummary(appt.application).then((res2) => {
-          setSelectedSummary(res2.data as PaymentSummary);
-        });
+        applicationService.paymentSummary(appt.application)
+          .then((res2) => setSelectedSummary((current) =>
+            current?.application_id === appt.application ? res2.data as PaymentSummary : current))
+          .catch(() => setFormError('Payment was saved. Could not refresh its summary; reopen payment entry to retry.'));
       })
       .catch((err: unknown) => {
         setFormError(readError(err, 'Failed to record onsite payment.'));
@@ -324,10 +323,12 @@ export default function PaymentsPage() {
           subtitle="Single staff destination for recording onsite payments and viewing payment history. Recording a payment requires actual money receipt confirmation and does not complete the adoption."
         />
         <Button
+          disabled={submittingPayment}
           onClick={() => {
             setShowRecordModal(!showRecordModal);
             setFormError('');
             setFormSuccess('');
+            setSelectedSummary(null);
           }}
           variant={showRecordModal ? 'outline' : 'primary'}
         >
@@ -368,14 +369,21 @@ export default function PaymentsPage() {
               No confirmed appointments currently eligible for onsite payment. Only applications with confirmed visit dates appear here.
             </p>
           ) : (
-            <form onSubmit={handleRecordPaymentSubmit} className="space-y-4 max-w-2xl">
+            <div className="space-y-4 max-w-2xl">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Eligible Confirmed Appointment
                 </label>
                 <select
+                  aria-label="Eligible Confirmed Appointment"
+                  disabled={submittingPayment}
                   value={selectedAppointmentId}
-                  onChange={(e) => setSelectedAppointmentId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedSummary(null);
+                    setPayReceived(false);
+                    setFormSuccess('');
+                    setSelectedAppointmentId(e.target.value);
+                  }}
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   {appointments.map((appt) => (
@@ -387,109 +395,98 @@ export default function PaymentsPage() {
               </div>
 
               {loadingSummary ? (
-                <Loading label="Loading payment balance..." />
-              ) : selectedSummary && (
-                <div className="rounded-md border border-slate-200 bg-white p-3">
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <span className="text-slate-500">Adoption Fee:</span>
-                      <p className="font-semibold text-slate-900">{formatCurrency(selectedSummary.adoption_fee)}</p>
+                <Loading label="Checking payment eligibility..." />
+              ) : selectedSummary && selectedSummary.application_id === appointments.find((a) => a.id === selectedAppointmentId)?.application && (
+                <>
+                  <p className="font-semibold text-slate-900">
+                    Required Onsite Payment: {formatCurrency(selectedSummary.adoption_fee)}
+                  </p>
+                  {selectedSummary.payments.some((p) => p.status === 'completed') ? (
+                    <div aria-label="Completed payment summary" className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
+                      <p className="text-sm font-medium text-green-800">A completed payment is already recorded for this application.</p>
+                      {selectedSummary.payments.filter((p) => p.status === 'completed').map((payment) => (
+                        <div key={payment.id} className="space-y-2 text-sm">
+                          <p>Receipt ID: <strong>{payment.receipt_number || '—'}</strong></p>
+                          <p>Amount: {formatCurrency(payment.amount)}</p>
+                          <StatusBadge status={payment.status} />
+                          <p>Payment date: {formatDate(payment.payment_date ?? undefined)}</p>
+                          <p>Recorded: {formatDateTime(payment.created_at)}</p>
+                          <Button variant="outline" onClick={() => downloadReceipt(payment)} disabled={downloadingId === payment.id}>
+                            {downloadingId === payment.id ? 'Downloading…' : 'Download Receipt PDF'}
+                          </Button>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <span className="text-slate-500">Total Paid:</span>
-                      <p className="font-semibold text-slate-900">{formatCurrency(selectedSummary.total_paid)}</p>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Remaining Balance:</span>
-                      <p className={`font-semibold ${Number(selectedSummary.adoption_fee) - Number(selectedSummary.total_paid) > 0 ? 'text-red-700' : 'text-slate-900'}`}>
-                        {formatCurrency(Math.max(Number(selectedSummary.adoption_fee) - Number(selectedSummary.total_paid), 0))}
-                      </p>
-                    </div>
-                  </div>
-                  {selectedSummary.is_fee_paid && (
-                    <p className="mt-2 text-xs text-green-700 font-medium">
-                      ✓ Required fee has already been reached for this application.
-                    </p>
+                  ) : !selectedSummary.can_record_payment ? (
+                    <p className="text-sm text-slate-600">This application is not eligible for onsite payment.</p>
+                  ) : (
+                    <form onSubmit={handleRecordPaymentSubmit} aria-label="Record onsite payment" className="space-y-4">
+                      <Select
+                        label="Payment Method"
+                        value={payMethod}
+                        onChange={(e) => setPayMethod(e.target.value)}
+                        options={PAYMENT_METHODS}
+                      />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Input
+                          label="Payment Date"
+                          type="date"
+                          value={payDate}
+                          onChange={(e) => setPayDate(e.target.value)}
+                        />
+                        <Input
+                          label="Reference Number (optional)"
+                          placeholder="e.g. OR / Check / Slip #"
+                          value={payReference}
+                          onChange={(e) => setPayReference(e.target.value)}
+                        />
+                      </div>
+
+                      <Textarea
+                        label="Notes (optional)"
+                        placeholder="e.g. Onsite cash payment received at front desk"
+                        rows={2}
+                        value={payNotes}
+                        onChange={(e) => setPayNotes(e.target.value)}
+                      />
+
+                      <div className="pt-2">
+                        <label className="inline-flex items-start gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={payReceived}
+                            onChange={(e) => {
+                              setPayReceived(e.target.checked);
+                              setFormError('');
+                            }}
+                            disabled={submittingPayment}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          <span>
+                            I confirm that this payment has <strong>actually been received</strong> in full onsite.
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="pt-2 flex items-center gap-3">
+                        <Button type="submit" disabled={submittingPayment || !payReceived}>
+                          {submittingPayment ? 'Recording Payment…' : 'Record Payment & Generate Receipt'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowRecordModal(false)}
+                          disabled={submittingPayment}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
                   )}
-                </div>
+                </>
               )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Amount Received (₱)"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={payAmount}
-                  onChange={(e) => {
-                    setPayAmount(e.target.value);
-                    setFormError('');
-                  }}
-                  required
-                />
-                <Select
-                  label="Payment Method"
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value)}
-                  options={PAYMENT_METHODS}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Payment Date"
-                  type="date"
-                  value={payDate}
-                  onChange={(e) => setPayDate(e.target.value)}
-                />
-                <Input
-                  label="Reference Number (optional)"
-                  placeholder="e.g. OR / Check / Slip #"
-                  value={payReference}
-                  onChange={(e) => setPayReference(e.target.value)}
-                />
-              </div>
-
-              <Textarea
-                label="Notes (optional)"
-                placeholder="e.g. Onsite cash payment received at front desk"
-                rows={2}
-                value={payNotes}
-                onChange={(e) => setPayNotes(e.target.value)}
-              />
-
-              <div className="pt-2">
-                <label className="inline-flex items-start gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={payReceived}
-                    onChange={(e) => {
-                      setPayReceived(e.target.checked);
-                      setFormError('');
-                    }}
-                    disabled={submittingPayment}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                  />
-                  <span>
-                    I confirm that this payment has <strong>actually been received</strong> in full onsite.
-                  </span>
-                </label>
-              </div>
-
-              <div className="pt-2 flex items-center gap-3">
-                <Button type="submit" disabled={submittingPayment || !payReceived}>
-                  {submittingPayment ? 'Recording Payment…' : 'Record Payment & Generate Receipt'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowRecordModal(false)}
-                  disabled={submittingPayment}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
+            </div>
           )}
         </Card>
       )}

@@ -77,6 +77,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 )
         except IntegrityError:
             # Race between the serializer check and the DB constraint.
+            # Only report a duplicate when one actually exists. A schema or
+            # other integrity failure must not masquerade as an active request.
+            if not Appointment.objects.filter(
+                application=application, status__in=Appointment.ACTIVE_STATUSES
+            ).exists():
+                raise
             return Response(
                 {"error": "This application already has an active appointment request."},
                 status=status.HTTP_400_BAD_REQUEST,

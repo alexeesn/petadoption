@@ -82,6 +82,7 @@ class Appointment(models.Model):
         PENDING_CONFIRMATION = "pending_confirmation", "Pending Confirmation"
         CONFIRMED = "confirmed", "Confirmed"
         REJECTED = "rejected", "Rejected"
+        NO_SHOW = "no_show", "No-show"
 
     # Only these statuses block a new request for the same application.
     ACTIVE_STATUSES = (Status.PENDING_CONFIRMATION, Status.CONFIRMED)
@@ -113,6 +114,15 @@ class Appointment(models.Model):
     reviewed_at = models.DateTimeField(blank=True, null=True)
     rejection_reason = models.TextField(
         blank=True, help_text="Why the requested date was rejected - visible to the adopter"
+    )
+    # Keep the existing database column in the model so fresh requests supply
+    # its empty-string default instead of inserting NULL into a required field.
+    no_show_reason = models.TextField(
+        blank=True,
+        help_text=(
+            "Staff note recorded when the adopter did not show up for a confirmed "
+            "visit. The adoption is not cancelled by a no-show alone."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

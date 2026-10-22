@@ -209,7 +209,9 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
             adopter=self.adopter, pet=other_pet, status="submitted"
         )
         self.confirm_appointment(application=submitted)
-        self.record_payment(application=submitted)
+        # Preserve the completion safeguard even for legacy invalid data;
+        # new onsite payments now require an approved application themselves.
+        Payment.objects.create(application=submitted, amount="500.00", status="completed")
 
         resp = self.complete(application=submitted)
         self.assertEqual(resp.status_code, 400)
@@ -1530,3 +1532,138 @@ class IndividualReceiptPdfTests(BaseAPITestCase):
         self.unauthenticate()
         resp = self.client.get(f"/api/payments/{self.payment.id}/receipt-pdf/")
         self.assertIn(resp.status_code, [401, 403])
+
+    def test_receipt_pdf_contains_only_the_selected_transaction(self):
+        other = Payment.objects.create(
+            application=self.app, amount="750.00", method="gcash",
+            status="completed", notes="OTHER-TRANSACTION-ONLY",
+        )
+        self.authenticate(self.staff)
+        response = self.client.get(f"/api/payments/{self.payment.id}/receipt-pdf/")
+        self.assertEqual(response.status_code, 200)
+        text = _extract_pdf_text(response.content)
+        self.assertIn(self.payment.receipt_number.encode(), text)
+        self.assertNotIn(other.receipt_number.encode(), text)
+        self.assertNotIn(b"OTHER-TRANSACTION-ONLY", text)
+
+
+class FixedOnsitePaymentTests(BaseAPITestCase):
+    """The one-time obligation is application-scoped and enforced by both routes."""
+
+    def setUp(self):
+        super().setUp()
+        self.staff = self.create_staff(email="fixed-staff@example.com")
+        self.adopter = self.create_user(email="fixed-adopter@example.com")
+        self.pet = Pet.objects.create(name="Fixed fee pet", species="dog", age_years=2, status="pending")
+        self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="approved")
+        self.authenticate(self.staff)
+
+    def record(self, route="canonical", **overrides):
+        payload = {"application": str(self.app.id), "method": "cash", "payment_received": True}
+        payload.update(overrides)
+        url = "/api/payments/record-onsite/" if route == "canonical" else f"/api/applications/{self.app.id}/record-payment/"
+        return self.client.post(url, payload, format="json")
+
+    def summary(self):
+        return self.client.get(f"/api/applications/{self.app.id}/payment-summary/")
+
+    def test_fixed_fee_is_server_defined_and_does_not_complete_adoption(self):
+        self.assertEqual(self.client.get("/api/payments/fee/").data["adoption_fee"], "500.00")
+        self.assertTrue(self.summary().data["can_record_payment"])
+        response = self.record(status="pending", receipt_number="FORGED")
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["amount"], "500.00")
+        self.assertEqual(response.data["status"], "completed")
+        self.assertTrue(response.data["receipt_number"].startswith("REC-"))
+        self.app.refresh_from_db()
+        self.pet.refresh_from_db()
+        self.assertEqual(self.app.status, "approved")
+        self.assertEqual(self.pet.status, "pending")
+        self.assertFalse(AdoptionRecord.objects.exists())
+        summary = self.summary().data
+        self.assertFalse(summary["can_record_payment"])
+        self.assertTrue(summary["is_fee_paid"])
+        self.assertEqual(summary["payments"][0]["receipt_number"], response.data["receipt_number"])
+        # A fresh request re-derives eligibility from the saved transaction.
+        self.assertFalse(self.summary().data["can_record_payment"])
+
+    def test_non_fixed_and_invalid_amounts_rejected_on_both_routes(self):
+        for route in ("canonical", "application"):
+            for amount in ("0", "-500", "250", "499.99", "501", "1000", "NaN", "Infinity", "bad"):
+                with self.subTest(route=route, amount=amount):
+                    self.assertEqual(self.record(route, amount=amount).status_code, 400)
+        self.assertFalse(Payment.objects.exists())
+
+    def test_explicit_boolean_receipt_confirmation_required_on_both_routes(self):
+        for route in ("canonical", "application"):
+            for value in (None, False, 0, 1, "false", "true", "", [], {}):
+                with self.subTest(route=route, value=value):
+                    self.assertEqual(self.record(route, payment_received=value).status_code, 400)
+            url = "/api/payments/record-onsite/" if route == "canonical" else f"/api/applications/{self.app.id}/record-payment/"
+            response = self.client.post(url, {"application": str(self.app.id)}, format="json")
+            self.assertEqual(response.status_code, 400)
+        self.assertFalse(Payment.objects.exists())
+
+    def test_duplicate_rejected_by_both_routes_without_new_side_effects(self):
+        from apps.audit.models import AuditLog
+        first = self.record()
+        self.assertEqual(first.status_code, 201)
+        before = (AuditLog.objects.count(), Notification.objects.count())
+        for route in ("canonical", "application"):
+            with self.subTest(route=route):
+                response = self.record(route)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("already exists", response.data["error"])
+        self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(Payment.objects.get().receipt_number, first.data["receipt_number"])
+        self.assertEqual((AuditLog.objects.count(), Notification.objects.count()), before)
+
+    def test_legacy_completed_partial_or_duplicate_rows_block_another_collection(self):
+        first = Payment.objects.create(application=self.app, amount="250.00", status="completed")
+        self.assertFalse(self.summary().data["can_record_payment"])
+        self.assertEqual(self.record().status_code, 400)
+        second = Payment.objects.create(application=self.app, amount="500.00", status="completed")
+        before = list(Payment.objects.order_by("id").values())
+        self.assertEqual(self.record().status_code, 400)
+        self.assertEqual(list(Payment.objects.order_by("id").values()), before)
+        self.assertEqual({p["id"] for p in self.summary().data["payments"]}, {str(first.id), str(second.id)})
+
+    def test_non_completed_transactions_do_not_block_or_count_as_collections(self):
+        for status in ("pending", "failed", "cancelled", "refunded"):
+            Payment.objects.create(application=self.app, amount="500.00", status=status)
+        summary = self.summary().data
+        self.assertTrue(summary["can_record_payment"])
+        self.assertFalse(summary["is_fee_paid"])
+        self.assertEqual(summary["total_paid"], "0.00")
+        self.assertEqual(self.record().status_code, 201)
+        self.assertEqual(self.summary().data["total_paid"], "500.00")
+
+    def test_other_application_for_same_adopter_remains_payable(self):
+        self.assertEqual(self.record().status_code, 201)
+        pet = Pet.objects.create(name="Another pet", species="cat", age_years=1)
+        self.app = Application.objects.create(adopter=self.adopter, pet=pet, status="approved")
+        self.assertTrue(self.summary().data["can_record_payment"])
+        self.assertEqual(self.record("application").status_code, 201)
+        self.assertEqual(Payment.objects.filter(status="completed").count(), 2)
+
+    def test_unapproved_application_is_not_eligible(self):
+        self.app.status = "submitted"
+        self.app.save(update_fields=["status"])
+        self.assertFalse(self.summary().data["can_record_payment"])
+        self.assertEqual(self.record().status_code, 400)
+        self.assertFalse(Payment.objects.exists())
+
+    def test_invalid_application_or_method_rejected_without_saving(self):
+        self.assertEqual(self.record(application="not-a-uuid").status_code, 400)
+        self.assertEqual(self.record(method="invalid-method").status_code, 400)
+        self.assertFalse(Payment.objects.exists())
+
+    def test_service_itself_requires_confirmation_and_checks_duplicates(self):
+        from django.core.exceptions import ValidationError
+        from apps.payments.services import record_onsite_payment
+        with self.assertRaises(ValidationError):
+            record_onsite_payment(self.app, self.staff)
+        record_onsite_payment(self.app, self.staff, payment_received=True)
+        with self.assertRaises(ValidationError):
+            record_onsite_payment(self.app, self.staff, payment_received=True)
+        self.assertEqual(Payment.objects.count(), 1)

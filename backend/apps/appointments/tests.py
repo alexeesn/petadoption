@@ -83,6 +83,62 @@ class AppointmentWorkflowTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(Appointment.objects.count(), 0)
 
+    def test_new_request_supplies_required_legacy_metadata_without_payment_or_adoption(self):
+        from apps.adoptions.models import AdoptionRecord
+        from apps.payments.models import Payment
+
+        self.assertFalse(Appointment.objects.filter(application=self.application).exists())
+        response = self.request_appointment()
+        self.assertEqual(response.status_code, 201, response.data)
+        appointment = Appointment.objects.get(pk=response.data["id"])
+        self.assertEqual(appointment.no_show_reason, "")
+        self.assertEqual(appointment.status, "pending_confirmation")
+        self.assertFalse(Payment.objects.exists())
+        self.assertFalse(AdoptionRecord.objects.exists())
+
+    def test_existing_no_show_history_is_preserved_and_does_not_block_request(self):
+        previous = Appointment.objects.create(
+            application=self.application, adopter=self.adopter, pet=self.pet,
+            requested_date=self.visit_date, status=Appointment.Status.NO_SHOW,
+            no_show_reason="Existing historical note",
+        )
+        response = self.request_appointment(visit_date=next_weekday(8))
+        self.assertEqual(response.status_code, 201, response.data)
+        previous.refresh_from_db()
+        self.assertEqual(previous.no_show_reason, "Existing historical note")
+        self.assertEqual(previous.status, "no_show")
+        self.assertEqual(Appointment.objects.count(), 2)
+
+    def test_unrelated_database_failure_is_not_misreported_as_duplicate(self):
+        from unittest.mock import patch
+        from django.db import IntegrityError
+
+        with patch("apps.appointments.views.Appointment.objects.create", side_effect=IntegrityError("Storage failure")):
+            with self.assertLogs("django.request", level="ERROR"):
+                with self.assertRaises(IntegrityError):
+                    self.request_appointment()
+        self.assertFalse(Appointment.objects.exists())
+
+    def test_duplicate_created_after_validation_is_still_rejected(self):
+        from unittest.mock import patch
+        from apps.appointments.serializers import AppointmentCreateSerializer
+
+        original_validate = AppointmentCreateSerializer.is_valid
+
+        def validate_then_competing_request(serializer, **kwargs):
+            result = original_validate(serializer, **kwargs)
+            Appointment.objects.create(
+                application=self.application, adopter=self.adopter, pet=self.pet,
+                requested_date=self.visit_date,
+            )
+            return result
+
+        with patch.object(AppointmentCreateSerializer, "is_valid", new=validate_then_competing_request):
+            response = self.request_appointment()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("active appointment", response.data["error"])
+        self.assertEqual(Appointment.objects.count(), 1)
+
     def test_adopter_cannot_request_for_another_adopters_application(self):
         other_adopter = self.create_user(email="other@example.com")
         other_pet = Pet.objects.create(name="Milo", species="cat", age_years=0)

@@ -364,12 +364,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
         app = self.get_object()
-        payment_received = request.data.get("payment_received", True)
-        if payment_received is False or payment_received == "false":
-            return Response(
-                {"error": "Payment can only be recorded after receiving the money."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        payment_received = request.data.get("payment_received")
 
         amount = request.data.get("amount")
         method = request.data.get("method", "cash")
@@ -388,7 +383,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 payment_date=payment_date,
                 reference_number=reference_number,
                 notes=notes,
-                payment_received=True,
+                payment_received=payment_received,
             )
         except ValidationError as e:
             msg = e.message if hasattr(e, "message") else str(e)
@@ -426,6 +421,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "adoption_fee": str(PROTOTYPE_ADOPTION_FEE),
             "total_paid": f"{total:.2f}",
             "is_fee_paid": is_paid,
+            "can_record_payment": (
+                app.status == Application.Status.APPROVED
+                and not app.payments.filter(status=Payment.Status.COMPLETED).exists()
+            ),
             "turnover_eligible": eligible,
             "payments": PaymentSerializer(
                 app.payments.all(), many=True, context=self.get_serializer_context()

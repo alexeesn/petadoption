@@ -240,6 +240,7 @@ export interface PaymentSummary {
   adoption_fee: string;
   total_paid: string;
   is_fee_paid: boolean;
+  can_record_payment: boolean;
   turnover_eligible: boolean;
   payments: Payment[];
 }

@@ -1,4 +1,5 @@
 import uuid
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets, permissions, status
@@ -122,15 +123,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
         from apps.applications.models import Application
         try:
             app = Application.objects.get(id=app_id)
-        except (Application.DoesNotExist, ValueError):
+        except (Application.DoesNotExist, ValueError, ValidationError):
             return Response({"application": ["Invalid application ID."]}, status=status.HTTP_400_BAD_REQUEST)
 
-        payment_received = request.data.get("payment_received", True)
-        if payment_received is False or payment_received == "false":
-            return Response(
-                {"error": "Payment can only be recorded after receiving the money."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        payment_received = request.data.get("payment_received")
 
         amount = request.data.get("amount")
         method = request.data.get("method", "cash")
@@ -138,7 +134,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
         reference_number = request.data.get("reference_number", "")
         notes = request.data.get("notes", "")
 
-        from django.core.exceptions import ValidationError
         try:
             payment = record_onsite_payment(
                 application=app,
@@ -148,7 +143,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 payment_date=payment_date,
                 reference_number=reference_number,
                 notes=notes,
-                payment_received=True,
+                payment_received=payment_received,
             )
         except ValidationError as e:
             msg = e.message if hasattr(e, "message") else str(e)
