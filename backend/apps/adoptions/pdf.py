@@ -220,3 +220,186 @@ def build_adoption_records_pdf(records, filters=()):
 
     doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
     return buffer.getvalue()
+
+
+
+def build_single_adoption_pdf(record):
+    """Render a single AdoptionRecord into an A4 PDF."""
+    cell_style = ParagraphStyle(
+        "PdfCell", fontName="Helvetica", fontSize=9, leading=12, textColor=colors.black,
+    )
+    label_style = ParagraphStyle(
+        "PdfLabel", fontName="Helvetica-Bold", fontSize=9, leading=12, textColor=colors.HexColor("#374151"),
+    )
+
+    def _page_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#6b7280"))
+        canvas.drawCentredString(PAGE_WIDTH / 2, 10 * mm, "PawConnect \u2014 Adoption Record")
+        canvas.restoreState()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=18 * mm, bottomMargin=16 * mm,
+        title="PawConnect - Adoption Record",
+        author="PawConnect Staff Portal",
+    )
+    generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
+    story = []
+    story.append(Paragraph("PawConnect", ParagraphStyle(
+        "SingleTitle", fontName="Helvetica-Bold", fontSize=19, leading=24,
+        textColor=colors.HexColor("#1f2937"),
+    )))
+    story.append(Paragraph("Adoption Record", ParagraphStyle(
+        "SingleHeading", fontName="Helvetica-Bold", fontSize=13, leading=17,
+        spaceAfter=2, textColor=colors.HexColor("#374151"),
+    )))
+    story.append(Paragraph(f"Generated on {escape(generated)}", ParagraphStyle(
+        "SingleMeta", fontSize=8.5, leading=11, textColor=colors.HexColor("#6b7280"),
+    )))
+    story.append(Spacer(1, 5 * mm))
+
+    rows = [
+        ("Transaction ID", str(record.transaction_id or "\u2014")),
+        ("Pet", record.pet.name),
+        ("Adopter", record.adopter.email),
+        ("Status", record.get_status_display()),
+        ("Completed", _completed_label(record) or "\u2014"),
+        ("Completed By", record.staff_member.email if record.status == AdoptionRecord.Status.COMPLETED and record.staff_member_id else "\u2014"),
+        ("Appointment Date", record.appointment.requested_date.isoformat() if record.appointment_id and record.appointment else "\u2014"),
+        ("Adoption Date", record.adoption_date.isoformat() if record.adoption_date else "\u2014"),
+        ("Notes", record.notes or "\u2014"),
+    ]
+    tdata = [[_cell(k, label_style), _cell(v, cell_style)] for k, v in rows]
+    table = Table(tdata, colWidths=[50 * mm, 120 * mm])
+    table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
+    return buffer.getvalue()
+
+
+def build_single_adoption_pdf(record):
+    """Render a single AdoptionRecord into an A4 PDF document.
+
+    Only contains the selected completed adoption and its real persisted details.
+    """
+    cell_style = ParagraphStyle(
+        "PdfCell",
+        fontName="Helvetica",
+        fontSize=9,
+        leading=12,
+        textColor=colors.black,
+    )
+    label_style = ParagraphStyle(
+        "PdfLabel",
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#374151"),
+    )
+
+    def _page_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#6b7280"))
+        canvas.drawCentredString(PAGE_WIDTH / 2, 10 * mm, "PawConnect — Adoption Record Certificate")
+        canvas.restoreState()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=MARGIN,
+        rightMargin=MARGIN,
+        topMargin=18 * mm,
+        bottomMargin=16 * mm,
+        title=f"PawConnect - Adoption Record {record.transaction_id or record.id}",
+        author="PawConnect Staff Portal",
+    )
+    generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
+    story = [
+        Paragraph(
+            "PawConnect",
+            ParagraphStyle(
+                "Title",
+                fontName="Helvetica-Bold",
+                fontSize=19,
+                leading=24,
+                textColor=colors.HexColor("#1f2937"),
+            ),
+        ),
+        Paragraph(
+            "Official Adoption Record",
+            ParagraphStyle(
+                "Heading",
+                fontName="Helvetica-Bold",
+                fontSize=13,
+                leading=17,
+                spaceAfter=2,
+                textColor=colors.HexColor("#374151"),
+            ),
+        ),
+        Paragraph(
+            f"Generated on {escape(generated)}",
+            ParagraphStyle(
+                "Meta", fontSize=8.5, leading=11, textColor=colors.HexColor("#6b7280")
+            ),
+        ),
+        Spacer(1, 5 * mm),
+    ]
+
+    pet_name = f"{record.pet.name} ({record.pet.species.capitalize()})" if (record.pet) else "—"
+    adopter_name = getattr(record.adopter, "full_name", "") or record.adopter.email
+    adopter_str = f"{adopter_name} ({record.adopter.email})" if record.adopter else "—"
+    app_ref = f"{str(record.application_id)[:8]}…" if record.application_id else "—"
+    completed_str = _completed_label(record) or "—"
+    staff_str = record.staff_member.email if record.staff_member else "—"
+    appt_str = (
+        record.appointment.requested_date.isoformat()
+        if (record.appointment_id and record.appointment)
+        else "—"
+    )
+    adoption_date_str = record.adoption_date.isoformat() if record.adoption_date else "—"
+
+    rows = [
+        ("Transaction ID", record.transaction_id or "—"),
+        ("Adoption Status", record.get_status_display()),
+        ("Pet", pet_name),
+        ("Adopter", adopter_str),
+        ("Application Reference", app_ref),
+        ("Adoption Date", adoption_date_str),
+        ("Finalized / Completed", completed_str),
+        ("Handled By Staff", staff_str),
+        ("Appointment Visit Date", appt_str),
+        ("Notes", record.notes or "—"),
+    ]
+    tdata = [[_cell(k, label_style), _cell(v, cell_style)] for k, v in rows]
+    table = Table(tdata, colWidths=[50 * mm, 120 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(table)
+    doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
+    return buffer.getvalue()
+

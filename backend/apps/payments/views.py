@@ -93,6 +93,22 @@ class PaymentViewSet(viewsets.ModelViewSet):
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
+    @action(detail=True, methods=["get"], url_path="receipt-pdf")
+    def receipt_pdf(self, request, pk=None):
+        """Staff-only individual payment receipt PDF for one transaction.
+
+        Each receipt contains only the selected transaction.
+        """
+        payment = self.get_object()
+        from .pdf import build_single_receipt_pdf
+
+        pdf_bytes = build_single_receipt_pdf(payment)
+        ref_slug = payment.receipt_number or payment.reference_number or str(payment.id)[:8]
+        filename = f"pawconnect-receipt-{ref_slug}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
     @action(detail=False, methods=["post"], url_path="record-onsite")
     def record_onsite(self, request):
         """Dedicated staff action for recording on-site payments."""
@@ -142,6 +158,19 @@ class PaymentViewSet(viewsets.ModelViewSet):
             PaymentSerializer(payment, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=["get"], url_path="receipt-pdf")
+    def receipt_pdf(self, request, pk=None):
+        """Staff-only individual payment receipt PDF for one transaction."""
+        if not (request.user.is_staff_role or request.user.is_admin_role):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        payment = self.get_object()
+        from .pdf import build_single_receipt_pdf
+        pdf_bytes = build_single_receipt_pdf(payment)
+        filename = f"pawconnect-receipt-{payment.receipt_number or str(payment.id)[:8]}.pdf"
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
 
     def perform_create(self, serializer):
         payment = serializer.save(processed_by=self.request.user)

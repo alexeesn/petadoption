@@ -8,4 +8,6 @@ urlpatterns = [
     path("payments/", views.PaymentReportView.as_view(), name="payment-report"),
     path("adopters/", views.AdopterReportView.as_view(), name="adopter-report"),
     path("health/", views.HealthReportView.as_view(), name="health-report"),
+    path("monthly-payments-pdf/", views.MonthlyPaymentReportPdfView.as_view(), name="monthly-payment-report-pdf"),
+    path("monthly-adoptions-pdf/", views.MonthlyAdoptionReportPdfView.as_view(), name="monthly-adoption-report-pdf"),
 ]

@@ -1214,3 +1214,55 @@ class AdoptionPdfExportTests(BaseAPITestCase):
         text = _extract_pdf_text(resp.content)
         self.assertIn(b"No adoption records match the selected filters.", text)
 
+
+
+
+class IndividualAdoptionRecordPdfTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Milo", species="cat", age_years=1, status="adopted")
+        self.adopter = self.create_user(email="adopter_adopt_pdf@example.com")
+        self.staff = self.create_staff(email="staff_adopt_pdf@example.com")
+        self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="adoption_completed")
+        self.completed_record = AdoptionRecord.objects.create(
+            application=self.app,
+            pet=self.pet,
+            adopter=self.adopter,
+            staff_member=self.staff,
+            status=AdoptionRecord.Status.COMPLETED,
+            transaction_id="TXN-AABBCCDDEEFF",
+            completed_at=timezone.now(),
+            completed_date=timezone.localdate(),
+        )
+        self.scheduled_pet = Pet.objects.create(name="Luna", species="cat", age_years=2, status="pending")
+        self.scheduled_app = Application.objects.create(adopter=self.adopter, pet=self.scheduled_pet, status="approved")
+        self.scheduled_record = AdoptionRecord.objects.create(
+            application=self.scheduled_app,
+            pet=self.scheduled_pet,
+            adopter=self.adopter,
+            status=AdoptionRecord.Status.SCHEDULED,
+        )
+
+    def test_staff_can_download_individual_completed_adoption_pdf(self):
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/adoptions/{self.completed_record.id}/record-pdf/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertIn("attachment;", resp["Content-Disposition"])
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+
+    def test_non_completed_adoption_cannot_download_individual_pdf(self):
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/adoptions/{self.scheduled_record.id}/record-pdf/")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("error", resp.data)
+
+    def test_adopter_cannot_download_adoption_pdf_via_staff_endpoint(self):
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/adoptions/{self.completed_record.id}/record-pdf/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_anonymous_cannot_download_adoption_pdf(self):
+        self.unauthenticate()
+        resp = self.client.get(f"/api/adoptions/{self.completed_record.id}/record-pdf/")
+        self.assertIn(resp.status_code, [401, 403])

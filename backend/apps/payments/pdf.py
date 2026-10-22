@@ -200,3 +200,182 @@ def build_payment_records_pdf(payments, filters=()):
 
     doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
     return buffer.getvalue()
+
+
+
+def build_single_receipt_pdf(payment):
+    """Render a single payment transaction into an A4 receipt PDF."""
+    cell_style = ParagraphStyle(
+        "PdfCell", fontName="Helvetica", fontSize=9, leading=12, textColor=colors.black,
+    )
+    label_style = ParagraphStyle(
+        "PdfLabel", fontName="Helvetica-Bold", fontSize=9, leading=12, textColor=colors.HexColor("#374151"),
+    )
+
+    def _page_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#6b7280"))
+        canvas.drawCentredString(PAGE_WIDTH / 2, 10 * mm, "PawConnect \u2014 Official Receipt")
+        canvas.restoreState()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=18 * mm, bottomMargin=16 * mm,
+        title="PawConnect - Payment Receipt",
+        author="PawConnect Staff Portal",
+    )
+    generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
+    app = payment.application
+    story = []
+    story.append(Paragraph("PawConnect", ParagraphStyle(
+        "SingleTitle", fontName="Helvetica-Bold", fontSize=19, leading=24,
+        textColor=colors.HexColor("#1f2937"),
+    )))
+    story.append(Paragraph("Official Payment Receipt", ParagraphStyle(
+        "SingleHeading", fontName="Helvetica-Bold", fontSize=13, leading=17,
+        spaceAfter=2, textColor=colors.HexColor("#374151"),
+    )))
+    story.append(Paragraph(f"Generated on {escape(generated)}", ParagraphStyle(
+        "SingleMeta", fontSize=8.5, leading=11, textColor=colors.HexColor("#6b7280"),
+    )))
+    story.append(Spacer(1, 5 * mm))
+
+    rows = [
+        ("Receipt Number", payment.receipt_number or "\u2014"),
+        ("Pet", app.pet.name),
+        ("Adopter", app.adopter.email),
+        ("Application", str(app.id)[:8] + "\u2026"),
+        ("Amount", _money(payment.amount)),
+        ("Method", payment.get_method_display()),
+        ("Status", payment.get_status_display()),
+        ("Payment Date", payment.payment_date.isoformat() if payment.payment_date else "\u2014"),
+        ("Processed By", payment.processed_by.email if payment.processed_by_id else "\u2014"),
+        ("Notes", payment.notes or "\u2014"),
+    ]
+    tdata = [[_cell(k, label_style), _cell(v, cell_style)] for k, v in rows]
+    table = Table(tdata, colWidths=[50 * mm, 120 * mm])
+    table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
+    return buffer.getvalue()
+
+
+def build_single_receipt_pdf(payment):
+    """Render a single payment transaction into an A4 receipt PDF."""
+    cell_style = ParagraphStyle(
+        "PdfCell",
+        fontName="Helvetica",
+        fontSize=9,
+        leading=12,
+        textColor=colors.black,
+    )
+    label_style = ParagraphStyle(
+        "PdfLabel",
+        fontName="Helvetica-Bold",
+        fontSize=9,
+        leading=12,
+        textColor=colors.HexColor("#374151"),
+    )
+
+    def _page_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor("#6b7280"))
+        canvas.drawCentredString(PAGE_WIDTH / 2, 10 * mm, "PawConnect — Official Receipt")
+        canvas.restoreState()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=MARGIN,
+        rightMargin=MARGIN,
+        topMargin=18 * mm,
+        bottomMargin=16 * mm,
+        title=f"PawConnect - Payment Receipt {payment.receipt_number or payment.id}",
+        author="PawConnect Staff Portal",
+    )
+    generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
+    app = payment.application
+    story = [
+        Paragraph(
+            "PawConnect",
+            ParagraphStyle(
+                "Title",
+                fontName="Helvetica-Bold",
+                fontSize=19,
+                leading=24,
+                textColor=colors.HexColor("#1f2937"),
+            ),
+        ),
+        Paragraph(
+            "Official Payment Receipt",
+            ParagraphStyle(
+                "Heading",
+                fontName="Helvetica-Bold",
+                fontSize=13,
+                leading=17,
+                spaceAfter=2,
+                textColor=colors.HexColor("#374151"),
+            ),
+        ),
+        Paragraph(
+            f"Generated on {escape(generated)}",
+            ParagraphStyle(
+                "Meta", fontSize=8.5, leading=11, textColor=colors.HexColor("#6b7280")
+            ),
+        ),
+        Spacer(1, 5 * mm),
+    ]
+
+    pet_name = app.pet.name if (app and app.pet) else "—"
+    adopter_email = app.adopter.email if (app and app.adopter) else "—"
+    app_ref = f"{str(app.id)[:8]}…" if app else "—"
+    payment_date_str = payment.payment_date.isoformat() if payment.payment_date else (
+        timezone.localtime(payment.created_at).strftime("%Y-%m-%d %H:%M") if payment.created_at else "—"
+    )
+    processed_by_str = payment.processed_by.email if payment.processed_by else "—"
+
+    rows = [
+        ("Receipt Number", payment.receipt_number or "—"),
+        ("Transaction Reference", payment.reference_number or "—"),
+        ("Pet", pet_name),
+        ("Adopter", adopter_email),
+        ("Application Reference", app_ref),
+        ("Amount Received", _money(payment.amount)),
+        ("Payment Method", payment.get_method_display()),
+        ("Payment Status", payment.get_status_display()),
+        ("Payment Date", payment_date_str),
+        ("Processed By", processed_by_str),
+        ("Notes", payment.notes or "—"),
+    ]
+    tdata = [[_cell(k, label_style), _cell(v, cell_style)] for k, v in rows]
+    table = Table(tdata, colWidths=[50 * mm, 120 * mm])
+    table.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    story.append(table)
+    doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
+    return buffer.getvalue()
+

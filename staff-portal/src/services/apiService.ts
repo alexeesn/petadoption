@@ -174,6 +174,9 @@ export const adoptionService = {
   // returns an application/pdf blob with a Content-Disposition attachment name.
   exportPdf: (params?: Record<string, unknown>) =>
     api.get('/adoptions/export-pdf/', { params, responseType: 'blob' }),
+  // Individual adoption record PDF for one completed adoption (staff-only).
+  recordPdf: (id: string) =>
+    api.get(`/adoptions/${id}/record-pdf/`, { responseType: 'blob' }),
 };
 
 // ----- Appointments (onsite visit dates) -----
@@ -209,6 +212,9 @@ export const paymentService = {
   // blob with a Content-Disposition attachment filename.
   exportPdf: (params?: Record<string, unknown>) =>
     api.get('/payments/export-pdf/', { params, responseType: 'blob' }),
+  // Individual receipt PDF for one payment transaction (staff-only).
+  receiptPdf: (id: string) =>
+    api.get(`/payments/${id}/receipt-pdf/`, { responseType: 'blob' }),
 };
 
 // ----- Reports -----
@@ -219,6 +225,10 @@ export const reportService = {
   application: (params?: Record<string, unknown>) => api.get('/reports/applications/', { params }),
   health: (params?: Record<string, unknown>) => api.get('/reports/health/', { params }),
   payment: (params?: Record<string, unknown>) => api.get('/reports/payments/', { params }),
+  monthlyPaymentsPdf: (year: number, month: number) =>
+    api.get('/reports/monthly-payments-pdf/', { params: { year, month }, responseType: 'blob' }),
+  monthlyAdoptionsPdf: (year: number, month: number) =>
+    api.get('/reports/monthly-adoptions-pdf/', { params: { year, month }, responseType: 'blob' }),
   csv: (reportType: string, params?: Record<string, unknown>) => {
     const urlMap: Record<string, string> = {
       adoption: '/reports/adoptions/',

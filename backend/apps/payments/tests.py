@@ -1493,3 +1493,40 @@ class PaymentIntegrityGateTests(BaseAPITestCase):
             f"/api/payments/{Payment.objects.get().id}/", {"status": "completed"}
         )
         self.assertEqual(resp2.status_code, 403)
+
+
+
+class IndividualReceiptPdfTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.pet = Pet.objects.create(name="Rocky", species="dog", age_years=2, status="pending")
+        self.adopter = self.create_user(email="adopter_receipt@example.com")
+        self.staff = self.create_staff(email="staff_receipt@example.com")
+        self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="approved")
+        self.payment = Payment.objects.create(
+            application=self.app,
+            amount=Decimal("500.00"),
+            method="cash",
+            status="completed",
+            payment_date=timezone.localdate(),
+            reference_number="OR-112233",
+            processed_by=self.staff,
+        )
+
+    def test_staff_can_download_individual_receipt_pdf(self):
+        self.authenticate(self.staff)
+        resp = self.client.get(f"/api/payments/{self.payment.id}/receipt-pdf/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/pdf")
+        self.assertIn("attachment;", resp["Content-Disposition"])
+        self.assertTrue(resp.content.startswith(b"%PDF"))
+
+    def test_adopter_cannot_download_receipt_pdf_via_staff_endpoint(self):
+        self.authenticate(self.adopter)
+        resp = self.client.get(f"/api/payments/{self.payment.id}/receipt-pdf/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_anonymous_cannot_download_receipt_pdf(self):
+        self.unauthenticate()
+        resp = self.client.get(f"/api/payments/{self.payment.id}/receipt-pdf/")
+        self.assertIn(resp.status_code, [401, 403])

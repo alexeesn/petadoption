@@ -44,6 +44,22 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
             qs = qs.filter(status=status)
         return qs
 
+    @action(detail=True, methods=["get"], url_path="record-pdf")
+    def record_pdf(self, request, pk=None):
+        """Staff-only individual adoption record PDF for one completed adoption."""
+        record = self.get_object()
+        if record.status != AdoptionRecord.Status.COMPLETED:
+            return Response(
+                {"error": "Individual PDF is only available for completed adoption records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from .pdf import build_single_adoption_pdf
+        pdf_bytes = build_single_adoption_pdf(record)
+        filename = f"pawconnect-adoption-{record.transaction_id or str(record.id)[:8]}.pdf"
+        resp = HttpResponse(pdf_bytes, content_type="application/pdf")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
     @action(detail=False, methods=["get"], url_path="export-pdf")
     def export_pdf(self, request):
         """Staff-only A4 PDF export of adoption records matching ``?status=``.

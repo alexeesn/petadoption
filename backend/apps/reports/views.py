@@ -189,3 +189,91 @@ class HealthReportView(views.APIView):
             return response
 
         return Response({"stats": stats})
+
+
+class MonthlyPaymentReportPdfView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsStaff]
+
+    def get(self, request):
+        from apps.payments.models import Payment
+        from apps.payments.pdf import build_payment_records_pdf
+        from django.db.models import Q
+
+        year = request.query_params.get("year")
+        month = request.query_params.get("month")
+        if not year or not month:
+            return Response({"error": "year and month are required."}, status=400)
+        try:
+            year = int(year)
+            month = int(month)
+            if not (1 <= month <= 12):
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"error": "year and month must be valid integers."}, status=400)
+
+        import calendar
+        from datetime import date
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
+
+        payments = list(
+            Payment.objects.filter(
+                status=Payment.Status.COMPLETED,
+            ).filter(
+                Q(payment_date__gte=first_day, payment_date__lte=last_day)
+                | Q(payment_date__isnull=True, created_at__date__gte=first_day, created_at__date__lte=last_day)
+            ).select_related("application", "application__adopter", "application__pet", "processed_by")
+            .order_by("payment_date", "created_at")
+        )
+
+        month_label = first_day.strftime("%B %Y")
+        filters = [f"Month: {month_label}", "Status: Completed only"]
+        pdf_bytes = build_payment_records_pdf(payments, filters=filters)
+        filename = f"pawconnect-payment-report-{year}-{month:02d}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response
+
+
+class MonthlyAdoptionReportPdfView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsStaff]
+
+    def get(self, request):
+        from apps.adoptions.models import AdoptionRecord
+        from apps.adoptions.pdf import build_adoption_records_pdf
+        from django.db.models import Q
+
+        year = request.query_params.get("year")
+        month = request.query_params.get("month")
+        if not year or not month:
+            return Response({"error": "year and month are required."}, status=400)
+        try:
+            year = int(year)
+            month = int(month)
+            if not (1 <= month <= 12):
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"error": "year and month must be valid integers."}, status=400)
+
+        import calendar
+        from datetime import date
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
+
+        records = list(
+            AdoptionRecord.objects.filter(
+                status=AdoptionRecord.Status.COMPLETED,
+            ).filter(
+                Q(completed_at__date__gte=first_day, completed_at__date__lte=last_day)
+                | Q(completed_at__isnull=True, completed_date__gte=first_day, completed_date__lte=last_day)
+            ).select_related("pet", "adopter", "staff_member", "appointment")
+            .order_by("completed_at", "completed_date")
+        )
+
+        month_label = first_day.strftime("%B %Y")
+        filters = [f"Month: {month_label}", "Status: Completed only"]
+        pdf_bytes = build_adoption_records_pdf(records, filters=filters)
+        filename = f"pawconnect-adoption-report-{year}-{month:02d}.pdf"
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return response

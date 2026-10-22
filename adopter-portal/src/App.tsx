@@ -64,6 +64,7 @@ function AppRoutes() {
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/adoption/:id" element={<AdoptionRecordPage />} />
+          <Route path="/adoptions/:id" element={<AdoptionRecordPage />} />
         </Route>
       </Route>
     </Routes>

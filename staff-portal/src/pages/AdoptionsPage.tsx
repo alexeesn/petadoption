@@ -28,14 +28,11 @@ function reportFilename(): string {
 }
 
 /**
- * Adoption Records (read-only browsing).
+ * Adoption Records (browsing and individual PDF download).
  *
  * Records are created server-side when staff confirm an onsite visit date; the
  * permanent transaction ID is generated and stored by the backend only when a
- * record is completed — never by this page. The list endpoint is paginated, so
- * the page fetches one page at a time and filters server-side (?status=) rather
- * than loading every record into the browser. No editing, deletion, or
- * completion actions exist here.
+ * record is completed. Completed adoptions have individual PDF certificate downloads.
  */
 export default function AdoptionsPage() {
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
@@ -48,6 +45,7 @@ export default function AdoptionsPage() {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -75,8 +73,7 @@ export default function AdoptionsPage() {
     setPage(1);
   };
 
-  /** Download the current-filter adoption records as a PDF (all matches, not
-   *  just the visible page) generated server-side by the staff-only endpoint. */
+  /** Download the current-filter adoption records as an aggregate PDF report */
   const exportPdf = () => {
     setExporting(true);
     setExportError('');
@@ -101,7 +98,6 @@ export default function AdoptionsPage() {
         const data = (e as { response?: { data?: unknown } } | undefined)?.response?.data;
         if (data instanceof Blob) {
           try {
-            // DRF validation errors arrive as JSON inside the blob.
             const parsed = JSON.parse(await data.text()) as Record<string, unknown>;
             if (typeof parsed.detail === 'string') {
               message = parsed.detail;
@@ -115,7 +111,7 @@ export default function AdoptionsPage() {
               if (parts.length > 0) message = parts.join(' · ');
             }
           } catch {
-            // Not JSON — keep the fallback message.
+            // Not JSON
           }
         }
         setExportError(message);
@@ -123,11 +119,35 @@ export default function AdoptionsPage() {
       .finally(() => setExporting(false));
   };
 
+  /** Download an individual PDF for a single completed adoption */
+  const downloadRecordPdf = (rec: AdoptionRecord) => {
+    setDownloadingId(rec.id);
+    setExportError('');
+    adoptionService
+      .recordPdf(rec.id)
+      .then((res) => {
+        const blob = res.data as Blob;
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        const refSlug = rec.transaction_id || rec.id.slice(0, 8);
+        anchor.download = `pawconnect-adoption-${refSlug}.pdf`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        setExportError('Failed to download individual adoption record PDF.');
+      })
+      .finally(() => setDownloadingId(null));
+  };
+
   return (
-<div>
+    <div>
       <PageHeader
         title="Adoption Records"
-        subtitle="Created automatically by the backend when staff confirm an onsite visit date. This page is read-only — adoption status is managed through the Schedule and Application workflows."
+        subtitle="Persisted adoption records. Each completed adoption has an individual official PDF download. Use Export All Filtered PDF for aggregate records."
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
@@ -150,7 +170,7 @@ export default function AdoptionsPage() {
           onClick={exportPdf}
           disabled={exporting}
         >
-          {exporting ? 'Preparing PDF…' : 'Export PDF'}
+          {exporting ? 'Preparing PDF…' : 'Export All Filtered PDF'}
         </Button>
       </div>
       {exportError && (
@@ -167,9 +187,7 @@ export default function AdoptionsPage() {
       </p>
       <p className="mb-4 text-xs text-slate-500">
         Only records with status <span className="font-medium text-green-700">Completed</span> are
-        finalized adoptions — they carry a permanent transaction ID and the completion time and
-        staff. Scheduled, cancelled, and returned records are not finalized. Nothing on this page
-        can be edited.
+        finalized adoptions — they carry a permanent transaction ID and can be downloaded as an individual official PDF.
       </p>
 
       {loading ? (
@@ -186,7 +204,7 @@ export default function AdoptionsPage() {
             <Table
               headers={[
                 'Transaction ID', 'Pet', 'Adopter', 'Application', 'Status',
-                'Completed', 'Completed by', 'Appointment',
+                'Completed', 'Completed by', 'Appointment', 'Action',
               ]}
             >
               {records.map((rec) => (
@@ -218,6 +236,20 @@ export default function AdoptionsPage() {
                     {rec.appointment_id && rec.appointment_date
                       ? `${formatDate(rec.appointment_date)}`
                       : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {rec.status === 'completed' ? (
+                      <Button
+                        variant="outline"
+                        className="text-xs px-2.5 py-1"
+                        onClick={() => downloadRecordPdf(rec)}
+                        disabled={downloadingId === rec.id}
+                      >
+                        {downloadingId === rec.id ? 'PDF…' : 'Download PDF'}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-slate-400">—</span>
+                    )}
                   </td>
                 </tr>
               ))}
