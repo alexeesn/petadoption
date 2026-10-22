@@ -91,6 +91,11 @@ export interface Application {
   documents?: Document[];
   created_at: string;
   updated_at: string;
+  /** Fee / payment / turnover-eligibility summary (backend serialized fields). */
+  adoption_fee?: string;
+  total_paid?: string;
+  is_fee_paid?: boolean;
+  turnover_eligible?: boolean;
 }
 
 export interface Document {
@@ -172,6 +177,10 @@ export interface AdoptionRecord {
   completed_date?: string | null;
   /** Finalization timestamp (only set when completed). */
   completed_at?: string | null;
+  /** Fee and payment totals (backend serialized from the application). */
+  adoption_fee?: string;
+  total_paid?: string;
+  is_fee_paid?: boolean;
   notes: string;
   return_reason: string;
   created_at: string;

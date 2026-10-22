@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select,
 } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
-import { adoptionService } from '../services/apiService';
-import type { AdoptionRecord, PaginatedResponse } from '../types';
-import { formatDate, formatDateTime } from '../utils/format';
+import { adoptionService, applicationService } from '../services/apiService';
+import type { AdoptionRecord, Application, PaginatedResponse } from '../types';
+import { formatDate, formatDateTime, formatCurrency } from '../utils/format';
 
 /** Matches AdoptionRecord.Status.choices in backend/apps/adoptions/models.py. */
 const STATUS_FILTERS = [
@@ -20,6 +20,10 @@ function shortId(value: string): string {
   return value.length > 8 ? `${value.slice(0, 8)}…` : value;
 }
 
+function humanise(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
 /** Filename convention for the generated report: pawconnect-adoption-records-YYYY-MM-DD.pdf */
 function reportFilename(): string {
   const today = new Date();
@@ -28,11 +32,16 @@ function reportFilename(): string {
 }
 
 /**
- * Adoption Records (browsing and individual PDF download).
+ * Adoption Records (browsing, completion, and individual PDF download).
  *
  * Records are created server-side when staff confirm an onsite visit date; the
  * permanent transaction ID is generated and stored by the backend only when a
- * record is completed. Completed adoptions have individual PDF certificate downloads.
+ * record is completed. Scheduled records can be completed from here via the
+ * same canonical endpoint the Application Review page uses
+ * (POST /api/applications/{id}/complete-adoption/), which re-validates the
+ * approved application, confirmed appointment, fully paid fee, and an explicit
+ * physical-handover confirmation. Completed adoptions have individual PDF
+ * certificate downloads.
  */
 export default function AdoptionsPage() {
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
@@ -46,6 +55,15 @@ export default function AdoptionsPage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  // ----- Complete Adoption (per scheduled record) -----
+  const [completionRecord, setCompletionRecord] = useState<AdoptionRecord | null>(null);
+  const [completionApp, setCompletionApp] = useState<Application | null>(null);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+  const [handoverChecked, setHandoverChecked] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState('');
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
   const load = () => {
     setLoading(true);
@@ -66,6 +84,96 @@ export default function AdoptionsPage() {
   };
 
   useEffect(load, [page, statusFilter]);
+
+  /**
+   * Open the completion confirmation dialog for a scheduled record and load
+   * the application so eligibility reflects current server-side data (the
+   * backend re-validates on submit; this only drives the UI state).
+   */
+  const openCompletion = (rec: AdoptionRecord) => {
+    setCompletionRecord(rec);
+    setCompletionApp(null);
+    setHandoverChecked(false);
+    setCompleting(false);
+    setCompletionError('');
+    setEligibilityLoading(true);
+    applicationService
+      .retrieve(rec.application_id)
+      .then((res) => setCompletionApp(res.data as Application))
+      .catch(() => setCompletionApp(null))
+      .finally(() => setEligibilityLoading(false));
+  };
+
+  const closeCompletion = () => {
+    setCompletionRecord(null);
+  };
+
+  // Open the native <dialog> whenever a record is selected for completion.
+  useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    if (completionRecord && !el.open) el.showModal();
+    else if (!completionRecord && el.open) el.close();
+  }, [completionRecord]);
+
+  // Escape-to-close fallback for browsers that do not fire the cancel event.
+  useEffect(() => {
+    if (!completionRecord) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeCompletion();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [completionRecord]);
+
+  /**
+   * Submit to the canonical adoption-completion endpoint
+   * (POST /api/applications/{id}/complete-adoption/, the same endpoint used by
+   * the Application Review page), then refresh the table. The backend owns all
+   * validation: approved application, confirmed appointment, fully paid fee,
+   * and the strict boolean handover confirmation carried by the service call.
+   */
+  const confirmCompletion = () => {
+    if (!completionRecord) return;
+    setCompleting(true);
+    setCompletionError('');
+    applicationService
+      .completeAdoption(completionRecord.application_id)
+      .then(() => {
+        closeCompletion();
+        load();
+      })
+      .catch((e) => {
+        const data = (e as { response?: { data?: { error?: string } } }).response?.data;
+        setCompletionError(data?.error || 'Failed to complete the adoption. Please try again.');
+      })
+      .finally(() => setCompleting(false));
+  };
+
+  // Eligibility checklist shown in the dialog, mirroring the backend gates in
+  // complete_application_adoption() (backend/apps/adoptions/services.py).
+  const requirements = completionRecord
+    ? [
+        {
+          met: completionApp?.status === 'approved',
+          label: 'Application approved',
+          message: completionApp
+            ? `The adoption application must be approved first (current status: ${humanise(completionApp.status)}).`
+            : 'The adoption application for this record could not be verified.',
+        },
+        {
+          met: Boolean(completionRecord.appointment_id),
+          label: 'Confirmed onsite visit date',
+          message: 'A confirmed onsite visit appointment is required before the pet can be handed over.',
+        },
+        {
+          met: Boolean(completionRecord.is_fee_paid),
+          label: `Adoption fee paid (₱${completionRecord.adoption_fee ?? '500.00'})`,
+          message: `The adoption fee must be fully paid before completion (total completed: ${formatCurrency(completionRecord.total_paid ?? '0.00')}).`,
+        },
+      ]
+    : [];
+  const completionEligible = completionRecord !== null && completionApp !== null && requirements.every((r) => r.met);
 
   const clearFilters = () => {
     setStatusFilter('');
@@ -186,8 +294,11 @@ export default function AdoptionsPage() {
         ))}
       </p>
       <p className="mb-4 text-xs text-slate-500">
-        Only records with status <span className="font-medium text-green-700">Completed</span> are
-        finalized adoptions — they carry a permanent transaction ID and can be downloaded as an individual official PDF.
+        Records with status <span className="font-medium text-sky-700">Scheduled</span> can be
+        completed from the <strong>Action</strong> column once the onsite visit is confirmed and the
+        adoption fee is fully paid. Records with status{' '}
+        <span className="font-medium text-green-700">Completed</span> are finalized adoptions — they
+        carry a permanent transaction ID and can be downloaded as an individual official PDF.
       </p>
 
       {loading ? (
@@ -247,6 +358,15 @@ export default function AdoptionsPage() {
                       >
                         {downloadingId === rec.id ? 'PDF…' : 'Download PDF'}
                       </Button>
+                    ) : rec.status === 'scheduled' ? (
+                      <Button
+                        variant="secondary"
+                        className="text-xs px-2.5 py-1"
+                        onClick={() => openCompletion(rec)}
+                        disabled={completing}
+                      >
+                        Complete Adoption
+                      </Button>
                     ) : (
                       <span className="text-xs text-slate-400">—</span>
                     )}
@@ -272,6 +392,150 @@ export default function AdoptionsPage() {
             </Button>
           </div>
         </>
+      )}
+      {completionRecord && (
+        <dialog
+          ref={dialogRef}
+          onCancel={(e) => {
+            e.preventDefault();
+            closeCompletion();
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeCompletion();
+          }}
+          aria-label="Complete adoption confirmation"
+          aria-modal="true"
+          className={[
+            'bg-transparent p-0 border-0 outline-none',
+            'fixed inset-0 m-0 max-h-none max-w-none w-screen h-screen',
+            'bg-stone-900/50 backdrop-blur-sm',
+            'flex items-center justify-center',
+            'z-50',
+          ].join(' ')}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="document"
+            className="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-2xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Complete Adoption</h3>
+                <p className="text-xs text-slate-500">
+                  Confirm the onsite visit finished and the pet was physically handed over.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCompletion}
+                aria-label="Close completion dialog"
+                className="rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <span aria-hidden="true" className="text-lg leading-none">×</span>
+              </button>
+            </div>
+
+            {eligibilityLoading ? (
+              <Loading label="Checking completion eligibility…" />
+            ) : (
+              <>
+                {/* Record summary: pet, adopter, appointment, and payment totals */}
+                <dl className="mb-4 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-slate-500">Pet</dt>
+                    <dd className="font-medium text-slate-900">{completionRecord.pet_name}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Adopter</dt>
+                    <dd className="font-medium text-slate-900">{completionRecord.adopter_email}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Appointment</dt>
+                    <dd className="font-medium text-slate-900">
+                      {completionRecord.appointment_id
+                        ? formatDate(completionRecord.appointment_date ?? undefined)
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Adoption fee</dt>
+                    <dd className="font-medium text-slate-900">
+                      {formatCurrency(completionRecord.adoption_fee ?? completionApp?.adoption_fee ?? null)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Paid</dt>
+                    <dd className="font-medium text-slate-900">
+                      {formatCurrency(completionRecord.total_paid ?? completionApp?.total_paid ?? null)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Balance</dt>
+                    <dd className={`font-medium ${completionRecord.is_fee_paid ? 'text-green-700' : 'text-slate-900'}`}>
+                      {formatCurrency(
+                        Math.max(
+                          Number(completionRecord.adoption_fee ?? completionApp?.adoption_fee ?? 0) -
+                            Number(completionRecord.total_paid ?? completionApp?.total_paid ?? 0),
+                          0,
+                        ),
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
+                {/* Eligibility requirements - each missing item explains what is needed */}
+                <ul className="mb-4 space-y-1.5 text-sm">
+                  {requirements.map((req) => (
+                    <li
+                      key={req.label}
+                      className={`flex items-start gap-2 ${req.met ? 'text-slate-600' : 'font-medium text-red-700'}`}
+                    >
+                      <span aria-hidden="true" className="mt-0.5">
+                        {req.met ? '✓' : '✗'}
+                      </span>
+                      <span>{req.met ? req.label : req.message}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {completionError && (
+                  <div
+                    role="alert"
+                    className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                  >
+                    {completionError}
+                  </div>
+                )}
+
+                <label className="mb-4 flex items-start gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={handoverChecked}
+                    onChange={(e) => setHandoverChecked(e.target.checked)}
+                    disabled={completing || !completionEligible}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>
+                    I confirm the pet has been <strong>physically handed over</strong> to the
+                    adopter. This is required to complete the adoption.
+                  </span>
+                </label>
+
+                <div className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                  <Button variant="outline" onClick={closeCompletion} disabled={completing}>
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={confirmCompletion}
+                    disabled={completing || !handoverChecked || !completionEligible}
+                  >
+                    {completing ? 'Completing…' : 'Complete Adoption'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </dialog>
       )}
     </div>
   );
