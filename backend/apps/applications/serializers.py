@@ -60,6 +60,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "reviewed_by_email", "reviewed_at", "documents",
             "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible", "onsite_visit",
             "created_at", "updated_at",
+            "has_other_pets", "other_pets_description",
         ]
 
     def get_adopter_profile(self, obj):
@@ -138,7 +139,7 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
         model = Application
         fields = [
             "pet", "why_adopt", "experience_with_pets", "living_situation",
-            "has_other_pets", "other_pets_description", "references", "additional_notes",
+            "references", "additional_notes",
             "privacy_consent", "require_home_visit", "no_home_visit_reason",
         ]
 
@@ -203,6 +204,11 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data["adopter"] = self.context["request"].user
+        # Household pet information is entered once in the adopter profile.
+        # Retain a submission-time snapshot without trusting duplicate form input.
+        profile = AdopterProfile.objects.filter(user=validated_data["adopter"]).first()
+        validated_data["has_other_pets"] = bool(profile and profile.has_other_pets)
+        validated_data["other_pets_description"] = profile.other_pets if profile and profile.has_other_pets else ""
         return super().create(validated_data)
 
 

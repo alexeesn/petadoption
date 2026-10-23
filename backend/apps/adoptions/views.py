@@ -50,18 +50,20 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="record-pdf")
     def record_pdf(self, request, pk=None):
-        """Staff-only document for a completed or returned adoption."""
+        """Staff-only document for completed, returned or cancelled adoption history."""
         record = self.get_object()
-        if record.status not in (AdoptionRecord.Status.COMPLETED, AdoptionRecord.Status.RETURNED):
+        if record.status not in (AdoptionRecord.Status.COMPLETED, AdoptionRecord.Status.RETURNED, AdoptionRecord.Status.CANCELLED):
             return Response(
-                {"error": "Individual PDF is only available for completed or returned adoption records."},
+                {"error": "Individual PDF is only available for completed, returned or cancelled adoption records."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        from .pdf import build_single_adoption_pdf, build_returned_adoption_pdf
-        returned = record.status == AdoptionRecord.Status.RETURNED
-        builder = build_returned_adoption_pdf if returned else build_single_adoption_pdf
+        from .pdf import build_single_adoption_pdf, build_returned_adoption_pdf, build_cancelled_adoption_pdf
+        builder, prefix = {
+            AdoptionRecord.Status.COMPLETED: (build_single_adoption_pdf, "adoption"),
+            AdoptionRecord.Status.RETURNED: (build_returned_adoption_pdf, "adoption-return"),
+            AdoptionRecord.Status.CANCELLED: (build_cancelled_adoption_pdf, "adoption-cancelled"),
+        }[record.status]
         pdf_bytes = builder(record, downloaded_by=request.user)
-        prefix = "adoption-return" if returned else "adoption"
         filename = f"pawconnect-{prefix}-{record.transaction_id or str(record.id)[:8]}.pdf"
         resp = HttpResponse(pdf_bytes, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'

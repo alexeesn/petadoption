@@ -36,7 +36,12 @@ reference. It retains the payment-history/no-automatic-refund statement.
 Historical rows without a return date display **Not recorded**; downloading
 never invents or changes their return dates.
 
-All six generated PDF downloads (individual adoption/return record, individual
+Cancelled records also offer **Download Cancellation PDF**, containing the
+saved cancellation reason/time, original schedule, adopter and pet information,
+and a statement that cancellation does not issue a refund. Existing historical
+rows without a cancellation timestamp display **Not recorded**.
+
+All six generated PDF downloads (individual adoption/return/cancellation record, individual
 payment receipt, adoption export, payment export and both monthly reports) show:
 
 - **Downloaded by:** the authenticated staff/admin's current name, email and
@@ -69,9 +74,11 @@ service and requires the same reason and strict boolean confirmation.
 `GET /api/adoptions/?status=returned` filters persisted returned records.
 
 `GET /api/adoptions/{id}/record-pdf/` (staff/admin) returns a certificate for
-Completed records or a return acknowledgment for Returned records. Scheduled
-and Cancelled records still return HTTP 400. Return PDF filenames use
-`pawconnect-adoption-return-{transaction-reference}.pdf`.
+Completed records, a return acknowledgment for Returned records, or a
+cancellation acknowledgment for Cancelled records. Scheduled records still
+return HTTP 400. Return PDF filenames use
+`pawconnect-adoption-return-{transaction-reference}.pdf`; cancellation filenames
+use `pawconnect-adoption-cancelled-{transaction-reference-or-short-record-id}.pdf`.
 
 ## Verification
 
@@ -101,15 +108,15 @@ Existing development data is not modified.
 Verified for this change:
 
 - 20 return/lifecycle HTTP regressions passed on PostgreSQL.
-- Full PostgreSQL suite after the PDF update: 593 tests, 588 passed and 5 opt-in cases skipped.
-- Full SQLite suite (CI settings) after the PDF update: 593 tests, 581 passed and 12
+- Full PostgreSQL suite after the cancellation PDF update: 606 tests, 601 passed and 5 opt-in cases skipped.
+- Full SQLite suite (CI settings) after the cancellation PDF update: 606 tests, 594 passed and 12
   PostgreSQL/browser-only cases skipped.
 - The opt-in return browser walkthrough passed separately against PostgreSQL,
   including both portals, a 390px viewport and a failed-save retry.
 - Both portals passed TypeScript/production builds. The adopter portal retains
   its existing bundle-size warning.
 - Django system checks, migration checks and diff whitespace checks passed.
-- All 9 PDF metadata/return-document regressions passed, and the staff portal
+- All 11 PDF metadata/return/cancellation-document regressions passed, and the staff portal
   passed its production build after adding Download Return PDF.
 
 PDF HTTP/content regressions can be run separately:

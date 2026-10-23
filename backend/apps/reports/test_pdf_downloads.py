@@ -143,13 +143,59 @@ class PdfDownloadMetadataTests(BaseAPITestCase):
         self.assertIn(b"END OF RETURN REASON", content)
         self.assertIn(self.downloader.email.encode(), content)
 
-    def test_scheduled_and_cancelled_records_still_cannot_download_individual_pdf(self):
+    def test_scheduled_records_still_cannot_download_individual_pdf(self):
         self.authenticate(self.downloader)
-        for record_status in ("scheduled", "cancelled"):
-            self.record.status = record_status
-            self.record.save()
-            response = self.client.get(self.urls[0])
-            self.assertEqual(response.status_code, 400)
+        self.record.status = "scheduled"
+        self.record.save()
+        self.assertEqual(self.client.get(self.urls[0]).status_code, 400)
+
+    def cancel_scheduled_record(self):
+        self.record.status = "scheduled"
+        self.record.transaction_id = None
+        self.record.completed_at = None
+        self.record.completed_date = None
+        self.record.adoption_date = date(2026, 10, 28)
+        self.record.save()
+        self.app.status = "approved"
+        self.app.save(update_fields=["status"])
+        self.pet.status = "pending"
+        self.pet.save(update_fields=["status"])
+        self.authenticate(self.downloader)
+        with patch("django.utils.timezone.now", return_value=datetime(2026, 10, 20, 4, tzinfo=dt_timezone.utc)):
+            response = self.client.post(f"/api/adoptions/{self.record.pk}/cancel/", {
+                "reason": "Adopter cannot attend & requested cancellation <confirmed>", "confirmed": True,
+            }, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        self.record.refresh_from_db()
+
+    def test_cancelled_pdf_has_saved_reason_dates_downloader_and_preserves_payment_history(self):
+        self.cancel_scheduled_record()
+        before = self.snapshot()
+        response, content = self.download(self.urls[0])
+        self.assertIn(f"pawconnect-adoption-cancelled-{str(self.record.pk)[:8]}.pdf", response["Content-Disposition"])
+        for value in (b"Adoption Cancellation Record", b"Current adoption status: Cancelled", b"20 October 2026",
+                      b"28 October 2026", b"24 October 2026", b"Download Operator", str(self.app.pk).encode(),
+                      str(self.record.pk).encode()):
+            self.assertIn(value, content)
+        compact = re.sub(rb"\s+", b"", content)
+        self.assertIn(b"Adoptercannotattend&requestedcancellation<confirmed>", compact)
+        self.assertIn(b"Cancellationdoesnotissuearefund", compact)
+        self.assertNotIn(b"Certificate of Adoption", content)
+        self.assertNotIn(b"Completion recorded:", content)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_cancelled_pdf_is_staff_only_and_does_not_invent_unknown_cancellation_date(self):
+        self.cancel_scheduled_record()
+        self.record.cancelled_at = None
+        self.record.save(update_fields=["cancelled_at"])
+        _, content = self.download(self.urls[0])
+        self.assertIn(b"Not recorded", content)
+        self.authenticate(self.adopter)
+        self.assertEqual(self.client.get(self.urls[0]).status_code, 403)
+        self.unauthenticate()
+        self.assertIn(self.client.get(self.urls[0]).status_code, (401, 403))
+        self.authenticate(self.admin)
+        self.assertEqual(self.client.get(self.urls[0]).status_code, 200)
 
     def test_return_pdf_remains_staff_only(self):
         self.make_returned()

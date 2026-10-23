@@ -109,3 +109,42 @@ def build_returned_adoption_pdf(record, *, downloaded_by=None):
         'Returning the pet does not automatically issue a refund. This document is not a refund receipt.',
     ))
     return build_letter(story, 'Adoption Return Record', reference, downloaded_by=downloaded_by)
+
+
+def build_cancelled_adoption_pdf(record, *, downloaded_by=None):
+    """A cancellation acknowledgment, separate from a completed-adoption certificate."""
+    style = styles()
+    reference = record.transaction_id or str(record.pk)
+    cancelled = (
+        timezone.localtime(record.cancelled_at, PHILIPPINE_TIMEZONE).strftime('%d %B %Y, %H:%M PHT')
+        if record.cancelled_at else 'Not recorded'
+    )
+    story = [
+        Paragraph('Adoption Cancellation Record', style['title']),
+        Paragraph(f'Adoption reference <b>{text(reference)}</b>', style['body']),
+        Paragraph('<b>Current adoption status: Cancelled</b>', style['body']),
+        rule(),
+        Paragraph(text(record.pet.name), style['pet']),
+        Paragraph(f'Adopter: <b>{text(name(record.adopter))}</b><br/>{text(record.adopter.email)}', style['body']),
+        Paragraph(
+            f'PawConnect records that the scheduled adoption of <b>{text(record.pet.name)}</b> '
+            f'by <b>{text(name(record.adopter))}</b> was cancelled. '
+            'This document acknowledges the cancellation of that scheduled adoption.',
+            style['body'],
+        ),
+    ]
+    story.extend(section('Cancellation details',
+        f'<b>Cancellation recorded:</b> {text(cancelled)}<br/>'
+        f'<b>Reason:</b> {text(record.cancellation_reason)}',
+    ))
+    story.extend(section('Original schedule',
+        f'<b>Scheduled adoption date:</b> {text(date_label(record.adoption_date))}<br/>'
+        f'<b>Scheduling staff:</b> {text(name(record.staff_member))}<br/>'
+        f'<b>Application reference:</b> {text(record.application_id)}<br/>'
+        f'<b>Adoption record ID:</b> {text(record.pk)}',
+    ))
+    story.extend(section('Payment history',
+        'Existing payment records and receipt references are retained. '
+        'Cancellation does not issue a refund. This document is not a payment or refund receipt.',
+    ))
+    return build_letter(story, 'Adoption Cancellation Record', reference, downloaded_by=downloaded_by)

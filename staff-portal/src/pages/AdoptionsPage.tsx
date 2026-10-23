@@ -252,7 +252,8 @@ export default function AdoptionsPage() {
         const anchor = document.createElement('a');
         anchor.href = url;
         const refSlug = rec.transaction_id || rec.id.slice(0, 8);
-        const prefix = rec.status === 'returned' ? 'adoption-return' : 'adoption';
+        const prefix = rec.status === 'returned' ? 'adoption-return'
+          : rec.status === 'cancelled' ? 'adoption-cancelled' : 'adoption';
         anchor.download = `pawconnect-${prefix}-${refSlug}.pdf`;
         document.body.appendChild(anchor);
         anchor.click();
@@ -269,7 +270,7 @@ export default function AdoptionsPage() {
     <div>
       <PageHeader
         title="Adoption Records"
-        subtitle="Completed and returned adoptions have individual PDF downloads. Each PDF includes the downloading staff member and current generation date. Use Export All Filtered PDF for aggregate records."
+        subtitle="Completed, returned and cancelled adoptions have individual PDF downloads. Each PDF includes the downloading staff member and current generation date. Use Export All Filtered PDF for aggregate records."
       />
       {cancellationSuccess && <p role="status" className="mb-4 text-sm text-green-800">{cancellationSuccess}</p>}
       {returnSuccess && <p role="status" className="mb-4 text-sm text-green-800">{returnSuccess}</p>}
@@ -387,10 +388,10 @@ export default function AdoptionsPage() {
                         Mark as Returned
                       </Button>
                       </div>
-                    ) : rec.status === 'returned' ? (
+                    ) : rec.status === 'returned' || rec.status === 'cancelled' ? (
                       <Button variant="outline" className="text-xs px-2.5 py-1"
                         onClick={() => downloadRecordPdf(rec)} disabled={downloadingId === rec.id}>
-                        {downloadingId === rec.id ? 'PDF…' : 'Download Return PDF'}
+                        {downloadingId === rec.id ? 'PDF…' : rec.status === 'returned' ? 'Download Return PDF' : 'Download Cancellation PDF'}
                       </Button>
                     ) : rec.status === 'scheduled' ? (
                       <div className="flex flex-wrap gap-2">

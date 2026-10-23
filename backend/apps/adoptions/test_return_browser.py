@@ -13,6 +13,7 @@ from rest_framework.authtoken.models import Token
 
 from apps.accounts.models import User
 from apps.accounts.serializers import UserSerializer
+from apps.adopters.models import AdopterProfile
 from apps.applications.models import Application
 from apps.appointments.models import Appointment
 from apps.audit.models import AuditLog
@@ -28,6 +29,14 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
     def test_completion_and_return_in_both_portals(self):
         staff = User.objects.create_user(email="return-browser-staff@example.test", role="staff", is_email_verified=True)
         adopter = User.objects.create_user(email="return-browser-adopter@example.test", role="adopter", is_email_verified=True)
+        profile, _ = AdopterProfile.objects.get_or_create(user=adopter)
+        for field, value in {
+            "phone_number": "+63 900 000 0000", "address_line1": "123 Test Street", "city": "Manila",
+            "state": "Metro Manila", "zip_code": "1000", "housing_type": "house", "owns_or_rents": "own",
+            "has_other_pets": True, "other_pets": "One older cat",
+        }.items():
+            setattr(profile, field, value)
+        profile.save()
         pet = Pet.objects.create(name="Return Browser Buddy", species="dog", age_years=2, status="pending")
         app = Application.objects.create(adopter=adopter, pet=pet, status="approved")
         appointment = Appointment.objects.create(
@@ -58,6 +67,7 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
             "adopter": {"token": Token.objects.create(user=adopter).key, "user": dict(UserSerializer(adopter).data)},
             "application": str(app.pk), "record": str(record.pk), "pet": str(pet.pk), "receipt": receipt,
             "futureApplication": str(future_app.pk), "futureAppointment": str(future_appointment.pk),
+            "futureRecord": str(future_record.pk),
         }
         root = Path(__file__).resolve().parents[3]
         environment = {**os.environ, "PAWCONNECT_FIXTURE": json.dumps(fixture),
@@ -80,7 +90,7 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
         self.assertEqual(payment.adoption_id, record.pk)
         self.assertEqual(AdoptionRecord.objects.count(), 2)
         future_record.refresh_from_db()
-        self.assertEqual(future_record.status, "scheduled")
+        self.assertEqual(future_record.status, "cancelled")
         self.assertFalse(Payment.objects.filter(application=future_app).exists())
         self.assertEqual(Payment.objects.count(), 1)
         self.assertEqual(AuditLog.objects.filter(action="adoption_returned").count(), 1)

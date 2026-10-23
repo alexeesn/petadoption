@@ -127,10 +127,11 @@ test('summary failure never enables entry or fabricates a paid state', async ({ 
   await expect(page.getByLabel('Completed payment summary')).toHaveCount(0);
 });
 
-test('status filters keep their backend values', async ({ page }) => {
+test('payment filters offer only All statuses and Completed', async ({ page }) => {
   const backend = await mockPayments(page);
   await page.goto('/payments');
-  for (const status of ['completed', 'pending', 'failed', 'cancelled', 'refunded']) {
+  await expect(page.getByLabel('Status').locator('option')).toHaveText(['All statuses', 'Completed']);
+  for (const status of ['completed', '']) {
     await page.getByLabel('Status').selectOption(status);
     await expect.poll(() => backend.filters.at(-1)).toBe(status);
   }

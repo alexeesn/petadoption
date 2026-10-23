@@ -11,8 +11,6 @@ interface ApplicationForm {
   why_adopt: string
   experience_with_pets: string
   living_situation: string
-  has_other_pets: boolean
-  other_pets_description: string
   references: string
   additional_notes: string
   privacy_consent: boolean
@@ -24,8 +22,6 @@ const EMPTY: ApplicationForm = {
   why_adopt: '',
   experience_with_pets: '',
   living_situation: '',
-  has_other_pets: false,
-  other_pets_description: '',
   references: '',
   additional_notes: '',
   privacy_consent: false,
@@ -160,9 +156,6 @@ export default function NewApplicationPage() {
     if (!form.why_adopt.trim()) errors.why_adopt = 'Please tell us why you want to adopt this pet.'
     if (!form.experience_with_pets.trim()) errors.experience_with_pets = 'Please describe your experience with pets.'
     if (!form.living_situation.trim()) errors.living_situation = 'Please describe your living situation.'
-    if (form.has_other_pets && !form.other_pets_description.trim()) {
-      errors.other_pets_description = 'Please describe the other pets in your home.'
-    }
     if (!form.references.trim()) errors.references = 'Please provide at least one reference.'
     if (!form.privacy_consent) {
       errors.privacy_consent = 'You must agree to the data privacy terms before submitting.'
@@ -485,38 +478,6 @@ export default function NewApplicationPage() {
               <FieldError message={fieldErrors.living_situation} />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                id="has_other_pets"
-                name="has_other_pets"
-                type="checkbox"
-                checked={form.has_other_pets}
-                onChange={handleChange}
-                className="h-4 w-4 rounded border-stone-300"
-              />
-              <label htmlFor="has_other_pets" className="text-sm text-stone-700">
-                I currently have other pets
-              </label>
-            </div>
-
-            {form.has_other_pets && (
-              <div>
-                <label htmlFor="other_pets_description" className="field-label mb-1">
-                  Describe your other pets <span className="text-red-600">*</span>
-                </label>
-                <textarea
-                  id="other_pets_description"
-                  name="other_pets_description"
-                  rows={2}
-                  value={form.other_pets_description}
-                  onChange={handleChange}
-                  className={inputCls}
-                  placeholder="Types, ages, temperament"
-                />
-                <FieldError message={fieldErrors.other_pets_description} />
-              </div>
-            )}
-
             <div>
               <label htmlFor="references" className="field-label mb-1">
                 References <span className="text-red-600">*</span>
@@ -657,7 +618,6 @@ export default function NewApplicationPage() {
             <ReviewItem label="Why adopt" value={form.why_adopt} />
             <ReviewItem label="Experience with pets" value={form.experience_with_pets} />
             <ReviewItem label="Living situation" value={form.living_situation} />
-            <ReviewItem label="Other pets" value={form.has_other_pets ? form.other_pets_description || 'Yes' : 'No'} />
             <ReviewItem label="References" value={form.references} />
             {form.additional_notes && <ReviewItem label="Additional notes" value={form.additional_notes} />}
             <ReviewItem

@@ -8,14 +8,10 @@ import { paymentService, appointmentService, applicationService } from '../servi
 import type { Payment, PaginatedResponse, Appointment, PaymentSummary } from '../types';
 import { formatDate, formatDateTime, formatCurrency, philippineDate } from '../utils/format';
 
-/** Matches Payment.Status.choices in backend/apps/payments/models.py. */
+/** Staff filter choices for the completed onsite collection workflow. */
 const PAYMENT_STATUS_FILTERS = [
   { value: '', label: 'All statuses' },
   { value: 'completed', label: 'Completed' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'refunded', label: 'Refunded' },
-  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const PAYMENT_METHODS = [
@@ -555,9 +551,8 @@ export default function PaymentsPage() {
           .map((opt) => <StatusBadge key={opt.value} status={opt.value} />)}
       </p>
       <p className="mb-4 text-xs text-slate-500">
-        Only <span className="font-medium text-green-700">Completed</span> payments count as money
-        received. Pending, failed, refunded, and cancelled records have not been received. Each
-        transaction has an individual official PDF receipt download.
+        Onsite payments are recorded as <span className="font-medium text-green-700">Completed</span> after
+        staff confirm receipt. Each transaction has an individual official PDF receipt download.
       </p>
 
       {loading ? (

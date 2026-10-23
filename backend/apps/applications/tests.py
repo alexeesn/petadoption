@@ -410,7 +410,7 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
     def make_pdf(self, name="doc.pdf"):
         return SimpleUploadedFile(name, b"%PDF-1.4 test", content_type="application/pdf")
 
-    def submit_with_documents(self):
+    def submit_with_documents(self, **overrides):
         """Adopter submits the application together with the required documents."""
         self.authenticate(self.adopter)
         resp = self.client.post("/api/applications/", {
@@ -419,6 +419,7 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
             "living_situation": "Own house with fenced yard.",
             "privacy_consent": True,
             "require_home_visit": True,
+            **overrides,
             "documents": [
                 self.make_pdf("id.pdf"),
                 self.make_pdf("address.pdf"),
@@ -432,6 +433,49 @@ class StaffReviewWorkflowTests(BaseAPITestCase):
         }, format="multipart")
         self.assertEqual(resp.status_code, 201)
         return Application.objects.get(pk=resp.data["id"])
+
+    def test_other_pets_comes_from_profile_even_if_client_sends_conflicting_form_fields(self):
+        profile = self.adopter.adopter_profile
+        profile.has_other_pets = True
+        profile.other_pets = "Two adult cats"
+        profile.save(update_fields=["has_other_pets", "other_pets"])
+        app = self.submit_with_documents(has_other_pets=False, other_pets_description="Forged answer")
+        self.assertTrue(app.has_other_pets)
+        self.assertEqual(app.other_pets_description, "Two adult cats")
+        self.authenticate(self.staff)
+        response = self.client.get(f"/api/applications/{app.pk}/")
+        self.assertTrue(response.data["has_other_pets"])
+        self.assertEqual(response.data["other_pets_description"], "Two adult cats")
+
+    def test_profile_without_other_pets_does_not_copy_stale_text_or_client_override(self):
+        profile = self.adopter.adopter_profile
+        profile.has_other_pets = False
+        profile.other_pets = "Old profile text"
+        profile.save(update_fields=["has_other_pets", "other_pets"])
+        app = self.submit_with_documents(has_other_pets=True, other_pets_description="Forged answer")
+        self.assertFalse(app.has_other_pets)
+        self.assertEqual(app.other_pets_description, "")
+
+    def test_profile_updates_apply_to_new_applications_without_rewriting_submitted_history(self):
+        app = self.submit_with_documents()
+        response = self.client.patch("/api/adopters/profile/", {
+            "has_other_pets": True, "other_pets": "One senior dog",
+        }, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        app.refresh_from_db()
+        self.assertFalse(app.has_other_pets)
+        self.pet = Pet.objects.create(name="Next family pet", species="cat", age_years=1, status="available")
+        new_app = self.submit_with_documents()
+        self.assertTrue(new_app.has_other_pets)
+        self.assertEqual(new_app.other_pets_description, "One senior dog")
+        self.authenticate(self.staff)
+        response = self.client.patch(f"/api/applications/{new_app.pk}/", {
+            "has_other_pets": False, "other_pets_description": "Forged edit",
+        }, format="json")
+        self.assertEqual(response.status_code, 200, response.data)
+        new_app.refresh_from_db()
+        self.assertTrue(new_app.has_other_pets)
+        self.assertEqual(new_app.other_pets_description, "One senior dog")
 
     def review(self, app, status_value, **extra):
         """Staff calls the review endpoint (POST /applications/<id>/update-status/)."""

@@ -23,7 +23,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .certificate import build_single_adoption_pdf, build_returned_adoption_pdf
+from .certificate import build_single_adoption_pdf, build_returned_adoption_pdf, build_cancelled_adoption_pdf
 from apps.reports.documents import download_details, name, PHILIPPINE_TIMEZONE
 from .models import AdoptionRecord
 
