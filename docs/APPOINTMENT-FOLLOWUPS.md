@@ -2,7 +2,8 @@
 
 Implemented flow:
 
-- An adopter can request a different weekday for their own confirmed or no-show appointment, with a reason. One pending request per application is enforced by an application row lock and a database constraint.
+- The center accepts appointment dates Monday–Saturday, 8 AM–5 PM; Sunday is closed. The same schedule applies to new bookings and reschedules.
+- An adopter can request a different open date for their own confirmed or no-show appointment, with a reason. One pending request per application is enforced by an application row lock and a database constraint.
 - The original date stays unchanged while pending or if rejected. Active staff/admin receive an in-app notification linking to **Appointments → Reschedule Requests**.
 - Staff/admin review requests with explicit confirmation. Rejection requires a reason. Approval revalidates the proposed date, retains the old appointment as rescheduled/no-show history, and creates one confirmed replacement. The existing Scheduled adoption record is updated, preserving its ID and every payment.
 - No-show is a manual staff decision, with reason and confirmation, available after the visit day ends at 5 PM Philippine time. It does not cancel the application/adoption or release the pet. No automatic date-based cancellation runs.

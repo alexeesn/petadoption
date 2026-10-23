@@ -12,7 +12,7 @@ from apps.notifications.models import Notification
 from apps.payments.models import Payment
 from apps.pets.models import Pet
 from .models import Appointment, RescheduleRequest
-from .tests import next_weekday
+from .tests import next_weekday, next_weekend_day
 
 
 class AppointmentFollowupTests(BaseAPITestCase):
@@ -102,13 +102,24 @@ class AppointmentFollowupTests(BaseAPITestCase):
                         {"requested_date": "2020-01-01"}, {"requested_date": "not-a-date"}):
             with self.subTest(changes=changes):
                 self.assertEqual(self.request_change(**changes).status_code, 400)
-        weekend = self.new_date
-        while weekend.weekday() != 5:
-            weekend += timedelta(days=1)
-        self.assertEqual(self.request_change(requested_date=weekend.isoformat()).status_code, 400)
+        sunday = next_weekend_day(6)
+        self.assertEqual(self.request_change(requested_date=sunday.isoformat()).status_code, 400)
         self.assertEqual(self.request_change().status_code, 201)
         self.assertEqual(self.request_change().status_code, 400)
         self.assertEqual(RescheduleRequest.objects.count(), 1)
+
+    def test_saturday_reschedule_can_be_requested_and_approved(self):
+        saturday = next_weekend_day(5)
+        response = self.request_change(requested_date=saturday.isoformat())
+        self.assertEqual(response.status_code, 201, response.data)
+        approved = self.review(response.data["id"])
+        self.assertEqual(approved.status_code, 200, approved.data)
+        self.appointment.refresh_from_db()
+        self.record.refresh_from_db()
+        self.assertEqual(self.appointment.status, "rescheduled")
+        self.assertEqual(self.record.adoption_date, saturday)
+        self.assertEqual(self.record.appointment.requested_date, saturday)
+        self.assertEqual(self.record.appointment.status, "confirmed")
 
     def test_approval_preserves_history_and_reuses_adoption_and_payment(self):
         payment = Payment.objects.create(application=self.app, amount="500.00", status="completed")

@@ -75,8 +75,8 @@ export function AppointmentReschedulePanel({ applicationId, applicationStatus, a
             event.preventDefault()
             if (!target || busy) return
             const weekday = new Date(`${date}T00:00:00`).getDay()
-            if (!date || date < todayISO() || weekday === 0 || weekday === 6 || date === target.requested_date || !reason.trim()) {
-              setError('Choose a different weekday from today onward and provide a reason.')
+            if (!date || date < todayISO() || !Number.isFinite(weekday) || weekday === 0 || date === target.requested_date || !reason.trim()) {
+              setError('Choose a different date from Monday to Saturday, today onward, and provide a reason.')
               return
             }
             setBusy(true)

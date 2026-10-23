@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { expect } from '@playwright/test';
 import { createServer } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
 
 if (!process.env.PAWCONNECT_FIXTURE) throw Error('Isolated Django test fixture is required.');
 const fixture = JSON.parse(process.env.PAWCONNECT_FIXTURE);
@@ -49,7 +52,9 @@ async function decide(page, approve, reason) {
 try {
   for (const [folder, port] of [['adopter-portal', 5188], ['staff-portal', 5189]]) {
     const server = await createServer({
+      configFile: false, plugins: [react()],
       root: path.join(root, folder), envFile: false, logLevel: 'error',
+      css: { postcss: { plugins: [tailwindcss(path.join(root, folder, 'tailwind.config.js')), autoprefixer()] } },
       server: { host: '127.0.0.1', port, strictPort: true, proxy: { '/api': { target: fixture.api, changeOrigin: true } } },
     });
     await server.listen();
@@ -68,6 +73,8 @@ try {
     // Defense in depth: never allow a local absolute .env URL to reach real data.
     await context.route('**/*', async (route) => {
       const url = new URL(route.request().url());
+      // Keep the walkthrough independent of the external font CDN.
+      if (['fonts.googleapis.com', 'fonts.gstatic.com'].includes(url.hostname)) return route.abort();
       if (url.pathname.startsWith('/api/') && ![adopterUrl, staffUrl].includes(url.origin)) {
         errors.push(`Blocked API origin: ${url.origin}`);
         return route.abort();
@@ -81,6 +88,19 @@ try {
     });
   }
   const { adopter, staff } = pages;
+  await adopter.goto(`${adopterUrl}/applications/${fixture.bookingApplication}`);
+  await expect(adopter.getByText('Visits are available Monday to Saturday', { exact: false })).toBeVisible();
+  await adopter.getByLabel('Choose appointment date').fill(fixture.sunday);
+  await adopter.getByRole('button', { name: 'Submit appointment request', exact: true }).click();
+  await expect(adopter.getByText('The center only accepts visits Monday to Saturday.', { exact: false })).toBeVisible();
+  await adopter.getByLabel('Choose appointment date').fill(fixture.newDate);
+  await adopter.getByRole('button', { name: 'Submit appointment request', exact: true }).click();
+  await expect(adopter.getByText('Appointment request submitted. Staff will review your requested date.', { exact: true })).toBeVisible();
+  const booking = await read(`/api/appointments/?application=${fixture.bookingApplication}`);
+  assert.equal(booking.count, 1);
+  assert.equal(booking.results[0].requested_date, fixture.newDate);
+  assert.equal(booking.results[0].status, 'pending_confirmation');
+  console.log('New appointment form accepts Saturday, rejects Sunday, and shows Monday–Saturday hours.');
   const [appA, appB] = fixture.applications;
   const original = await read(`/api/adoptions/${fixture.records[0]}/`);
   await requestDate(adopter, appA, fixture.newDate, 'Work schedule changed');

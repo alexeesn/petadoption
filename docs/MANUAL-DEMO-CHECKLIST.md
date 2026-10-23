@@ -240,7 +240,7 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
 - **Actor**: Adopter (`http://localhost:5173`) then Staff (`http://localhost:5174`)
 - **Action**:
   1. **As Adopter**: On `ApplicationDetailPage` (`/applications/:id`), see the approved banner: *"Your application has been approved!"*
-  2. Under "Choose appointment date", select an upcoming weekday (Monday–Friday) for the onsite visit.
+  2. Under "Choose appointment date", select an upcoming open date (Monday–Saturday) for the onsite visit.
   3. Click **Submit appointment request**.
   4. Status pill shows appointment **Pending confirmation**.
   5. **As Staff**: Navigate to **Schedule** (`/appointments`) or open the Application detail page in the Staff Portal.
@@ -254,7 +254,7 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
 - **What to Verify**:
   - In Staff Portal, navigate to **Adoptions** (`/adoptions`): the newly scheduled adoption record appears in the list with status `scheduled`.
 - **Recovery Step**:
-  - If date selection fails in Adopter Portal, ensure the selected date is a future Monday–Friday date (weekends and past dates are rejected).
+  - If date selection fails in Adopter Portal, ensure the selected date is today or a future Monday–Saturday date (Sundays and past dates are rejected).
 
 ---
 

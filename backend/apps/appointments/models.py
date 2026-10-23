@@ -15,7 +15,7 @@ always chooses the date themselves from the adopter portal.
 Reschedule requests retain the original appointment until staff approve a
 confirmed replacement; no-show, rescheduled and cancelled visits stay in history.
 
-Center operating schedule (project-provided): Monday-Friday, 8:00 AM-5:00 PM.
+Center operating schedule: Monday-Saturday, 8:00 AM-5:00 PM.
 """
 import uuid
 from datetime import time
@@ -26,7 +26,7 @@ from django.db import models
 from django.utils import timezone
 
 # Center operating schedule.  Monday is 0 and Sunday is 6 (date.weekday()).
-CENTER_VISIT_WEEKDAYS = frozenset({0, 1, 2, 3, 4})
+CENTER_VISIT_WEEKDAYS = frozenset({0, 1, 2, 3, 4, 5})
 CENTER_OPENING_TIME = time(8, 0)
 CENTER_CLOSING_TIME = time(17, 0)
 
@@ -34,7 +34,7 @@ CENTER_CLOSING_TIME = time(17, 0)
 # NO holiday / work-suspension data source (no model, API, or imported
 # calendar), so nothing can be listed here yet and the set is intentionally
 # empty: the system cannot detect holidays on its own.  Dates added to this set
-# are refused by the same validation path as weekends and past dates, so
+# are refused by the same validation path as Sundays and past dates, so
 # wiring a real source later means populating this set (or replacing
 # CenterSchedule.is_open_on) and nothing else.
 CENTER_CLOSED_DATES = frozenset()
@@ -57,7 +57,7 @@ class CenterSchedule:
     @staticmethod
     def describe():
         """Human-readable summary of the operating schedule."""
-        return "Monday-Friday, 8:00 AM-5:00 PM"
+        return "Monday-Saturday, 8:00 AM-5:00 PM"
 
 
 def validate_visit_date(value):
@@ -68,8 +68,8 @@ def validate_visit_date(value):
         raise ValidationError("Appointment date cannot be in the past.")
     if value.weekday() not in CENTER_VISIT_WEEKDAYS:
         raise ValidationError(
-            "The center only accepts visits Monday to Friday. "
-            "Please choose a weekday."
+            "The center only accepts visits Monday to Saturday. "
+            "Please choose a date when the center is open."
         )
     if value in CENTER_CLOSED_DATES:
         raise ValidationError(

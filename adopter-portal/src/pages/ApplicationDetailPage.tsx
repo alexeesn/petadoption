@@ -24,11 +24,11 @@ const NEXT_STEPS: Record<string, string> = {
   adoption_completed: 'Your adoption is complete. Thank you for giving a pet a new home.',
 }
 
-/** Center operating schedule: Monday-Friday, 8:00 AM-5:00 PM. */
-const CENTER_SCHEDULE_TEXT = 'Monday to Friday, 8:00 AM - 5:00 PM'
+/** Center operating schedule: Monday-Saturday, 8:00 AM-5:00 PM. */
+const CENTER_SCHEDULE_TEXT = 'Monday to Saturday, 8:00 AM - 5:00 PM'
 
 /** Center hours reminder shown with the confirmed-visit preparation list. */
-const CENTER_HOURS_TEXT = 'Monday-Friday, 8:00 AM-5:00 PM (except holidays and work suspensions)'
+const CENTER_HOURS_TEXT = 'Monday-Saturday, 8:00 AM-5:00 PM (except holidays and work suspensions)'
 
 /**
  * Onsite visit guidance shown once the requested visit date is confirmed.
@@ -49,10 +49,10 @@ function todayISO(): string {
   return local.toISOString().slice(0, 10)
 }
 
-/** Saturday/Sunday are not selectable; the API enforces this too. */
-function isWeekday(dateStr: string): boolean {
+/** Sunday is closed; the API enforces this too. */
+function isCenterOpenDay(dateStr: string): boolean {
   const day = new Date(`${dateStr}T00:00:00`).getDay()
-  return day !== 0 && day !== 6
+  return Number.isFinite(day) && day !== 0
 }
 
 export default function ApplicationDetailPage() {
@@ -123,8 +123,8 @@ export default function ApplicationDetailPage() {
       setApptError('The visit date cannot be in the past.')
       return
     }
-    if (!isWeekday(visitDate)) {
-      setApptError('The center only accepts visits Monday to Friday. Please choose a weekday.')
+    if (!isCenterOpenDay(visitDate)) {
+      setApptError('The center only accepts visits Monday to Saturday. Please choose a date when the center is open.')
       return
     }
     setApptSubmitting(true)
@@ -337,7 +337,7 @@ export default function ApplicationDetailPage() {
                     className="field-input sm:w-64"
                   />
                   <p id="visitDateHint" className="mt-1 text-xs text-stone-500">
-                    Visits are available {CENTER_SCHEDULE_TEXT}. Weekends and past dates cannot be
+                    Visits are available {CENTER_SCHEDULE_TEXT}. Sundays and past dates cannot be
                     selected, and the center is closed on holidays and work suspensions.
                   </p>
                 </div>

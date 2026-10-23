@@ -149,11 +149,21 @@ class AppointmentWorkflowTests(BaseAPITestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(Appointment.objects.count(), 0)
 
-    def test_saturday_cannot_be_requested(self):
-        resp = self.request_appointment(visit_date=next_weekend_day(5))
-        self.assertEqual(resp.status_code, 400)
-        self.assertIn("requested_date", resp.data)
-        self.assertEqual(Appointment.objects.count(), 0)
+    def test_saturday_can_be_requested_and_confirmed(self):
+        from apps.adoptions.models import AdoptionRecord
+
+        saturday = next_weekend_day(5)
+        resp = self.request_appointment(visit_date=saturday)
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertEqual(resp.data["requested_date"], saturday.isoformat())
+        self.assertEqual(resp.data["status"], "pending_confirmation")
+        self.authenticate(self.staff)
+        approved = self.client.post(f"/api/appointments/{resp.data['id']}/approve/")
+        self.assertEqual(approved.status_code, 200, approved.data)
+        self.assertEqual(approved.data["status"], "confirmed")
+        record = AdoptionRecord.objects.get(application=self.application)
+        self.assertEqual(record.adoption_date, saturday)
+        self.assertEqual(record.status, "scheduled")
 
     def test_sunday_cannot_be_requested(self):
         resp = self.request_appointment(visit_date=next_weekend_day(6))

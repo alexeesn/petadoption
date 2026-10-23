@@ -18,7 +18,7 @@ from apps.applications.models import Application
 from apps.payments.models import Payment
 from apps.pets.models import Pet
 from .models import Appointment, RescheduleRequest
-from .tests import next_weekday
+from .tests import next_weekday, next_weekend_day
 
 
 @skipUnless(os.environ.get("PAWCONNECT_BROWSER_TESTS") == "1", "Opt-in: set PAWCONNECT_BROWSER_TESTS=1; requires Playwright browser")
@@ -44,12 +44,17 @@ class AppointmentFollowupBrowserTests(LiveServerTestCase):
             records.append(str(record.pk))
         payment = Payment.objects.create(application_id=applications[0], amount="500.00", status="completed")
         receipt = payment.receipt_number
+        booking_pet = Pet.objects.create(name="Saturday Booking Pet", species="dog", age_years=2, status="pending")
+        booking_application = Application.objects.create(adopter=adopter, pet=booking_pet, status="approved")
+        saturday = next_weekend_day(5) + timedelta(days=7)
         fixture = {
             "api": self.live_server_url,
             "staff": {"token": Token.objects.create(user=staff).key, "user": dict(UserSerializer(staff).data)},
             "adopter": {"token": Token.objects.create(user=adopter).key, "user": dict(UserSerializer(adopter).data)},
             "applications": applications, "records": records,
-            "newDate": next_weekday(8).isoformat(), "laterDate": next_weekday(15).isoformat(),
+            "bookingApplication": str(booking_application.pk),
+            "newDate": saturday.isoformat(), "sunday": (saturday + timedelta(days=1)).isoformat(),
+            "laterDate": next_weekday(22).isoformat(),
         }
         root = Path(__file__).resolve().parents[3]
         environment = {**os.environ, "PAWCONNECT_FIXTURE": json.dumps(fixture), "PLAYWRIGHT_CHANNEL": os.environ.get("PLAYWRIGHT_CHANNEL", "msedge")}
@@ -61,6 +66,9 @@ class AppointmentFollowupBrowserTests(LiveServerTestCase):
         print(result.stdout)
         self.assertEqual(AdoptionRecord.objects.count(), 2)
         self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(
+            Appointment.objects.get(application=booking_application).requested_date, saturday,
+        )
         payment.refresh_from_db()
         self.assertEqual(payment.status, "completed")
         self.assertEqual(payment.receipt_number, receipt)
