@@ -9,7 +9,6 @@ member can trigger this through the staff-authorized export endpoint.
 import io
 from xml.sax.saxutils import escape
 
-from django.utils import timezone
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
@@ -23,6 +22,7 @@ from reportlab.platypus import (
 )
 
 from .receipt import build_single_receipt_pdf
+from apps.reports.documents import download_details, name
 from .models import Payment
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
@@ -59,7 +59,7 @@ def _money(value):
     return f"₱{value:.2f}"
 
 
-def build_payment_records_pdf(payments, filters=()):
+def build_payment_records_pdf(payments, filters=(), *, downloaded_by=None):
     """Render *payments* into an A4 PDF report and return the bytes.
 
     ``filters`` is an optional iterable of short human-readable strings that
@@ -99,10 +99,8 @@ def build_payment_records_pdf(payments, filters=()):
         topMargin=18 * mm,
         bottomMargin=16 * mm,
         title="PawConnect - Payment Records Report",
-        author="PawConnect Staff Portal",
+        author=name(downloaded_by),
     )
-
-    generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
 
     story = []
     story.append(
@@ -123,14 +121,7 @@ def build_payment_records_pdf(payments, filters=()):
             ),
         )
     )
-    story.append(
-        Paragraph(
-            f"Generated on {escape(generated)}",
-            ParagraphStyle(
-                "Meta", fontSize=8.5, leading=11, textColor=colors.HexColor("#6b7280")
-            ),
-        )
-    )
+    story.extend(download_details(downloaded_by))
     if filters:
         story.append(
             Paragraph(

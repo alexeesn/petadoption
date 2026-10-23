@@ -12,6 +12,7 @@ from .services import record_onsite_payment
 from .pdf import build_payment_records_pdf
 from apps.accounts.permissions import IsStaff, IsAdopter
 from apps.notifications.models import create_notification
+from apps.reports.documents import philippine_now
 
 
 class PaymentViewSet(viewsets.ModelViewSet):
@@ -87,11 +88,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if application_id:
             filters.append(f"Application: {application_id}")
 
-        pdf_bytes = build_payment_records_pdf(payments, filters=filters)
+        pdf_bytes = build_payment_records_pdf(payments, filters=filters, downloaded_by=request.user)
 
-        filename = f"pawconnect-payment-records-{timezone.localdate().isoformat()}.pdf"
+        filename = f"pawconnect-payment-records-{philippine_now().date().isoformat()}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "private, no-store"
         return response
 
     @action(detail=True, methods=["get"], url_path="receipt-pdf")
@@ -103,11 +105,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
         payment = self.get_object()
         from .pdf import build_single_receipt_pdf
 
-        pdf_bytes = build_single_receipt_pdf(payment)
+        pdf_bytes = build_single_receipt_pdf(payment, downloaded_by=request.user)
         ref_slug = payment.receipt_number or payment.reference_number or str(payment.id)[:8]
         filename = f"pawconnect-receipt-{ref_slug}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "private, no-store"
         return response
 
     @action(detail=False, methods=["post"], url_path="record-onsite")
@@ -161,10 +164,11 @@ class PaymentViewSet(viewsets.ModelViewSet):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
         payment = self.get_object()
         from .pdf import build_single_receipt_pdf
-        pdf_bytes = build_single_receipt_pdf(payment)
+        pdf_bytes = build_single_receipt_pdf(payment, downloaded_by=request.user)
         filename = f"pawconnect-receipt-{payment.receipt_number or str(payment.id)[:8]}.pdf"
         resp = HttpResponse(pdf_bytes, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Cache-Control"] = "private, no-store"
         return resp
 
     def perform_create(self, serializer):

@@ -228,10 +228,11 @@ class MonthlyPaymentReportPdfView(views.APIView):
 
         month_label = first_day.strftime("%B %Y")
         filters = [f"Month: {month_label}", "Status: Completed only"]
-        pdf_bytes = build_payment_records_pdf(payments, filters=filters)
+        pdf_bytes = build_payment_records_pdf(payments, filters=filters, downloaded_by=request.user)
         filename = f"pawconnect-payment-report-{year}-{month:02d}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "private, no-store"
         return response
 
 
@@ -272,8 +273,9 @@ class MonthlyAdoptionReportPdfView(views.APIView):
 
         month_label = first_day.strftime("%B %Y")
         filters = [f"Month: {month_label}", "Status: Completed only"]
-        pdf_bytes = build_adoption_records_pdf(records, filters=filters)
+        pdf_bytes = build_adoption_records_pdf(records, filters=filters, downloaded_by=request.user)
         filename = f"pawconnect-adoption-report-{year}-{month:02d}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "private, no-store"
         return response

@@ -15,6 +15,7 @@ from .services import (
 from .pdf import build_adoption_records_pdf
 from apps.accounts.permissions import IsStaff
 from apps.notifications.models import create_notification
+from apps.reports.documents import philippine_now
 
 
 class AdoptionRecordViewSet(viewsets.ModelViewSet):
@@ -49,18 +50,22 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="record-pdf")
     def record_pdf(self, request, pk=None):
-        """Staff-only individual adoption record PDF for one completed adoption."""
+        """Staff-only document for a completed or returned adoption."""
         record = self.get_object()
-        if record.status != AdoptionRecord.Status.COMPLETED:
+        if record.status not in (AdoptionRecord.Status.COMPLETED, AdoptionRecord.Status.RETURNED):
             return Response(
-                {"error": "Individual PDF is only available for completed adoption records."},
+                {"error": "Individual PDF is only available for completed or returned adoption records."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        from .pdf import build_single_adoption_pdf
-        pdf_bytes = build_single_adoption_pdf(record)
-        filename = f"pawconnect-adoption-{record.transaction_id or str(record.id)[:8]}.pdf"
+        from .pdf import build_single_adoption_pdf, build_returned_adoption_pdf
+        returned = record.status == AdoptionRecord.Status.RETURNED
+        builder = build_returned_adoption_pdf if returned else build_single_adoption_pdf
+        pdf_bytes = builder(record, downloaded_by=request.user)
+        prefix = "adoption-return" if returned else "adoption"
+        filename = f"pawconnect-{prefix}-{record.transaction_id or str(record.id)[:8]}.pdf"
         resp = HttpResponse(pdf_bytes, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        resp["Cache-Control"] = "private, no-store"
         return resp
 
     @action(detail=False, methods=["get"], url_path="export-pdf")
@@ -84,11 +89,12 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
         records = list(self.filter_queryset(self.get_queryset()).order_by("created_at"))
         filters = [f"Status: {status_filter}"] if status_filter else []
 
-        pdf_bytes = build_adoption_records_pdf(records, filters=filters)
+        pdf_bytes = build_adoption_records_pdf(records, filters=filters, downloaded_by=request.user)
 
-        filename = f"pawconnect-adoption-records-{timezone.localdate().isoformat()}.pdf"
+        filename = f"pawconnect-adoption-records-{philippine_now().date().isoformat()}.pdf"
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Cache-Control"] = "private, no-store"
         return response
 
     def create(self, request, *args, **kwargs):

@@ -4,6 +4,7 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from xml.sax.saxutils import escape
+from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 import reportlab
@@ -13,13 +14,28 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Flowable, HRFlowable, Paragraph, SimpleDocTemplate
+from reportlab.platypus import Flowable, HRFlowable, KeepTogether, Paragraph, SimpleDocTemplate
 
 INK = colors.HexColor('#203B30')
 TEXT = colors.HexColor('#303934')
 MUTED = colors.HexColor('#67716B')
 RULE = colors.HexColor('#CFD8D0')
 ACCENT = colors.HexColor('#A58953')
+PHILIPPINE_TIMEZONE = ZoneInfo('Asia/Manila')
+
+
+def philippine_now():
+    return timezone.localtime(timezone.now(), PHILIPPINE_TIMEZONE)
+
+
+def download_details(user, generated_at=None):
+    """Attribute an export to the authenticated downloader, separate from its recorder."""
+    generated_at = generated_at or philippine_now()
+    role = f' ({text(user.get_role_display())})' if user else ''
+    return [
+        Paragraph(f'<b>Downloaded by:</b> {person(user)}{role}', styles()['small']),
+        Paragraph(f'<b>Generated on:</b> {text(generated_at.strftime("%d %B %Y, %H:%M:%S"))} PHT (UTC+08:00)', styles()['small']),
+    ]
 
 
 def text(value):
@@ -42,7 +58,7 @@ def date_label(value):
     if value is None:
         return 'Not recorded'
     if isinstance(value, datetime) and timezone.is_aware(value):
-        value = timezone.localtime(value)
+        value = timezone.localtime(value, PHILIPPINE_TIMEZONE)
     return value.strftime('%d %B %Y')
 
 
@@ -106,13 +122,15 @@ class Signatures(Flowable):
         canvas.restoreState()
 
 
-def build_letter(story, title, reference):
+def build_letter(story, title, reference, *, downloaded_by=None):
     """Render flowing content with a repeated letterhead and numbered footer."""
     styles()
     buffer = io.BytesIO()
     margin = 22 * mm
     width, height = A4
-    generated = date_label(timezone.now())
+    generated_at = philippine_now()
+    generated = generated_at.strftime('%d %b %Y, %H:%M PHT')
+    story = [*story, KeepTogether([rule(), *download_details(downloaded_by, generated_at)])]
 
     def decorate(canvas, doc):
         canvas.saveState()
@@ -141,7 +159,7 @@ def build_letter(story, title, reference):
     document = SimpleDocTemplate(
         buffer, pagesize=A4, leftMargin=margin, rightMargin=margin,
         topMargin=42 * mm, bottomMargin=26 * mm,
-        title=f'PawConnect - {title} - {reference}', author='PawConnect',
+        title=f'PawConnect - {title} - {reference}', author=name(downloaded_by),
     )
     document.build(story, onFirstPage=decorate, onLaterPages=decorate)
     return buffer.getvalue()

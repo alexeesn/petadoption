@@ -23,7 +23,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from .certificate import build_single_adoption_pdf
+from .certificate import build_single_adoption_pdf, build_returned_adoption_pdf
+from apps.reports.documents import download_details, name, PHILIPPINE_TIMEZONE
 from .models import AdoptionRecord
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
@@ -60,17 +61,17 @@ def _short_id(value):
 
 
 def _completed_label(record):
-    """Human-readable completion stamp, only for completed records."""
-    if record.status != AdoptionRecord.Status.COMPLETED:
+    """Keep completion history visible even after an adoption is returned."""
+    if record.status not in (AdoptionRecord.Status.COMPLETED, AdoptionRecord.Status.RETURNED):
         return ""
     if record.completed_at:
-        return timezone.localtime(record.completed_at).strftime("%Y-%m-%d %H:%M")
+        return timezone.localtime(record.completed_at, PHILIPPINE_TIMEZONE).strftime("%Y-%m-%d %H:%M")
     if record.completed_date:
         return record.completed_date.isoformat()
     return ""
 
 
-def build_adoption_records_pdf(records, filters=()):
+def build_adoption_records_pdf(records, filters=(), *, downloaded_by=None):
     """Render *records* into an A4 PDF report and return the bytes.
 
     ``filters`` is an optional iterable of short human-readable strings that
@@ -110,10 +111,8 @@ def build_adoption_records_pdf(records, filters=()):
         topMargin=18 * mm,
         bottomMargin=16 * mm,
         title="PawConnect - Adoption Records Report",
-        author="PawConnect Staff Portal",
+        author=name(downloaded_by),
     )
-
-    generated = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M")
 
     story = []
     story.append(
@@ -134,14 +133,7 @@ def build_adoption_records_pdf(records, filters=()):
             ),
         )
     )
-    story.append(
-        Paragraph(
-            f"Generated on {escape(generated)}",
-            ParagraphStyle(
-                "Meta", fontSize=8.5, leading=11, textColor=colors.HexColor("#6b7280")
-            ),
-        )
-    )
+    story.extend(download_details(downloaded_by))
     if filters:
         story.append(
             Paragraph(
@@ -164,7 +156,7 @@ def build_adoption_records_pdf(records, filters=()):
     else:
         body = [[_cell(h, header_style) for h in TABLE_HEADERS]]
         for record in records:
-            completed = record.status == AdoptionRecord.Status.COMPLETED
+            completed = record.status in (AdoptionRecord.Status.COMPLETED, AdoptionRecord.Status.RETURNED)
             body.append([
                 _cell(record.transaction_id, cell_style),
                 _cell(f"{record.pet.name}\n({_short_id(record.pet_id)})", cell_style),

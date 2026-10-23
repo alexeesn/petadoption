@@ -8,7 +8,7 @@ from apps.reports.documents import (
 from .models import Payment
 
 
-def build_single_receipt_pdf(payment):
+def build_single_receipt_pdf(payment, *, downloaded_by=None):
     style = styles()
     application = payment.application
     adopter = application.adopter
@@ -62,4 +62,4 @@ def build_single_receipt_pdf(payment):
     if payment.reference_number:
         references.insert(0, f'<b>Transaction reference:</b> {text(payment.reference_number)}')
     story.append(Paragraph('<br/>'.join(references), style['small']))
-    return build_letter(story, title, reference)
+    return build_letter(story, title, reference, downloaded_by=downloaded_by)

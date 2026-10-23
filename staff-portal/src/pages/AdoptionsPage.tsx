@@ -235,7 +235,7 @@ export default function AdoptionsPage() {
       .finally(() => setExporting(false));
   };
 
-  /** Download an individual PDF for a single completed adoption */
+  /** Download the certificate or return record from the current saved status. */
   const downloadRecordPdf = (rec: AdoptionRecord) => {
     setDownloadingId(rec.id);
     setExportError('');
@@ -247,7 +247,8 @@ export default function AdoptionsPage() {
         const anchor = document.createElement('a');
         anchor.href = url;
         const refSlug = rec.transaction_id || rec.id.slice(0, 8);
-        anchor.download = `pawconnect-adoption-${refSlug}.pdf`;
+        const prefix = rec.status === 'returned' ? 'adoption-return' : 'adoption';
+        anchor.download = `pawconnect-${prefix}-${refSlug}.pdf`;
         document.body.appendChild(anchor);
         anchor.click();
         anchor.remove();
@@ -263,7 +264,7 @@ export default function AdoptionsPage() {
     <div>
       <PageHeader
         title="Adoption Records"
-        subtitle="Persisted adoption records. Each completed adoption has an individual official PDF download. Use Export All Filtered PDF for aggregate records."
+        subtitle="Completed and returned adoptions have individual PDF downloads. Each PDF includes the downloading staff member and current generation date. Use Export All Filtered PDF for aggregate records."
       />
       {cancellationSuccess && <p role="status" className="mb-4 text-sm text-green-800">{cancellationSuccess}</p>}
       {returnSuccess && <p role="status" className="mb-4 text-sm text-green-800">{returnSuccess}</p>}
@@ -346,11 +347,6 @@ export default function AdoptionsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={rec.status} />
-                    {rec.status === 'returned' && <div className="mt-1 max-w-xs text-xs text-slate-600">
-                      <p>{rec.return_reason || 'No return reason recorded.'}</p>
-                      {rec.returned_at && <p>Returned: {formatDateTime(rec.returned_at)}</p>}
-                      <p>Payment history retained. No automatic refund.</p>
-                    </div>}
                     {rec.status === 'cancelled' && <div className="mt-1 max-w-xs text-xs text-slate-600">
                       <p>{rec.cancellation_reason || 'No cancellation reason recorded.'}</p>
                       {rec.cancelled_at && <p>{formatDateTime(rec.cancelled_at)}</p>}
@@ -386,6 +382,11 @@ export default function AdoptionsPage() {
                         Mark as Returned
                       </Button>
                       </div>
+                    ) : rec.status === 'returned' ? (
+                      <Button variant="outline" className="text-xs px-2.5 py-1"
+                        onClick={() => downloadRecordPdf(rec)} disabled={downloadingId === rec.id}>
+                        {downloadingId === rec.id ? 'PDF…' : 'Download Return PDF'}
+                      </Button>
                     ) : rec.status === 'scheduled' ? (
                       <div className="flex flex-wrap gap-2">
                       <Button

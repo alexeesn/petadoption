@@ -5,10 +5,11 @@ from reportlab.lib.units import mm
 
 from apps.reports.documents import (
     Signatures, build_letter, date_label, name, rule, section, styles, text,
+    PHILIPPINE_TIMEZONE,
 )
 
 
-def build_single_adoption_pdf(record):
+def build_single_adoption_pdf(record, *, downloaded_by=None):
     style = styles()
     pet = record.pet
     adopter = record.adopter
@@ -52,7 +53,7 @@ def build_single_adoption_pdf(record):
 
     dates = []
     if record.completed_at:
-        timestamp = timezone.localtime(record.completed_at).strftime('%d %B %Y, %H:%M %Z')
+        timestamp = timezone.localtime(record.completed_at, PHILIPPINE_TIMEZONE).strftime('%d %B %Y, %H:%M PHT')
         dates.append(f'<b>Completion recorded:</b> {text(timestamp)}')
     elif record.completed_date:
         dates.append(f'<b>Completion recorded:</b> {text(date_label(record.completed_date))}')
@@ -71,4 +72,40 @@ def build_single_adoption_pdf(record):
         f'<b>Adoption record ID:</b> {text(record.pk)}<br/>'
         f'<b>Pet ID:</b> {text(pet.pk)}', style['small'],
     ))
-    return build_letter(story, 'Certificate of Adoption', reference)
+    return build_letter(story, 'Certificate of Adoption', reference, downloaded_by=downloaded_by)
+
+
+def build_returned_adoption_pdf(record, *, downloaded_by=None):
+    """A return acknowledgment, preserving the original completed transaction."""
+    style = styles()
+    reference = record.transaction_id or str(record.pk)
+    story = [
+        Paragraph('Adoption Return Record', style['title']),
+        Paragraph(f'Transaction reference <b>{text(reference)}</b>', style['body']),
+        Paragraph('<b>Current adoption status: Returned</b>', style['body']),
+        rule(),
+        Paragraph(text(record.pet.name), style['pet']),
+        Paragraph(f'Adopter: <b>{text(name(record.adopter))}</b><br/>{text(record.adopter.email)}', style['body']),
+        Paragraph(
+            f'PawConnect records that <b>{text(record.pet.name)}</b> was returned to the shelter '
+            f'following the completed adoption by <b>{text(name(record.adopter))}</b>. '
+            'This document acknowledges the return and retains the original adoption reference.',
+            style['body'],
+        ),
+    ]
+    story.extend(section('Return details',
+        f'<b>Return date:</b> {text(date_label(record.return_date))}<br/>'
+        f'<b>Return recorded:</b> {text(timezone.localtime(record.returned_at, PHILIPPINE_TIMEZONE).strftime("%d %B %Y, %H:%M PHT") if record.returned_at else "Not recorded")}<br/>'
+        f'<b>Reason:</b> {text(record.return_reason)}',
+    ))
+    story.extend(section('Original adoption',
+        f'<b>Completed on:</b> {text(date_label(record.completed_at or record.completed_date))}<br/>'
+        f'<b>Originally completed by:</b> {text(name(record.staff_member))}<br/>'
+        f'<b>Application reference:</b> {text(record.application_id)}<br/>'
+        f'<b>Adoption record ID:</b> {text(record.pk)}',
+    ))
+    story.extend(section('Payment history',
+        'Existing payment records and receipt references are retained. '
+        'Returning the pet does not automatically issue a refund. This document is not a refund receipt.',
+    ))
+    return build_letter(story, 'Adoption Return Record', reference, downloaded_by=downloaded_by)
