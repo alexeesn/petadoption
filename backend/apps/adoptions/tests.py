@@ -115,8 +115,8 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         self.pet.refresh_from_db()
         self.assertEqual(self.pet.status, "adopted")
         resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {
-            "status": "returned", "return_reason": "Allergies",
-        })
+            "status": "returned", "return_reason": "Allergies", "confirmed": True,
+        }, format="json")
         self.assertEqual(resp.status_code, 200)
         self.pet.refresh_from_db()
         self.assertEqual(self.pet.status, "available")

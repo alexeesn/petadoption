@@ -47,6 +47,8 @@ function reportFilename(): string {
  */
 export default function AdoptionsPage() {
   const toast = useToast();
+  const [returningRecord, setReturningRecord] = useState<AdoptionRecord | null>(null);
+  const [returnSuccess, setReturnSuccess] = useState('');
   const [cancellingRecord, setCancellingRecord] = useState<AdoptionRecord | null>(null);
   const [cancellationSuccess, setCancellationSuccess] = useState('');
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
@@ -264,6 +266,7 @@ export default function AdoptionsPage() {
         subtitle="Persisted adoption records. Each completed adoption has an individual official PDF download. Use Export All Filtered PDF for aggregate records."
       />
       {cancellationSuccess && <p role="status" className="mb-4 text-sm text-green-800">{cancellationSuccess}</p>}
+      {returnSuccess && <p role="status" className="mb-4 text-sm text-green-800">{returnSuccess}</p>}
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Select
@@ -343,6 +346,11 @@ export default function AdoptionsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={rec.status} />
+                    {rec.status === 'returned' && <div className="mt-1 max-w-xs text-xs text-slate-600">
+                      <p>{rec.return_reason || 'No return reason recorded.'}</p>
+                      {rec.returned_at && <p>Returned: {formatDateTime(rec.returned_at)}</p>}
+                      <p>Payment history retained. No automatic refund.</p>
+                    </div>}
                     {rec.status === 'cancelled' && <div className="mt-1 max-w-xs text-xs text-slate-600">
                       <p>{rec.cancellation_reason || 'No cancellation reason recorded.'}</p>
                       {rec.cancelled_at && <p>{formatDateTime(rec.cancelled_at)}</p>}
@@ -364,6 +372,7 @@ export default function AdoptionsPage() {
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {rec.status === 'completed' ? (
+                      <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
                         className="text-xs px-2.5 py-1"
@@ -372,6 +381,11 @@ export default function AdoptionsPage() {
                       >
                         {downloadingId === rec.id ? 'PDF…' : 'Download PDF'}
                       </Button>
+                      <Button variant="danger" className="text-xs px-2.5 py-1"
+                        onClick={() => { setReturnSuccess(''); setReturningRecord(rec); }}>
+                        Mark as Returned
+                      </Button>
+                      </div>
                     ) : rec.status === 'scheduled' ? (
                       <div className="flex flex-wrap gap-2">
                       <Button
@@ -413,6 +427,15 @@ export default function AdoptionsPage() {
           </div>
         </>
       )}
+      {returningRecord && <DecisionDialog title="Mark as Returned"
+        description={`Record that ${returningRecord.pet_name} has been returned by ${returningRecord.adopter_email}. The pet will become Available for adoption again. The original adoption and payment history are retained; no automatic refund is issued.`}
+        confirmationLabel="I confirm the pet has been physically returned to the shelter."
+        onClose={() => setReturningRecord(null)} onConfirm={async (reason) => {
+          await adoptionService.markReturned(returningRecord.id, reason);
+          toast.success('Adoption returned', `${returningRecord.pet_name} is now available for adoption again.`);
+          setReturnSuccess('Return recorded. The pet is Available again; payment records and receipts are retained without an automatic refund.');
+          load();
+        }} />}
       {cancellingRecord && <DecisionDialog title="Cancel Adoption"
         description={`Cancel ${cancellingRecord.pet_name}'s Scheduled adoption for ${cancellingRecord.adopter_email}. This closes the application and active appointments. Existing payments are retained; no automatic refund is issued.`}
         onClose={() => setCancellingRecord(null)} onConfirm={async (reason) => {

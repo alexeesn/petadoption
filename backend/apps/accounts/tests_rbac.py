@@ -534,12 +534,15 @@ class StaffAccessTests(RBACTestCaseBase):
         self.assertEqual(resp.status_code, 200)
 
     def test_health_record_create(self):
+        # The shared pet already has a record; creation now requires an
+        # eligible pet. This test checks staff access, not duplicate records.
+        pet = Pet.objects.create(name="Staff health pet", species="dog", age_years=1)
         resp = self.client.post("/api/health-records/", {
-            "pet": str(self.pet.id),
+            "pet": str(pet.id),
             "record_date": str(date.today()),
             "veterinarian_name": "Dr. Staff",
         }, format="json")
-        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.status_code, 201, resp.data)
 
     def test_vaccination_list(self):
         resp = self.client.get("/api/health-records/vaccinations/")

@@ -405,3 +405,50 @@ def cancel_scheduled_adoption(record, staff, reason, confirmed):
         "Existing payment records have been retained; cancellation does not automatically issue a refund."
     ), notification_type="adoption")
     return record
+
+
+@transaction.atomic
+def return_completed_adoption(record, staff, reason, confirmed):
+    """Record physical return once, preserving completion and payment history."""
+    from zoneinfo import ZoneInfo
+
+    from apps.applications.models import Application
+    from apps.appointments.services import audit, notify_adopter, require_staff, required_reason
+    from apps.pets.models import Pet
+
+    require_staff(staff)
+    if confirmed is not True:
+        raise ValidationError("Confirm that the pet has been physically returned to the shelter (confirmed: true).")
+    reason = required_reason(reason)
+    # Match completion/cancellation lock order; all side effects commit together.
+    application = Application.objects.select_for_update().get(pk=record.application_id)
+    pet = Pet.objects.select_for_update().get(pk=application.pet_id)
+    record = AdoptionRecord.objects.select_for_update().get(pk=record.pk)
+    if record.status == AdoptionRecord.Status.RETURNED:
+        # A retry must never release a pet that has since been adopted again.
+        return record
+    if not record.can_transition_to(AdoptionRecord.Status.RETURNED):
+        raise ValidationError("Only a Completed adoption may be marked as Returned.")
+    if (
+        Application.objects.filter(pet=pet, status=Application.Status.APPROVED).exclude(pk=application.pk).exists()
+        or AdoptionRecord.objects.filter(pet=pet, status__in=["scheduled", "completed"]).exclude(pk=record.pk).exists()
+    ):
+        raise ValidationError("This pet has another active adoption. Resolve it before recording this return.")
+
+    now = timezone.now()
+    record.status = AdoptionRecord.Status.RETURNED
+    record.return_reason = reason
+    record.return_date = timezone.localtime(now, ZoneInfo("Asia/Manila")).date()
+    record.returned_at = now
+    record.save(update_fields=["status", "return_reason", "return_date", "returned_at", "updated_at"])
+    previous_pet_status = pet.status
+    if pet.status != Pet.Status.AVAILABLE:
+        pet.status = Pet.Status.AVAILABLE
+        pet.save(update_fields=["status", "updated_at"])
+        audit(staff, "status_change", pet, previous_pet_status, "available")
+    audit(staff, "adoption_returned", record, "completed", f"returned: {reason}")
+    notify_adopter(application, "Adoption Returned", (
+        f"The shelter has received {pet.name} back and recorded your adoption as Returned. "
+        f"Reason: {reason}. Existing payment records and receipts are retained; no automatic refund is issued."
+    ), notification_type="adoption")
+    return record

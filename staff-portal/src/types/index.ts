@@ -186,6 +186,8 @@ export interface AdoptionRecord {
   is_fee_paid?: boolean;
   notes: string;
   return_reason: string;
+  return_date?: string | null;
+  returned_at?: string | null;
   created_at: string;
   updated_at: string;
 }

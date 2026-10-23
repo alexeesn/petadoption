@@ -117,6 +117,8 @@ export interface AdoptionRecord {
   completed_date?: string
   notes: string
   return_reason: string
+  return_date?: string | null
+  returned_at?: string | null
   created_at: string
 }
 

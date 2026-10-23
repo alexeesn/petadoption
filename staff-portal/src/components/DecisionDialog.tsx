@@ -6,11 +6,13 @@ interface Props {
   title: string;
   description: string;
   requireReason?: boolean;
+  confirmationLabel?: string;
   onConfirm: (reason: string) => Promise<void>;
   onClose: () => void;
 }
 
-export function DecisionDialog({ title, description, requireReason = true, onConfirm, onClose }: Props) {
+export function DecisionDialog({ title, description, requireReason = true,
+  confirmationLabel = 'I confirm this decision and understand its effect.', onConfirm, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const errorId = useId();
@@ -43,7 +45,7 @@ export function DecisionDialog({ title, description, requireReason = true, onCon
         <label className="flex items-start gap-2 text-sm text-slate-700">
           <input type="checkbox" required disabled={busy} checked={confirmed}
             onChange={(e) => setConfirmed(e.target.checked)} className="mt-1" />
-          <span>I confirm this decision and understand its effect.</span>
+          <span>{confirmationLabel}</span>
         </label>
         {error && <p id={errorId} role="alert" className="text-sm text-red-700">{error}</p>}
         <div className="flex flex-wrap justify-end gap-3">

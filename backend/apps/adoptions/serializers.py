@@ -30,13 +30,15 @@ class AdoptionRecordSerializer(serializers.ModelSerializer):
             "appointment", "appointment_id", "appointment_date", "appointment_status",
             "status", "adoption_date", "completed_date", "completed_at",
             "adoption_fee", "total_paid", "is_fee_paid",
-            "notes", "return_reason", "cancellation_reason", "cancelled_at", "created_at", "updated_at",
+            "notes", "return_reason", "return_date", "returned_at",
+            "cancellation_reason", "cancelled_at", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "transaction_id", "application_id", "pet_name",
             "adopter", "adopter_email", "staff_email",
             "appointment", "appointment_id", "appointment_date", "appointment_status",
             "cancellation_reason", "cancelled_at",
+            "return_reason", "return_date", "returned_at",
             "completed_date", "completed_at",
             "adoption_fee", "total_paid", "is_fee_paid",
             "created_at", "updated_at",

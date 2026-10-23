@@ -79,6 +79,14 @@ export default function AdoptionRecordPage() {
             Your adoption is scheduled. Please follow the instructions provided by our staff.
           </div>
         )}
+        {record.status === 'returned' && (
+          <div className="bg-purple-50 border border-purple-100 rounded-md p-4 text-sm text-purple-800">
+            <p>The shelter has recorded the return of {record.pet_name}.
+              {record.return_date && ` Returned on ${new Date(`${record.return_date}T00:00:00`).toLocaleDateString()}.`}
+            </p>
+            <p className="mt-1">Your adoption and payment history are retained. No automatic refund is issued.</p>
+          </div>
+        )}
         {record.status === 'completed' && (
           <div className="bg-green-50 border border-green-100 rounded-md p-4 text-sm text-green-800">
             Congratulations on your new family member! 🎉

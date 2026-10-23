@@ -177,6 +177,7 @@ export const healthService = {
 
 // ----- Adoptions -----
 export const adoptionService = {
+  markReturned: (id: string, reason: string) => api.post(`/adoptions/${id}/mark-returned/`, { return_reason: reason, confirmed: true }),
   cancel: (id: string, reason: string) => api.post(`/adoptions/${id}/cancel/`, { reason, confirmed: true }),
   list: (params?: Record<string, unknown>) => api.get('/adoptions/', { params }),
   create: (data: Record<string, unknown>) => api.post('/adoptions/', data),
