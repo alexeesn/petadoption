@@ -3,9 +3,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from datetime import timedelta
 from unittest import skipUnless
+from zoneinfo import ZoneInfo
 
 from django.test import LiveServerTestCase
+from django.utils import timezone
 from rest_framework.authtoken.models import Token
 
 from apps.accounts.models import User
@@ -23,8 +26,11 @@ class HealthRecordBrowserTests(LiveServerTestCase):
             HealthRecord.objects.create(pet=pet, record_date='2026-01-01', diagnosis='Existing history', created_by=staff)
             eligible = Pet.objects.create(name=f'Eligible {index:02d}', species='cat')
         before = list(HealthRecord.objects.order_by('pk').values())
+        today = timezone.localtime(timezone.now(), ZoneInfo('Asia/Manila')).date()
         fixture = {
             'api': self.live_server_url, 'eligible_pet': str(eligible.pk),
+            'today': today.isoformat(), 'yesterday': (today - timedelta(days=1)).isoformat(),
+            'tomorrow': (today + timedelta(days=1)).isoformat(),
             'staff': {'token': Token.objects.create(user=staff).key, 'user': dict(UserSerializer(staff).data)},
         }
         root = Path(__file__).resolve().parents[3]

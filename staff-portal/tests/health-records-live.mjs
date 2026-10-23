@@ -30,11 +30,16 @@ try {
     server.on('exit', code => { clearTimeout(timer); reject(Error(`Vite exited (${code}): ${stderr}`)); });
   });
   browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
-  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'America/Los_Angeles' });
   await context.addInitScript(auth => {
     localStorage.setItem('staff_auth_token', auth.token);
     localStorage.setItem('staff_auth_user', JSON.stringify(auth.user));
   }, fixture.staff);
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (['fonts.googleapis.com', 'fonts.gstatic.com'].includes(url.hostname)) return route.abort();
+    return route.continue();
+  });
   page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${origin}/health`);
@@ -49,13 +54,32 @@ try {
   await expect(choice.locator('option')).toHaveCount(26);
   assert.ok((await choice.locator('option').allTextContents()).every(name => !name.startsWith('Recorded')));
   await choice.selectOption(fixture.eligible_pet);
+  const recordDate = page.getByLabel('Record Date', { exact: true });
+  const nextCheckup = page.getByLabel('Next Checkup Date', { exact: true });
+  await expect(recordDate).toHaveAttribute('max', fixture.today);
+  await expect(nextCheckup).toHaveAttribute('min', fixture.today);
+  await recordDate.fill(fixture.tomorrow);
+  assert.equal(await recordDate.evaluate(input => input.validity.rangeOverflow), true);
+  await page.getByRole('button', { name: 'Save Record', exact: true }).click();
+  assert.equal((await read('/health-records/')).count, 25);
+  // Even bypassing native date bounds must not submit invalid dates.
+  await recordDate.evaluate(input => { input.form.noValidate = true; });
+  await page.getByRole('button', { name: 'Save Record', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Record date cannot be in the future.');
+  await recordDate.fill(fixture.today);
+  await nextCheckup.fill(fixture.yesterday);
+  assert.equal(await nextCheckup.evaluate(input => input.validity.rangeUnderflow), true);
+  await page.getByRole('button', { name: 'Save Record', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Next checkup date cannot be in the past.');
+  assert.equal((await read('/health-records/')).count, 25);
+  await recordDate.evaluate(input => { input.form.noValidate = false; });
   // Even an older medical date must not hide a newly added record.
   await page.getByLabel('Record Date', { exact: true }).fill('2025-10-01');
   await page.getByLabel('Diagnosis', { exact: true }).fill('Initial checkup');
   await page.getByLabel('Treatment', { exact: true }).fill('Rest and monitoring');
   await page.getByLabel('Veterinarian Name', { exact: true }).fill('Dr. Reyes');
   await page.getByLabel('Veterinary Clinic', { exact: true }).fill('PawCare');
-  await page.getByLabel('Next Checkup Date', { exact: true }).fill('2026-10-15');
+  await nextCheckup.fill(fixture.tomorrow);
   await page.getByLabel('Notes', { exact: true }).fill('Initial care plan');
   const created = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/health-records/'));
   await page.getByRole('button', { name: 'Save Record', exact: true }).click();
@@ -70,7 +94,9 @@ try {
   await expect(page.getByLabel('Treatment', { exact: true })).toHaveValue('Rest and monitoring');
   await expect(page.getByLabel('Veterinarian Name', { exact: true })).toHaveValue('Dr. Reyes');
   await expect(page.getByLabel('Veterinary Clinic', { exact: true })).toHaveValue('PawCare');
-  await expect(page.getByLabel('Next Checkup Date', { exact: true })).toHaveValue('2026-10-15');
+  await expect(nextCheckup).toHaveValue(fixture.tomorrow);
+  await expect(recordDate).toHaveAttribute('max', fixture.today);
+  await expect(nextCheckup).toHaveAttribute('min', fixture.today);
   await expect(page.getByLabel('Pet', { exact: true })).toHaveAttribute('readonly', '');
   await page.getByLabel('Diagnosis', { exact: true }).fill('Recovered after follow-up');
   await page.getByLabel('Notes', { exact: true }).fill('Updated care plan');

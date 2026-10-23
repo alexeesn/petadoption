@@ -1,3 +1,6 @@
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
 from rest_framework import serializers
 from .models import HealthRecord, Vaccination
 
@@ -19,6 +22,19 @@ class VaccinationSerializer(serializers.ModelSerializer):
 class HealthRecordSerializer(serializers.ModelSerializer):
     # The staff list shows the pet by name; `pet` alone is a UUID.
     pet_name = serializers.CharField(source="pet.name", read_only=True)
+
+    def validate(self, attrs):
+        today = timezone.localtime(timezone.now(), ZoneInfo("Asia/Manila")).date()
+        errors = {}
+        record_date = attrs.get("record_date")
+        next_checkup_date = attrs.get("next_checkup_date")
+        if record_date is not None and record_date > today:
+            errors["record_date"] = "Record date cannot be in the future."
+        if next_checkup_date is not None and next_checkup_date < today:
+            errors["next_checkup_date"] = "Next checkup date cannot be in the past."
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     def validate_pet(self, value):
         if self.instance is not None and value.pk != self.instance.pet_id:

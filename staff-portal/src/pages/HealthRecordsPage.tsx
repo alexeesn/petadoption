@@ -3,7 +3,7 @@ import { Card, Loading, ErrorMessage, Empty, Table, Button, Input, Textarea } fr
 import { PageHeader } from '../layouts/DashboardLayout';
 import { healthService } from '../services/apiService';
 import type { HealthRecord, Pet } from '../types';
-import { formatPetLabel } from '../utils/format';
+import { formatPetLabel, philippineDate } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 
 const emptyForm = {
@@ -61,6 +61,7 @@ export default function HealthRecordsPage() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
+  const today = philippineDate();
 
   useEffect(() => {
     let active = true;
@@ -121,6 +122,19 @@ export default function HealthRecordsPage() {
     setSuccess('');
     if (!form.pet) {
       setSubmitError('Select a pet without a health record.');
+      return;
+    }
+    const currentDate = philippineDate();
+    if (!form.record_date) {
+      setSubmitError('Record date is required.');
+      return;
+    }
+    if (form.record_date > currentDate) {
+      setSubmitError('Record date cannot be in the future.');
+      return;
+    }
+    if (form.next_checkup_date && form.next_checkup_date < currentDate) {
+      setSubmitError('Next checkup date cannot be in the past.');
       return;
     }
     setSubmitting(true);
@@ -185,6 +199,7 @@ export default function HealthRecordsPage() {
             <Input
               label="Record Date"
               type="date"
+              max={today}
               required
               value={form.record_date}
               onChange={(e) => setForm({ ...form, record_date: e.target.value })}
@@ -212,6 +227,7 @@ export default function HealthRecordsPage() {
             <Input
               label="Next Checkup Date"
               type="date"
+              min={today}
               value={form.next_checkup_date}
               onChange={(e) => setForm({ ...form, next_checkup_date: e.target.value })}
             />

@@ -1,6 +1,8 @@
-from datetime import date
+from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
+from django.utils import timezone
 from apps.accounts.tests import BaseAPITestCase
 from apps.pets.models import Pet
 from apps.health.models import HealthRecord, Vaccination
@@ -77,6 +79,12 @@ class HealthRecordCreationTests(BaseAPITestCase):
 
     def setUp(self):
         super().setUp()
+        # Keep upcoming checkups valid without freezing creation timestamps.
+        today = timezone.localtime(timezone.now(), ZoneInfo("Asia/Manila")).date()
+        self.FORM_PAYLOAD = {
+            **self.FORM_PAYLOAD,
+            "next_checkup_date": (today + timedelta(days=30)).isoformat(),
+        }
         self.pet = Pet.objects.create(
             name="Buddy", species="dog", age_years=2, status="available"
         )
