@@ -1517,11 +1517,44 @@ class IndividualReceiptPdfTests(BaseAPITestCase):
 
     def test_staff_can_download_individual_receipt_pdf(self):
         self.authenticate(self.staff)
+        before = Payment.objects.values().get(pk=self.payment.pk)
         resp = self.client.get(f"/api/payments/{self.payment.id}/receipt-pdf/")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp["Content-Type"], "application/pdf")
         self.assertIn("attachment;", resp["Content-Disposition"])
         self.assertTrue(resp.content.startswith(b"%PDF"))
+        text = _extract_pdf_text(resp.content)
+        for value in ['Payment Receipt', '500.00', self.payment.receipt_number, self.adopter.email, self.staff.email, str(self.app.pk), str(self.payment.pk)]:
+            self.assertIn(value.encode(), text)
+        self.assertEqual(Payment.objects.values().get(pk=self.payment.pk), before)
+
+    def test_non_completed_transaction_is_not_presented_as_money_received(self):
+        payment = Payment.objects.create(application=self.app, amount='600.00', status='pending')
+        self.authenticate(self.staff)
+        response = self.client.get(f'/api/payments/{payment.pk}/receipt-pdf/')
+        self.assertEqual(response.status_code, 200)
+        text = _extract_pdf_text(response.content)
+        self.assertIn(b'Payment Transaction Record', text)
+        self.assertIn(b'It does not', text)
+        self.assertIn(b'confirm receipt of funds.', text)
+        self.assertNotIn(b'AMOUNT RECEIVED', text)
+        payment.refresh_from_db()
+        self.assertEqual(payment.receipt_number, '')
+        self.assertEqual(payment.status, 'pending')
+
+    def test_long_notes_and_names_wrap_without_losing_content(self):
+        self.adopter.first_name = 'Maria Isabel ' * 10
+        self.adopter.last_name = 'Dela Cruz ' * 14
+        self.adopter.save(update_fields=['first_name', 'last_name'])
+        self.payment.notes = ('Care note & follow-up <needs review>.\n' * 90) + 'END OF SAVED PAYMENT NOTES'
+        self.payment.save(update_fields=['notes'])
+        self.authenticate(self.staff)
+        response = self.client.get(f'/api/payments/{self.payment.pk}/receipt-pdf/')
+        self.assertEqual(response.status_code, 200)
+        text = _extract_pdf_text(response.content)
+        self.assertIn(b'END OF SAVED PAYMENT NOTES', text)
+        self.assertIn(b'<needs review>', text)
+        self.assertGreaterEqual(text.count(self.payment.receipt_number.encode()), 2)
 
     def test_adopter_cannot_download_receipt_pdf_via_staff_endpoint(self):
         self.authenticate(self.adopter)

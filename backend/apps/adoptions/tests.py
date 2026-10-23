@@ -1300,11 +1300,31 @@ class IndividualAdoptionRecordPdfTests(BaseAPITestCase):
 
     def test_staff_can_download_individual_completed_adoption_pdf(self):
         self.authenticate(self.staff)
+        before = AdoptionRecord.objects.values().get(pk=self.completed_record.pk)
         resp = self.client.get(f"/api/adoptions/{self.completed_record.id}/record-pdf/")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp["Content-Type"], "application/pdf")
         self.assertIn("attachment;", resp["Content-Disposition"])
         self.assertTrue(resp.content.startswith(b"%PDF"))
+        text = _extract_pdf_text(resp.content)
+        for value in ['Certificate of Adoption', self.completed_record.transaction_id, self.pet.name, self.adopter.email, self.staff.email, str(self.app.pk), str(self.completed_record.pk)]:
+            self.assertIn(value.encode(), text)
+        self.assertNotIn(self.scheduled_pet.name.encode(), text)
+        self.assertEqual(AdoptionRecord.objects.values().get(pk=self.completed_record.pk), before)
+
+    def test_long_adoption_notes_and_names_are_preserved(self):
+        self.adopter.first_name = 'Maria Isabel ' * 10
+        self.adopter.last_name = 'Dela Cruz ' * 14
+        self.adopter.save(update_fields=['first_name', 'last_name'])
+        self.completed_record.notes = ('Care instructions & follow-up <recorded>.\n' * 90) + 'END OF SAVED ADOPTION NOTES'
+        self.completed_record.save(update_fields=['notes'])
+        self.authenticate(self.staff)
+        response = self.client.get(f'/api/adoptions/{self.completed_record.pk}/record-pdf/')
+        self.assertEqual(response.status_code, 200)
+        text = _extract_pdf_text(response.content)
+        self.assertIn(b'END OF SAVED ADOPTION NOTES', text)
+        self.assertIn(b'<recorded>', text)
+        self.assertGreaterEqual(text.count(self.completed_record.transaction_id.encode()), 2)
 
     def test_non_completed_adoption_cannot_download_individual_pdf(self):
         self.authenticate(self.staff)
