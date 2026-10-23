@@ -26,7 +26,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshUnreadCount()
     const interval = setInterval(refreshUnreadCount, 30000)
-    return () => clearInterval(interval)
+    window.addEventListener('pawconnect-notifications-changed', refreshUnreadCount)
+    return () => { clearInterval(interval); window.removeEventListener('pawconnect-notifications-changed', refreshUnreadCount) }
   }, [user])
 
   return (

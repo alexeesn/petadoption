@@ -61,3 +61,9 @@ export function formatPetAge(years?: number | null, months?: number | null): str
   }
   return m === 1 ? '1 month' : `${m} months`;
 }
+
+/** Shared pet-label presentation. Descriptions and stored values stay unchanged. */
+export function formatPetLabel(value?: string | null): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+    .replace(/(^|[\s/\-])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toLocaleUpperCase())
+}

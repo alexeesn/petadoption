@@ -106,7 +106,7 @@ export function Icon({ name, className = 'h-5 w-5' }: { name: IconName; classNam
 /** Small brand tile: ink square with a tag-yellow paw. */
 export function BrandTile({ className = 'h-9 w-9' }: { className?: string }) {
   return (
-    <span className={`flex items-center justify-center rounded-[11px] bg-primary-900 text-accent-400 ${className}`}>
+    <span className={`brand-mark ${className}`}>
       <PawMark className="h-[55%] w-[55%]" />
     </span>
   );

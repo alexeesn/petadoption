@@ -53,7 +53,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="panel p-8">
+    <div className="panel min-w-0 p-5 sm:p-8">
       <h2 className="mb-6 text-2xl font-bold text-primary-900">Sign In</h2>
       {error && (
         <div className="relative mb-4 overflow-hidden rounded-md border border-red-200 bg-red-50 py-3 pl-5 pr-4 text-sm text-red-800" role="alert">

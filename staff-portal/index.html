@@ -3,15 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/paw.svg" />
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem('pawconnect_staff_theme')
+          const theme = saved === 'light' || saved === 'dark' ? saved : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          document.documentElement.dataset.theme = theme
+          document.documentElement.classList.toggle('dark', theme === 'dark')
+          document.documentElement.style.colorScheme = theme
+        } catch { document.documentElement.dataset.theme = 'light' }
+      })()
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#141F3B" />
+    <meta name="theme-color" content="#f4f6f9" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <title>Pet Adoption Staff Portal</title>
+    <title>PawConnect | Staff Workspace</title>
   </head>
   <body>
     <div id="root"></div>

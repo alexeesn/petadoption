@@ -432,7 +432,7 @@ export default function AdoptionsPage() {
           className={[
             'bg-transparent p-0 border-0 outline-none',
             'fixed inset-0 m-0 max-h-none max-w-none w-screen h-screen',
-            'bg-stone-900/50 backdrop-blur-sm',
+            'bg-black/50',
             'flex items-center justify-center',
             'z-50',
           ].join(' ')}

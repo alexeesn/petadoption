@@ -252,6 +252,8 @@ export const reportService = {
 
 // ----- Notifications -----
 export const notificationService = {
+  unreadCount: () => api.get('/notifications/unread-count/'),
+  markAllRead: () => api.post('/notifications/mark-all-read/'),
   list: (params?: Record<string, unknown>) => api.get('/notifications/', { params }),
   // Unread notifications of the authenticated user, following the existing
   // `?unread=true` filter and pagination (PAGE_SIZE = 20) so counts are not

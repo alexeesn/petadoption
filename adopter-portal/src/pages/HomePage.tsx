@@ -2,129 +2,61 @@ import { Link } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { fetchPets } from '../services/apiService'
 import type { Pet } from '../types'
-import { formatCurrency, formatPetAge } from '../utils/format'
+import { formatPetLabel, capitalize, formatPetAge } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
-import { CollarTagArt, Icon, PawMark } from '../components/Icons'
-import type { IconName } from '../components/Icons'
-
-const reasons: { icon: IconName; title: string; desc: string }[] = [
-  { icon: 'heart', title: 'Loving homes', desc: 'Every pet is cared for while waiting for their forever family.' },
-  { icon: 'shield', title: 'Health checked', desc: 'All our pets receive veterinary care and vaccinations.' },
-  { icon: 'route', title: 'Supportive process', desc: 'We guide you through every step of the adoption journey.' },
-]
+import PetCard from '../components/PetCard'
+import { Icon } from '../components/Icons'
+import PetPhoto from '../components/PetPhoto'
 
 export default function HomePage() {
   const [featured, setFeatured] = useState<Pet[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-
   useEffect(() => {
-    fetchPets({ status: 'available', page_size: '3' })
-      .then((data) => setFeatured(data.results || data))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+    let active = true
+    fetchPets({ status: 'available', ordering: '-created_at' })
+      .then(data => { if (active) setFeatured((data.results || data).filter((pet: Pet) => pet.status === 'available').slice(0, 3)) })
+      .catch(() => { if (active) setError(true) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [])
-
-  return (
-    <div>
-      {/* Hero */}
-      <section className="overflow-hidden bg-white">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.15fr_1fr] lg:px-8 lg:py-24">
-          <div>
-            <h1 className="max-w-xl font-display text-5xl font-extrabold leading-[1.02] tracking-tight text-primary-900 sm:text-6xl lg:text-7xl">
-              Find your new best friend
-            </h1>
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-stone-600">
-              Every pet deserves a loving home. Browse our adoptable pets and start
-              your adoption journey today.
-            </p>
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-              <Link to="/pets" className="btn btn-accent btn-lg">
-                Browse Pets
-              </Link>
-              <Link to="/register" className="btn btn-secondary btn-lg">
-                Start Adopting
-              </Link>
-            </div>
-          </div>
-          <div className="mx-auto w-full max-w-md lg:max-w-none">
-            <CollarTagArt className="h-auto w-full" />
-          </div>
+  const heroPet = featured[0]
+  return <div>
+    <section className="home-hero mx-auto max-w-7xl px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pb-14 lg:pt-9">
+      <div className="hero-bento">
+        <div className="hero-copy-card">
+          <p className="hero-eyebrow"><span aria-hidden="true" />A better beginning starts here</p>
+          <h1 className="hero-title">A little love.<br /><span>A whole new life.</span></h1>
+          <p className="hero-description">Find a companion who feels like home. Meet our pets, get to know their stories, and take the first step together.</p>
+          <div className="mt-8 flex flex-wrap items-center gap-3"><Link to="/pets" className="btn btn-primary btn-lg">Find a Pet<Icon name="arrowRight" className="h-4 w-4" /></Link><a href="#how-it-works" className="btn btn-outline">How it works<Icon name="chevronRight" className="h-4 w-4" /></a></div>
+          <div className="hero-care-note"><span className="hero-note-icon"><Icon name="shield" className="h-5 w-5" /></span><div><p className="text-sm font-semibold text-stone-800">A real connection. A thoughtful process.</p><p className="mt-1 text-xs text-stone-600">Our team is here to guide every step.</p></div></div>
         </div>
-      </section>
-
-      {/* Featured pets */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="mb-10 flex items-end justify-between gap-4">
-          <h2 className="text-3xl font-bold text-primary-900 sm:text-4xl">Latest Pets</h2>
-          <Link
-            to="/pets"
-            className="inline-flex items-center gap-1.5 font-semibold text-primary-700 transition-colors hover:text-primary-900"
-          >
-            View all
-            <Icon name="arrowRight" className="h-4 w-4" />
-          </Link>
+        <div className="spotlight-card">
+          <div className="spotlight-photo"><PetPhoto src={heroPet?.primary_image?.image} name={formatPetLabel(heroPet?.name) || 'our pets'} eager /><span className="spotlight-label"><Icon name="heart" className="h-3.5 w-3.5" />{heroPet ? 'Your next hello' : 'Room for a new friend'}</span></div>
+          <div className="spotlight-details"><div className="min-w-0"><p className="section-label">{heroPet ? 'Waiting to meet you' : 'Start your adoption journey'}</p><p className="pet-name mt-1 text-2xl font-bold text-stone-900">{formatPetLabel(heroPet?.name) || 'Find a connection'}</p>{heroPet && <p className="mt-1 text-sm text-stone-600">{capitalize(heroPet.species)} / {formatPetAge(heroPet.age_years, heroPet.age_months)}</p>}</div><Link to={heroPet ? `/pets/${heroPet.id}` : '/pets'} aria-label={heroPet ? `Meet ${heroPet.name}` : 'Browse pets'} className="spotlight-link"><Icon name="arrowRight" className="h-5 w-5" /></Link></div>
         </div>
+      </div>
+    </section>
 
+    <section className="latest-pets-section border-y border-stone-200" id="latest-pets">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="section-label">Ready for a new chapter</p><h2 className="mt-2 text-3xl font-bold text-stone-900 sm:text-4xl">Latest Pets</h2><p className="mt-3 text-sm text-stone-600">A few friendly faces. Many more stories to discover.</p></div><Link to="/pets" className="btn btn-secondary">Meet all our pets<Icon name="arrowRight" className="h-4 w-4"/></Link></div>
         {loading && <Spinner label="Loading featured pets..." />}
         {error && <ErrorState message="Could not load pets." />}
-        {!loading && !error && featured.length === 0 && (
-          <p className="py-8 text-center text-stone-500">
-            No available pets right now. Check back soon!
-          </p>
-        )}
-
-        <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {featured.map((pet) => (
-            <Link key={pet.id} to={`/pets/${pet.id}`} className="pet-card">
-              <div className="relative h-64 bg-stone-200">
-                {pet.primary_image?.image ? (
-                  <img src={pet.primary_image.image} alt={pet.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-stone-400" aria-hidden="true">
-                    <PawMark className="h-16 w-16" />
-                  </div>
-                )}
-                <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold capitalize text-primary-900 shadow-sm">
-                  {pet.species}
-                </span>
-              </div>
-              <div className="p-6">
-                <h3 className="text-2xl font-bold text-primary-900">{pet.name}</h3>
-                <p className="mt-1.5 text-stone-600">
-                  {pet.breed || 'Mixed breed'} · {formatPetAge(pet.age_years, pet.age_months)}
-                </p>
-                <div className="mt-5 flex items-center justify-end border-t border-dashed border-stone-300 pt-5">
-                  <Icon name="arrowRight" className="h-5 w-5 text-primary-600" />
-                </div>
-              </div>
-            </Link>
-          ))}
+        {!loading && !error && featured.length === 0 && <p className="py-8 text-stone-500">No available pets right now. Check back soon!</p>}
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" data-testid="latest-pets">
+          {!loading && !error && featured.map(pet => <PetCard key={pet.id} pet={pet} />)}
         </div>
-      </section>
+      </div>
+    </section>
 
-      {/* Why adopt */}
-      <section className="border-t border-stone-200 bg-white py-16 lg:py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="mb-12 max-w-md text-3xl font-bold text-primary-900 sm:text-4xl">
-            Why adopt from us?
-          </h2>
-          <div className="grid grid-cols-1 gap-10 sm:grid-cols-3 sm:gap-8">
-            {reasons.map((item) => (
-              <div key={item.title}>
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-700 ring-1 ring-inset ring-primary-100"
-                  aria-hidden="true"
-                >
-                  <Icon name={item.icon} className="h-6 w-6" />
-                </div>
-                <h3 className="mt-5 text-xl font-bold text-primary-900">{item.title}</h3>
-                <p className="mt-2 leading-relaxed text-stone-600">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    </div>
-  )
+    <section id="how-it-works" className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      <div className="mb-10 max-w-lg"><p className="section-label">The adoption journey</p><h2 className="mt-3 text-3xl font-bold leading-tight text-stone-900 sm:text-4xl">Good things start<br />with a connection.</h2></div>
+      <div className="grid gap-4 sm:grid-cols-3">{[
+        ['01', 'Find your companion', 'Browse the pets, read their profiles, and find someone you would love to meet.'],
+        ['02', 'Tell us about yourself', 'Complete your profile and application. Our team will review the information you submit.'],
+        ['03', 'Meet and welcome home', 'Once approved, request your visit. Staff will guide you through the onsite steps and physical handover.'],
+      ].map(([number,title,description]) => <div key={number} className="journey-step"><span className="journey-number">{number}</span><h3 className="mt-5 text-xl font-bold text-primary-900">{title}</h3><p className="mt-3 text-sm leading-7 text-stone-600">{description}</p></div>)}</div>
+    </section>
+  </div>
 }

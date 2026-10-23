@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Card, Loading, ErrorMessage, Empty, Button, Input, Select } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { petService } from '../services/apiService';
-import { formatPetAge } from '../utils/format';
+import { formatPetAge, formatPetLabel } from '../utils/format';
+import { PawMark } from '../components/Icons';
 import type { Pet, PetImage } from '../types';
 
 const emptyForm = {
@@ -240,18 +241,20 @@ export default function PetsPage() {
     }
   };
 
+  const previewImage = existingPhotos.find(photo => photo.is_primary)?.image || existingPhotos[0]?.image || photos[0]?.url;
+
   return (
     <div>
       <PageHeader title="Pets" subtitle="Manage pet inventory and details" />
-      <div className="mb-4">
+      <div className="mb-6 flex items-center justify-between gap-4">
         <Button onClick={openNew}>Add New Pet</Button>
       </div>
 
       {showForm && (
-        <Card className="p-6 mb-6">
-          <h3 className="font-semibold text-primary-900 mb-4">{editing ? 'Edit Pet' : 'New Pet'}</h3>
+        <Card className="mb-6 overflow-hidden p-5 sm:p-7">
+          <div className="mb-6 border-b border-stone-200 pb-5"><p className="section-label mb-2">Pet profile</p><h3 className="text-xl font-bold text-stone-900">{editing ? 'Edit Pet' : 'New Pet'}</h3><p className="mt-2 text-sm text-stone-500">Keep details clear and accurate. The preview shows how adopters will see this profile.</p></div>
           {submitError && <p className="text-red-600 text-sm mb-4">{submitError}</p>}
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="pet-editor-layout"><form onSubmit={handleSubmit} className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
             <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             <Select
               label="Species"
@@ -312,7 +315,7 @@ export default function PetsPage() {
               value={form.arrival_date}
               onChange={(e) => setForm({ ...form, arrival_date: e.target.value })}
             />
-            <div className="md:col-span-2 flex items-center gap-4">
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-5 rounded-lg border border-stone-200 bg-stone-50 p-4">
               <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={form.is_vaccinated} onChange={(e) => setForm({ ...form, is_vaccinated: e.target.checked })} />
                 Vaccinated
@@ -322,16 +325,18 @@ export default function PetsPage() {
                 Neutered
               </label>
             </div>
-            <div className="md:col-span-2">
-              <label className="field-label mb-1">Description</label>
+            <div className="sm:col-span-2">
+              <label htmlFor="pet-description" className="field-label mb-1.5">Description</label>
               <textarea
+                id="pet-description"
+                aria-describedby="pet-description-help"
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
-                rows={3}
-                className="field-input"
-              />
+                rows={5}
+                className="field-input pet-copy"
+              /><p id="pet-description-help" className="mt-2 text-xs text-stone-500">Write in sentences. Paragraph breaks will appear in the adopter profile.</p>
             </div>
-            <div className="md:col-span-2">
+            <div className="sm:col-span-2">
               <label htmlFor="pet-photos" className="field-label mb-1">Pet Photos</label>
 
               {editing && (
@@ -352,7 +357,7 @@ export default function PetsPage() {
                           className="h-20 w-20 object-cover rounded-md border border-slate-200"
                         />
                         {photo.is_primary && (
-                          <span className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[10px] text-center rounded-b-md py-0.5">
+                          <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] text-center rounded-b-md py-0.5">
                             Primary
                           </span>
                         )}
@@ -360,7 +365,7 @@ export default function PetsPage() {
                           type="button"
                           onClick={() => markPhotoForRemoval(photo)}
                           aria-label={`Remove saved photo ${idx + 1}`}
-                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-slate-900/80 text-white text-xs leading-none hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-black/80 text-white text-xs leading-none hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
                           ✕
                         </button>
@@ -420,7 +425,7 @@ export default function PetsPage() {
                           className="h-20 w-20 object-cover rounded-md border border-slate-200"
                         />
                         {idx === 0 && existingPhotos.length === 0 && (
-                          <span className="absolute bottom-0 inset-x-0 bg-slate-900/70 text-white text-[10px] text-center rounded-b-md py-0.5">
+                          <span className="absolute bottom-0 inset-x-0 bg-black/70 text-white text-[10px] text-center rounded-b-md py-0.5">
                             Primary
                           </span>
                         )}
@@ -433,7 +438,7 @@ export default function PetsPage() {
                           type="button"
                           onClick={() => removePhoto(idx)}
                           aria-label={`Remove selected photo ${p.file.name}`}
-                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-slate-900/80 text-white text-xs leading-none hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-black/80 text-white text-xs leading-none hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
                           ✕
                         </button>
@@ -444,11 +449,27 @@ export default function PetsPage() {
               )}
               </div>
             </div>
-            <div className="md:col-span-2 flex gap-3">
+            <div className="sm:col-span-2 flex flex-wrap gap-3 border-t border-stone-200 pt-5">
               <Button type="submit" disabled={saving}>{saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Pet'}</Button>
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={saving}>Cancel</Button>
             </div>
           </form>
+          <aside aria-label="Adopter pet preview" className="min-w-0 rounded-xl border border-stone-200 bg-stone-50 p-4 xl:sticky xl:top-24">
+            <p className="section-label mb-3">Adopter preview</p>
+            <div className="pet-card">
+              <div className="aspect-[4/3] bg-stone-100">
+                {previewImage ? <img src={previewImage} alt="Pet profile preview" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-stone-400"><PawMark className="h-12 w-12" /></div>}
+              </div>
+              <div className="p-4">
+                <h4 className="pet-name text-xl font-bold text-stone-900">{formatPetLabel(form.name) || 'Pet name'}</h4>
+                <p className="mt-1 text-sm text-stone-600">{formatPetLabel(form.breed) || formatPetLabel(form.species)}{form.age_years !== '' && ` \u00b7 ${formatPetAge(Number(form.age_years), Number(form.age_months))}`}</p>
+                <p className="mt-1 text-sm text-stone-500">{formatPetLabel(form.gender)} &middot; {formatPetLabel(form.size.replace(/_/g, ' '))}</p>
+                {form.color.trim() && <p className="mt-3 border-t border-stone-200 pt-3 text-sm text-stone-600">{formatPetLabel(form.color)}</p>}
+                <p className="pet-copy mt-3 text-stone-600">{form.description || 'Your description will appear here.'}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-stone-500">Names, breeds, and colors use the same display format across both portals. Description wording stays as you write it.</p>
+          </aside></div>
         </Card>
       )}
 
@@ -472,9 +493,9 @@ export default function PetsPage() {
               <tbody className="bg-white divide-y divide-slate-200">
                 {pets.map((pet) => (
                   <tr key={pet.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{pet.name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{formatPetLabel(pet.name)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600 capitalize">{pet.species}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{pet.breed}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{formatPetLabel(pet.breed)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years, pet.age_months)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-right">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Loading, ErrorMessage, StatusBadge, Table } from '../components/UI';
+import { Icon } from '../components/Icons';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { getDashboardStats } from '../services/apiService';
 
@@ -35,37 +36,27 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const cards = [
-    { label: 'Applications', value: stats.totalApplications, to: '/applications' },
-    { label: 'Pets', value: stats.totalPets, to: '/pets' },
-    { label: 'Adopters', value: stats.totalAdopters, to: '/adopters' },
-    { label: 'Adoption Records', value: stats.totalAdoptions, to: '/adoptions' },
+    { label: 'Applications', value: stats.totalApplications, to: '/applications', icon: 'clipboard' },
+    { label: 'Pets', value: stats.totalPets, to: '/pets', icon: 'paw' },
+    { label: 'Adopters', value: stats.totalAdopters, to: '/adopters', icon: 'user' },
+    { label: 'Adoption Records', value: stats.totalAdoptions, to: '/adoptions', icon: 'home' },
   ];
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Overview of adoption operations" />
 
-      <Card className="mb-8 overflow-hidden">
-        <div className="grid grid-cols-2 divide-stone-200 lg:grid-cols-4 lg:divide-x">
-          {cards.map((c, i) => (
-            <Link
-              key={c.label}
-              to={c.to}
-              className={`group block px-6 py-5 transition-colors hover:bg-primary-50/60 ${
-                i % 2 === 1 ? 'border-l border-stone-200 lg:border-l-0' : ''
-              } ${i > 1 ? 'border-t border-stone-200 lg:border-t-0' : ''}`}
-            >
-              <p className="text-sm font-medium text-stone-600">{c.label}</p>
-              <p className="mt-2 font-display text-5xl font-extrabold tabular-nums text-primary-900">{c.value}</p>
-              <span className="mt-3 block h-1 w-8 rounded-full bg-accent-400 transition-all group-hover:w-14" aria-hidden="true" />
-            </Link>
-          ))}
-        </div>
-      </Card>
+      <div className="mb-7 grid grid-cols-2 gap-3 xl:grid-cols-4 sm:gap-5">
+        {cards.map(c => <Link key={c.label} to={c.to} className="panel stat-card group min-w-0 p-4 transition-colors hover:border-primary-300 sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-2"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary-100 bg-primary-50 text-primary-700"><Icon name={c.icon} className="h-[18px] w-[18px]" /></span><svg viewBox="0 0 24 24" className="h-4 w-4 text-stone-400" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12" /></svg></div>
+          <p className="text-3xl font-bold tracking-tight text-stone-900 tabular-nums sm:text-4xl">{c.value}</p>
+          <p className="mt-2 text-xs font-medium text-stone-500 sm:text-sm">{c.label}</p>
+        </Link>)}
+      </div>
 
-      <Card>
-        <div className="border-b border-stone-200 px-6 py-4">
-          <h3 className="text-lg font-bold text-primary-900">Recent Applications</h3>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_17rem]"><Card>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-5">
+          <div><h3 className="text-base font-bold text-stone-900">Recent Applications</h3><p className="mt-1 text-xs text-stone-500">Keep the next adoption moving.</p></div><Link to="/applications" className="btn btn-outline">View applications</Link>
         </div>
         {stats.recentApplications.length === 0 ? (
           <p className="p-6 text-sm text-stone-500">No applications yet.</p>
@@ -88,6 +79,15 @@ export default function DashboardPage() {
           </Table>
         )}
       </Card>
+      <aside className="workspace-links" aria-label="Workspace shortcuts">
+        <p className="section-label">Keep things moving</p>
+        <h3 className="mt-2 text-base font-bold text-stone-900">Your workspace</h3>
+        {[
+          ['/applications', 'clipboard', 'Review applications', 'Help the next adoption take shape.'],
+          ['/appointments', 'calendar', 'Manage appointments', 'Coordinate visits and reschedules.'],
+          ['/pets', 'paw', 'Update pet profiles', 'Keep every story up to date.'],
+        ].map(([to,icon,title,description]) => <Link key={to} to={to} className="workspace-link"><span className="workspace-link-icon"><Icon name={icon} className="h-4 w-4" /></span><span><span className="workspace-link-title">{title}</span><span className="mt-1 block text-xs leading-5 text-stone-500">{description}</span></span></Link>)}
+      </aside></div>
     </div>
   );
 }

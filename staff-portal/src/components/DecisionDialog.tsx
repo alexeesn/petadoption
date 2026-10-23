@@ -23,7 +23,7 @@ export function DecisionDialog({ title, description, requireReason = true, onCon
   return (
     <dialog ref={ref} aria-labelledby={titleId} aria-describedby={error ? errorId : undefined}
       onCancel={(e) => { e.preventDefault(); if (!busy) onClose(); }}
-      className="w-[calc(100%-2rem)] max-w-lg rounded-xl border-0 p-6 shadow-xl backdrop:bg-stone-900/50">
+      className="w-[calc(100%-2rem)] max-w-lg rounded-xl border-0 bg-white p-6 shadow-xl backdrop:bg-black/50">
       <form className="space-y-4" onSubmit={async (e) => {
         e.preventDefault();
         if (!confirmed || (requireReason && !reason.trim()) || busy) return;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchApplication, cancelApplication, uploadDocument, fetchAppointments, createAppointment } from '../services/apiService'
+import { fetchApplication, cancelApplication, uploadDocument, fetchAppointments, createAppointment, fetchNotifications } from '../services/apiService'
 import type { Application, Appointment } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
 import { formatDate, getStatusColor, capitalize } from '../utils/format'
@@ -11,6 +11,17 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 /** Statuses where staff have explicitly asked the adopter for more paperwork. */
 const DOCUMENTS_REQUESTED = ['pending_documents', 'additional_info_requested']
+const NEXT_STEPS: Record<string, string> = {
+  draft: 'This application has not been submitted yet.',
+  submitted: 'Your application has been received. Check back here or in notifications for a review update.',
+  under_review: 'Your application is being reviewed. We will notify you when there is an update.',
+  pending_documents: 'Staff need additional documents. Read their feedback and upload the requested file below.',
+  additional_info_requested: 'Staff need more information. Read their feedback and use the requested-document form below where applicable.',
+  approved: 'Your application is approved. The visit date still needs separate staff confirmation. Manage your appointment below.',
+  rejected: 'Your application was not approved. Read the staff feedback below for the saved reason.',
+  cancelled: 'This application is closed. Please contact staff if you have questions.',
+  adoption_completed: 'Your adoption is complete. Thank you for giving a pet a new home.',
+}
 
 /** Center operating schedule: Monday-Friday, 8:00 AM-5:00 PM. */
 const CENTER_SCHEDULE_TEXT = 'Monday to Friday, 8:00 AM - 5:00 PM'
@@ -54,6 +65,8 @@ export default function ApplicationDetailPage() {
   const [extraFile, setExtraFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const [feedbackUnavailable, setFeedbackUnavailable] = useState(false)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [visitDate, setVisitDate] = useState('')
   const [apptError, setApptError] = useState('')
@@ -61,18 +74,40 @@ export default function ApplicationDetailPage() {
 
   useEffect(() => {
     if (!id) return
+    let active = true
+    setLoading(true)
+    setError(false)
+    setNotice('')
+    setApp(null)
+    setAppointments([])
     Promise.all([
       fetchApplication(id),
       // Appointment history for this application (own appointments only).
       fetchAppointments(id),
     ])
       .then(([application, appointments]) => {
+        if (!active) return
         setApp(application)
         setAppointments(appointments as Appointment[])
       })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false))
+      .catch(() => { if (active) setError(true) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [id])
+
+  useEffect(() => {
+    setFeedback('')
+    setFeedbackUnavailable(false)
+    if (!app || !DOCUMENTS_REQUESTED.includes(app.status)) return
+    let active = true
+    fetchNotifications().then(data => {
+      if (!active) return
+      const rows = (Array.isArray(data) ? data : data.results) as import('../types').Notification[]
+      const notice = rows.find(item => item.link?.split('?')[0] === `/applications/${app.id}` && item.notification_type === 'application')
+      setFeedback(notice?.message || '')
+    }).catch(() => { if (active) setFeedbackUnavailable(true) })
+    return () => { active = false }
+  }, [app?.id, app?.status])
 
   const handleRequestAppointment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -174,21 +209,28 @@ export default function ApplicationDetailPage() {
   )
   const lastRejectedAppointment = appointments.find((a) => a.status === 'rejected')
   const canChooseVisitDate = app.status === 'approved' && !activeAppointment && !appointments.some((a) => a.status === 'no_show')
+  const nextStep = app.status === 'approved' && activeAppointment?.status === 'confirmed'
+    ? `Your visit is confirmed for ${formatDate(activeAppointment.requested_date)}. Follow the onsite instructions below and staff guidance for physical handover.`
+    : app.status === 'approved' && activeAppointment?.status === 'pending_confirmation'
+      ? 'Your visit request is waiting for staff review. You will be notified when the date is confirmed or rejected.'
+      : NEXT_STEPS[app.status] || 'Please check with staff for the next step.'
 
   return (
-    <div className="max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <Link to="/applications" className="text-primary-600 text-sm font-medium hover:underline">
         ← Back to applications
       </Link>
 
-      <div className="panel mt-4 p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-extrabold text-primary-900">Application for {app.pet_name}</h1>
+      <div className="panel mt-5 p-5 sm:p-8">
+        <p className="section-label mb-3">Your adoption journey</p>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold text-primary-900">Application status</h1>
           <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(app.status)}`}>
             {capitalize(app.status)}
           </span>
         </div>
-        <p className="mt-2 text-sm text-stone-500">Submitted {formatDate(app.created_at)}</p>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-6"><Link to={`/pets/${app.pet}`} className="text-sm font-semibold text-primary-700">For {app.pet_name} →</Link><p className="text-xs text-stone-500">Last updated {formatDate(app.updated_at)}</p></div>
+        <section className="mt-6 rounded-lg bg-primary-50 p-5"><h2 className="text-sm font-bold text-primary-900">What's next</h2><p className="mt-2 text-sm leading-7 text-stone-700">{nextStep}</p></section>
 
         {notice && (
           <div className="mt-4">
@@ -196,59 +238,15 @@ export default function ApplicationDetailPage() {
           </div>
         )}
 
-        {app.rejection_reason && (
+        {app.status === 'rejected' && app.rejection_reason && (
           <div className="mt-4">
             <Alert type="error">
-              <strong>Reason:</strong> {app.rejection_reason}
+              <strong>Staff feedback:</strong> {app.rejection_reason}
             </Alert>
           </div>
         )}
 
-        <div className="mt-6 space-y-5">
-          <Section title="Why you want to adopt">
-            <p className="text-stone-600 whitespace-pre-line">{app.why_adopt || '—'}</p>
-          </Section>
-          <Section title="Experience with pets">
-            <p className="text-stone-600 whitespace-pre-line">{app.experience_with_pets || '—'}</p>
-          </Section>
-          <Section title="Living situation">
-            <p className="text-stone-600 whitespace-pre-line">{app.living_situation || '—'}</p>
-          </Section>
-          <Section title="Other pets">
-            <p className="text-stone-600">{app.has_other_pets ? app.other_pets_description || 'Yes' : 'No'}</p>
-          </Section>
-          <Section title="References">
-            <p className="text-stone-600 whitespace-pre-line">{app.references || '—'}</p>
-          </Section>
-          {app.additional_notes && (
-            <Section title="Additional notes">
-              <p className="text-stone-600 whitespace-pre-line">{app.additional_notes}</p>
-            </Section>
-          )}
-
-          <Section title="Uploaded documents">
-            {documents.length === 0 ? (
-              <p className="text-stone-500">No documents attached to this application.</p>
-            ) : (
-              <ul className="space-y-2">
-                {documents.map((doc) => (
-                  <li key={doc.id} className="flex flex-wrap items-center gap-2 text-stone-600">
-                    <span className="text-green-600" aria-hidden="true">
-                      ✓
-                    </span>
-                    <span className="font-medium text-stone-700">{capitalize(doc.document_type)}</span>
-                    <span className="text-stone-500">— {doc.original_filename}</span>
-                    {doc.download_url && (
-                      <a href={doc.download_url} className="text-primary-600 hover:underline">
-                        Download
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        </div>
+        {DOCUMENTS_REQUESTED.includes(app.status) && <section className="mt-5 rounded-lg border border-stone-200 p-5"><h2 className="text-sm font-bold text-stone-900">Staff feedback</h2><p className="mt-2 whitespace-pre-line text-sm leading-7 text-stone-600">{feedback || (feedbackUnavailable ? 'Feedback could not be loaded. Please check your notifications.' : 'Check your notifications for the details requested by staff.')}</p><Link to="/notifications" className="mt-3 inline-block text-sm font-semibold text-primary-700">View notifications →</Link></section>}
 
         {app.status === 'approved' && (
           <div className="mt-6 rounded-md border border-primary-200 bg-primary-50 p-4">
@@ -261,6 +259,7 @@ export default function ApplicationDetailPage() {
                   <span className="font-medium">{formatDate(activeAppointment.requested_date)}</span>
                 </p>
                 <span
+                  aria-label={`Appointment status: ${capitalize(activeAppointment.status)}`}
                   className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full ${getStatusColor(
                     activeAppointment.status
                   )}`}
@@ -360,7 +359,7 @@ export default function ApplicationDetailPage() {
           </div>
         )}
 
-        {(app.status === 'approved' || appointments.length > 0) && <AppointmentReschedulePanel
+        {app.status === 'approved' && <AppointmentReschedulePanel
           key={app.id} applicationId={app.id} applicationStatus={app.status} appointments={appointments}
           onUpdated={async () => { if (id) setAppointments(await fetchAppointments(id) as Appointment[]) }}
         />}
@@ -432,15 +431,6 @@ export default function ApplicationDetailPage() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="border-t border-stone-100 pt-4">
-      <h3 className="text-sm font-semibold text-primary-900">{title}</h3>
-      <div className="mt-2 text-sm">{children}</div>
     </div>
   )
 }

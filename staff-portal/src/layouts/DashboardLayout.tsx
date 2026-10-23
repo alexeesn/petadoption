@@ -1,5 +1,7 @@
-import { ReactNode } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { ReactNode, useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle';
+import NotificationBell from '../components/NotificationBell';
 import { useAuth } from '../context/AuthContext';
 import { useSidebarCounts } from '../hooks/useSidebarCounts';
 import type { SidebarBadgeKey } from '../hooks/useSidebarCounts';
@@ -73,155 +75,45 @@ const navSections: NavSection[] = [
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  // Unread staff notifications, re-read from the existing notification API.
+  const { pathname } = useLocation();
   const { counts, markModuleRead } = useSidebarCounts();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/login');
-  };
-
-  const visibleSections = navSections.filter(
-    (section) => !section.adminOnly || user?.role === 'admin',
-  );
-
-  const initial = (user?.full_name || user?.email || '?').trim().charAt(0).toUpperCase();
-
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const drawer = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    drawer.current?.querySelector<HTMLAnchorElement>('a')?.focus();
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSidebarOpen(false); };
+    document.addEventListener('keydown', escape);
+    return () => document.removeEventListener('keydown', escape);
+  }, [sidebarOpen]);
+  const visibleSections = navSections.filter(section => !section.adminOnly || user?.role === 'admin');
+  const current = visibleSections.flatMap(section => section.items).find(item => item.to === '/' ? pathname === '/' : pathname.startsWith(item.to));
+  const handleLogout = async () => { await logout(); navigate('/login'); };
   return (
-    <div className="flex min-h-screen bg-stone-100">
-      {/* Sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-64 flex-shrink-0 flex-col border-r border-stone-200 bg-white md:flex">
-        <div className="flex items-center gap-3 border-b border-stone-200 px-5 py-5">
-          <BrandTile />
-          <div>
-            <h1 className="font-display text-lg font-bold leading-5 text-primary-900">Pet Adoption</h1>
-            <p className="text-xs text-stone-500">Staff Portal</p>
-          </div>
-        </div>
-        <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5" aria-label="Staff portal sections">
-          {visibleSections.map((section) => (
-            <div key={section.title}>
-              <h2 className="px-3 pb-1.5 font-sans text-xs font-semibold text-stone-500">{section.title}</h2>
-              <ul className="space-y-0.5">
-                {section.items.map((item) => {
-                  const badgeCount = item.badge ? counts[item.badge] : 0;
-                  return (
-                    <li key={item.to}>
-                      <NavLink
-                        to={item.to}
-                        end={item.to === '/'}
-                        onClick={() => {
-                          // Opening a module clears its own unread notifications only.
-                          if (item.badge && badgeCount > 0) void markModuleRead(item.badge);
-                        }}
-                        className={({ isActive }) =>
-                          `relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'bg-primary-50 text-primary-900 before:absolute before:inset-y-1.5 before:-left-3 before:w-1 before:rounded-r-full before:bg-accent-400'
-                              : 'text-stone-600 hover:bg-stone-100 hover:text-primary-900'
-                          }`
-                        }
-                      >
-                        <Icon name={item.icon} className="h-[18px] w-[18px] shrink-0" />
-                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                        {item.badge && badgeCount > 0 && (
-                          <span className="inline-flex min-w-[1.375rem] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold leading-4 text-white">
-                            {badgeCount > 99 ? '99+' : badgeCount}
-                            <span className="sr-only"> unread notifications</span>
-                          </span>
-                        )}
-                      </NavLink>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+    <div className="portal-shell flex">
+      {sidebarOpen && <button type="button" aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
+      <aside ref={drawer} id="staff-navigation" aria-label="Staff workspace" className={`fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex-col staff-sidebar md:sticky md:top-0 md:flex md:h-screen ${sidebarOpen ? 'flex' : 'hidden'}`}>
+        <div className="flex h-[4.5rem] shrink-0 items-center gap-3 border-b border-stone-200 px-6"><BrandTile className="h-10 w-10" /><div><p className="font-display text-lg font-bold tracking-tight text-stone-900">PawConnect</p><p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.18em] text-stone-500">Staff workspace</p></div></div>
+        <nav className="flex-1 space-y-5 overflow-y-auto px-4 py-5" aria-label="Staff portal sections">
+          {visibleSections.map(section => <div key={section.title}><h2 className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[.08em] text-stone-500">{section.title}</h2><ul className="space-y-1">{section.items.map(item => {
+            const badgeCount = item.badge ? counts[item.badge] : 0;
+            return <li key={item.to}><NavLink to={item.to} end={item.to === '/'} onClick={() => { setSidebarOpen(false); if (item.badge && badgeCount > 0) void markModuleRead(item.badge); }} className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors staff-nav-link ${isActive ? 'is-active' : ''}`}><Icon name={item.icon} className="h-[18px] w-[18px] shrink-0"/><span className="min-w-0 flex-1 truncate">{item.label}</span>{item.badge && badgeCount > 0 && <span className="rounded-md bg-[#b42336] px-1.5 py-0.5 text-[10px] font-semibold text-white">{badgeCount > 99 ? '99+' : badgeCount}<span className="sr-only"> unread notifications</span></span>}</NavLink></li>;
+          })}</ul></div>)}
         </nav>
-        <div className="border-t border-stone-200 p-4">
-          <div className="flex items-center gap-3">
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 font-display text-sm font-bold text-primary-800"
-              aria-hidden="true"
-            >
-              {initial}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-stone-900">{user?.full_name}</p>
-              <p className="truncate text-xs text-stone-500">{user?.email}</p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="mt-3 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold text-stone-600 transition-colors hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-          >
-            <Icon name="logout" className="h-4 w-4" />
-            Logout
-          </button>
-        </div>
+        <div className="shrink-0 border-t border-stone-200 p-4"><div className="mb-3 flex items-center gap-3 px-2"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-700"><Icon name="user" className="h-5 w-5"/></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-stone-900">{user?.full_name || 'PawConnect team'}</p><p className="truncate text-xs text-stone-500">{user?.role === 'admin' ? 'Administrator' : 'Staff member'}</p></div></div><button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"><Icon name="logout" className="h-4 w-4"/>Logout</button></div>
       </aside>
-
-      {/* Content column: header with the notification bell + grouped nav on small screens */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/90 backdrop-blur">
-          <div className="flex items-center justify-between px-6 py-3">
-            <div className="flex items-center gap-2.5 md:hidden">
-              <BrandTile className="h-8 w-8" />
-              <h1 className="font-display text-lg font-bold text-primary-900">Staff Portal</h1>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <NavLink
-                to="/notifications"
-                aria-label="Notifications"
-                className={({ isActive }) =>
-                  `flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-800'
-                      : 'text-stone-500 hover:bg-stone-100 hover:text-primary-900'
-                  }`
-                }
-              >
-                <Icon name="bell" className="h-5 w-5" />
-              </NavLink>
-              <button
-                onClick={handleLogout}
-                className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-primary-900 md:hidden"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-          {/* Section links for small screens (the sidebar is desktop-only) */}
-          <nav className="flex gap-1 overflow-x-auto border-t border-stone-100 px-4 py-2 md:hidden" aria-label="Staff portal sections (mobile)">
-            {visibleSections.flatMap((section) => section.items).map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `flex shrink-0 items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ${
-                    isActive ? 'bg-primary-900 text-white' : 'text-stone-600'
-                  }`
-                }
-              >
-                <Icon name={item.icon} className="h-4 w-4" />
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+        <header className="sticky top-0 z-30 flex h-[4.5rem] items-center justify-between gap-3 portal-header border-b px-4 sm:px-6 lg:px-9">
+          <div className="flex min-w-0 items-center gap-3"><button type="button" onClick={() => setSidebarOpen(true)} aria-label="Open navigation" aria-controls="staff-navigation" aria-expanded={sidebarOpen} className="icon-button shrink-0 md:hidden"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><div className="min-w-0"><p className="text-[9px] font-bold uppercase tracking-[.13em] text-stone-500 sm:text-[10px]"><span className="sm:hidden">PawConnect staff</span><span className="hidden sm:inline">Team workspace</span></p><p className="truncate text-sm font-semibold text-stone-800">{current?.label || 'Workspace'}</p></div></div>
+          <div className="flex shrink-0 items-center gap-2"><span className="mr-2 hidden rounded-full border border-stone-200 px-3 py-1 text-[11px] font-semibold text-stone-600 lg:inline-flex">{user?.role === 'admin' ? 'Administrator' : 'Staff'}</span><ThemeToggle/><NotificationBell open={notificationsOpen} onOpenChange={setNotificationsOpen}/></div>
         </header>
-
-        <main className="flex-1 p-6 md:p-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <footer className="px-6 py-5 text-xs text-stone-500">PawConnect · Staff workspace</footer>
       </div>
     </div>
   );
 }
-
 export function PageHeader({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <div className="mb-7">
-      <h2 className="text-3xl font-extrabold tracking-tight text-primary-900">{title}</h2>
-      {subtitle && <p className="mt-1.5 text-stone-600">{subtitle}</p>}
-    </div>
-  );
+  return <div className="mb-7"><h2 className="text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">{title}</h2>{subtitle && <p className="mt-2 text-sm text-stone-500">{subtitle}</p>}</div>;
 }

@@ -16,11 +16,11 @@ export function PawMark({ className = '' }: { className?: string }) {
 /** Brand lockup: ink tile with a tag-yellow paw, followed by the wordmark. */
 export function Logo({ className = '' }: { className?: string }) {
   return (
-    <span className={`inline-flex items-center gap-2.5 ${className}`}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-primary-900 text-accent-400">
+    <span className={`inline-flex items-center gap-2 sm:gap-2.5 ${className}`}>
+      <span className="brand-mark h-8 w-8 sm:h-9 sm:w-9">
         <PawMark className="h-5 w-5" />
       </span>
-      <span className="font-display text-xl font-bold tracking-tight text-primary-900">Pawnscape</span>
+      <span className="font-display text-base font-bold tracking-tight text-primary-900 sm:text-xl">PawConnect</span>
     </span>
   )
 }

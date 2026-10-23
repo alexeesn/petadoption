@@ -75,8 +75,8 @@ export async function deleteDocument(id: string) {
   await api.delete(`/documents/${id}/`)
 }
 
-export async function fetchNotifications() {
-  const { data } = await api.get('/notifications/')
+export async function fetchNotifications(params?: Record<string, string>) {
+  const { data } = await api.get('/notifications/', { params })
   return data
 }
 

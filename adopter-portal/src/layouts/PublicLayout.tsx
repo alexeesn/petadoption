@@ -1,78 +1,16 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { Logo, PawMark } from '../components/Icons'
-
-const navLinks = [
-  { to: '/', label: 'Home' },
-  { to: '/pets', label: 'Find a Pet' },
-]
-
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `relative py-1 text-sm font-medium transition-colors ${
-    isActive
-      ? 'text-primary-900 after:absolute after:inset-x-0 after:-bottom-1 after:h-[3px] after:rounded-full after:bg-accent-400'
-      : 'text-stone-600 hover:text-primary-900'
-  }`
+import { Link, Outlet } from 'react-router-dom'
+import AdopterHeader from '../components/AdopterHeader'
+import { PawMark } from '../components/Icons'
 
 export default function PublicLayout() {
-  const { user, logout } = useAuth()
-
-  return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" aria-label="Pawnscape home">
-            <Logo />
-          </Link>
-          <nav className="flex items-center gap-5 sm:gap-7" aria-label="Main">
-            {navLinks.map((link) => (
-              <NavLink key={link.to} to={link.to} end={link.to === '/'} className={navLinkClass}>
-                {link.label}
-              </NavLink>
-            ))}
-            {user ? (
-              <div className="flex items-center gap-4">
-                <Link to="/applications" className="text-sm font-medium text-stone-600 transition-colors hover:text-primary-900">
-                  My Applications
-                </Link>
-                <button
-                  onClick={() => logout()}
-                  className="text-sm font-medium text-stone-600 transition-colors hover:text-primary-900"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 sm:gap-4">
-                <Link to="/login" className="text-sm font-medium text-stone-600 transition-colors hover:text-primary-900">
-                  Log in
-                </Link>
-                <Link to="/register" className="btn btn-primary">
-                  Get Started
-                </Link>
-              </div>
-            )}
-          </nav>
-        </div>
-      </header>
-
-      <main className="flex-1">
-        <Outlet />
-      </main>
-
-      <footer className="bg-primary-900 text-primary-100">
-        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-          <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-accent-400 text-primary-900">
-                <PawMark className="h-5 w-5" />
-              </span>
-              <span className="font-display font-semibold text-white">Pawnscape Pet Adoption</span>
-            </div>
-            <p className="text-sm text-primary-200">Helping pets find loving homes.</p>
-          </div>
-        </div>
-      </footer>
-    </div>
-  )
+  return <div className="portal-shell flex flex-col">
+    <AdopterHeader />
+    <main className="flex-1"><Outlet /></main>
+    <footer className="mt-8 border-t border-stone-200 bg-white">
+      <div className="mx-auto flex max-w-7xl flex-col justify-between gap-6 px-4 py-10 sm:flex-row sm:items-center sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3"><span className="brand-mark h-10 w-10"><PawMark className="h-6 w-6" /></span><div><p className="font-display text-lg font-bold text-primary-900">PawConnect</p><p className="mt-1 text-sm text-stone-500">A little connection. A lifelong companion.</p></div></div>
+        <div className="flex gap-6 text-sm font-semibold text-stone-600"><Link to="/pets" className="hover:text-primary-700">Find a Pet</Link><Link to="/applications" className="hover:text-primary-700">Your adoption journey</Link></div>
+      </div>
+    </footer>
+  </div>
 }

@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { fetchPets } from '../services/apiService'
 import type { Pet } from '../types'
-import { formatCurrency, capitalize, formatPetAge } from '../utils/format'
+import { capitalize } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
-import { Icon, PawMark } from '../components/Icons'
+import { Icon } from '../components/Icons'
+import PetCard from '../components/PetCard'
 
 const speciesOptions = ['dog', 'cat', 'bird', 'rabbit', 'other']
 const sizeOptions = ['small', 'medium', 'large', 'extra_large']
@@ -19,11 +20,12 @@ export default function PetsPage() {
   const species = searchParams.get('species') || ''
   const size = searchParams.get('size') || ''
   const search = searchParams.get('search') || ''
+  const page = Math.max(1, Number(searchParams.get('page')) || 1)
 
   useEffect(() => {
     setLoading(true)
     setError(false)
-    const params: Record<string, string> = { status: 'available' }
+    const params: Record<string, string> = { status: 'available', page: String(page) }
     if (species) params.species = species
     if (size) params.size = size
     if (search) params.search = search
@@ -34,18 +36,20 @@ export default function PetsPage() {
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false))
-  }, [species, size, search])
+  }, [species, size, search, page])
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams)
     if (value) params.set(key, value)
     else params.delete(key)
+    params.delete('page')
     setSearchParams(params)
   }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
-      <h1 className="text-4xl font-extrabold text-primary-900 sm:text-5xl">Find Your New Friend</h1>
+      <p className="section-label mb-3">Meet your next companion</p>
+      <h1 className="text-4xl font-bold text-primary-900 sm:text-5xl">Find a Pet</h1>
       <p className="mt-3 max-w-xl text-lg text-stone-600">Browse available pets looking for their forever home.</p>
 
       <div className="mt-8 rounded-xl border border-stone-200 bg-white p-2 shadow-sm">
@@ -102,46 +106,22 @@ export default function PetsPage() {
 
       {!loading && !error && pets.length > 0 && (
         <div className="mt-10 grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
-          {pets.map((pet) => (
-            <Link key={pet.id} to={`/pets/${pet.id}`} className="pet-card">
-              <div className="relative h-56 bg-stone-200">
-                {pet.primary_image?.image ? (
-                  <img src={pet.primary_image.image} alt={pet.name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-stone-400" aria-hidden="true">
-                    <PawMark className="h-14 w-14" />
-                  </div>
-                )}
-                <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-primary-900 shadow-sm">
-                  {capitalize(pet.species)}
-                </span>
-              </div>
-              <div className="p-5">
-                <h3 className="text-xl font-bold text-primary-900">{pet.name}</h3>
-                <p className="mt-1 text-sm text-stone-600">
-                  {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years, pet.age_months)} · {capitalize(pet.gender)}
-                </p>
-                <p className="mt-1 text-sm text-stone-500">
-                  {pet.size && capitalize(pet.size)}
-                  {pet.is_vaccinated ? ' · Vaccinated' : ''}
-                </p>
-                <div className="mt-4 flex items-center justify-end border-t border-dashed border-stone-300 pt-4">
-                  <Icon name="arrowRight" className="h-5 w-5 text-primary-600" />
-                </div>
-              </div>
-            </Link>
-          ))}
+          {pets.map(pet => <PetCard key={pet.id} pet={pet} />)}
         </div>
       )}
 
-      {!loading && !error && nextPage && (
-        <div className="mt-10 text-center">
+      {!loading && !error && (nextPage || page > 1) && (
+        <div className="mt-10 flex items-center justify-center gap-4">
+          {page > 1 && <Link to={`/pets?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: String(page - 1) })}`} className="btn btn-secondary">Previous page</Link>}
+          <span className="text-sm text-stone-500">Page {page}</span>
+          {nextPage && (
           <Link
-            to={`/pets?${searchParams.toString()}&page=2`}
+            to={`/pets?${new URLSearchParams({ ...Object.fromEntries(searchParams), page: String(page + 1) })}`}
             className="btn btn-secondary"
           >
             Next page
           </Link>
+          )}
         </div>
       )}
     </div>

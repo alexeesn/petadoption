@@ -13,7 +13,7 @@ const PILL = {
   amber: { pill: 'bg-amber-50 text-amber-800 ring-amber-600/25', dot: 'bg-amber-500' },
   purple: { pill: 'bg-purple-50 text-purple-800 ring-purple-600/20', dot: 'bg-purple-500' },
   // The brand palette has no orange, so this one uses literal values.
-  orange: { pill: 'bg-[#fff1e6] text-[#9a3f0b] ring-[#e8590c]/25', dot: 'bg-[#e8590c]' },
+  orange: { pill: 'bg-orange-50 text-orange-800 ring-orange-600/25', dot: 'bg-[#e8590c]' },
   green: { pill: 'bg-green-50 text-green-800 ring-green-600/20', dot: 'bg-green-500' },
   emerald: { pill: 'bg-emerald-50 text-emerald-800 ring-emerald-600/20', dot: 'bg-emerald-500' },
   red: { pill: 'bg-red-50 text-red-800 ring-red-600/20', dot: 'bg-red-500' },

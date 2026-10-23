@@ -88,7 +88,7 @@ try {
   const notifications = await read('/api/notifications/');
   assert.ok(notifications.results.some((n) => n.title === 'Reschedule Requested' && n.link === '/appointments?tab=reschedules'));
   await staff.goto(`${staffUrl}/notifications`);
-  await staff.getByRole('link', { name: 'Reschedule Requested', exact: true }).click();
+  await staff.getByRole('article').filter({ hasText: 'Reschedule Requested' }).getByRole('link', { name: 'View update', exact: false }).click();
   await expect(staff).toHaveURL(`${staffUrl}/appointments?tab=reschedules`);
   await expect(staff.getByText('Reason: Work schedule changed', { exact: true })).toBeVisible();
   await adopter.reload();
@@ -153,7 +153,8 @@ try {
   await dialog.getByRole('button', { name: 'Cancel Adoption', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await adopter.goto(`${adopterUrl}/applications/${appB}`);
-  await expect(adopter.getByRole('heading', { name: 'Application for NoShow Pet' })).toBeVisible();
+  await expect(adopter.getByRole('heading', { name: 'Application status', exact: true })).toBeVisible();
+  await expect(adopter.getByRole('link', { name: 'For NoShow Pet', exact: false })).toBeVisible();
   await expect(adopter.getByRole('button', { name: 'Request Reschedule', exact: true })).toHaveCount(0);
   await expect(adopter.getByText('Your adoption has not been cancelled.', { exact: false })).toHaveCount(0);
   assert.deepEqual(errors, []);

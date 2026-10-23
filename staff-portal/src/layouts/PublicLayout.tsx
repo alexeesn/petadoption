@@ -1,39 +1,14 @@
 import { ReactNode } from 'react';
-import { BrandTile, CollarTagArt } from '../components/Icons';
+import { BrandTile, Icon } from '../components/Icons';
+import ThemeToggle from '../components/ThemeToggle';
 
 export function PublicLayout({ children }: { children: ReactNode }) {
-  return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      {/* Brand panel (desktop only, decorative) */}
-      <aside className="relative hidden overflow-hidden bg-primary-900 lg:flex lg:flex-col lg:justify-between lg:p-12" aria-hidden="true">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-400 text-primary-900">
-            <svg viewBox="0 0 32 32" className="h-6 w-6" fill="currentColor">
-              <ellipse cx="7.5" cy="14" rx="3" ry="4" transform="rotate(-20 7.5 14)" />
-              <ellipse cx="13" cy="8.5" rx="3" ry="4.2" transform="rotate(-8 13 8.5)" />
-              <ellipse cx="19.5" cy="8.5" rx="3" ry="4.2" transform="rotate(8 19.5 8.5)" />
-              <ellipse cx="25" cy="14" rx="3" ry="4" transform="rotate(20 25 14)" />
-              <path d="M16 15c-4.2 0-8 4.6-8 8.2 0 2.6 2 3.8 4 3.8 1.5 0 2.7-.6 4-.6s2.5.6 4 .6c2 0 4-1.2 4-3.8 0-3.6-3.8-8.2-8-8.2z" />
-            </svg>
-          </span>
-          <span className="font-display text-xl font-bold text-white">Pawnscape</span>
-        </div>
-        <CollarTagArt className="mx-auto h-auto w-full max-w-md" />
-        <div className="h-6" />
-      </aside>
-
-      <div className="flex min-h-screen items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="mb-8 text-center lg:text-left">
-            <div className="mb-4 flex justify-center lg:hidden">
-              <BrandTile className="h-12 w-12" />
-            </div>
-            <h1 className="text-3xl font-extrabold text-primary-900">Staff Portal</h1>
-            <p className="mt-1 text-stone-600">Pet Adoption Management System</p>
-          </div>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="portal-shell relative min-w-0 lg:grid lg:grid-cols-[1fr_1.1fr]">
+    <aside className="staff-auth-aside hidden min-h-screen flex-col justify-between p-12 lg:flex" aria-label="PawConnect staff workspace">
+      <div className="flex items-center gap-3"><BrandTile className="h-11 w-11"/><div><p className="text-xl font-bold text-stone-900">PawConnect</p><p className="mt-1 text-xs font-medium text-stone-500">The staff workspace</p></div></div>
+      <div className="my-16 max-w-md"><p className="section-label mb-5">Good care takes a team</p><h2 className="text-5xl font-semibold leading-[1.12] tracking-tight text-stone-900">Every detail.<br/><span className="text-primary-700">Every little life.</span></h2><p className="mt-6 text-base leading-8 text-stone-600">One calm, organized place to coordinate applications, visits, and the pets in your care.</p><div className="mt-10 grid grid-cols-2 gap-3">{[['clipboard','Applications'],['calendar','Appointments'],['paw','Pet care'],['home','Adoption records']].map(([icon,label]) => <div key={label} className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-3 text-xs font-medium text-stone-700"><Icon name={icon} className="h-4 w-4 text-primary-700"/>{label}</div>)}</div></div>
+      <p className="text-xs text-stone-500">For authorized PawConnect staff and administrators.</p>
+    </aside>
+    <div className="relative flex min-h-screen min-w-0 items-center justify-center px-4 py-20 sm:px-6"><div className="absolute right-5 top-5"><ThemeToggle/></div><div className="w-full min-w-0 max-w-md"><div className="mb-7"><div className="mb-6 flex items-center gap-3 lg:hidden"><BrandTile className="h-10 w-10"/><p className="text-xl font-bold text-stone-900">PawConnect</p></div><p className="section-label mb-3">PawConnect staff workspace</p><h1 className="text-3xl font-bold text-stone-900">Welcome back.</h1><p className="mt-3 text-sm text-stone-600">Sign in to continue caring for your community.</p></div>{children}</div></div>
+  </div>;
 }

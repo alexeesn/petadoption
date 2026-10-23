@@ -52,7 +52,8 @@ export function useSidebarCounts() {
   useEffect(() => {
     refreshCounts();
     const interval = setInterval(refreshCounts, REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
+    window.addEventListener('pawconnect-notifications-changed', refreshCounts);
+    return () => { clearInterval(interval); window.removeEventListener('pawconnect-notifications-changed', refreshCounts); };
   }, [refreshCounts]);
 
   /**
@@ -69,6 +70,7 @@ export function useSidebarCounts() {
         );
         await Promise.all(relevant.map((notification) => notificationService.markRead(notification.id)));
         await refreshCounts();
+        window.dispatchEvent(new Event('pawconnect-notifications-changed'));
       } catch (err) {
         console.error('Failed to mark module notifications as read:', err);
       }

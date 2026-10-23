@@ -19,7 +19,7 @@ const PILL = {
   blue: 'bg-blue-50 text-blue-800 ring-1 ring-inset ring-blue-600/20',
   purple: 'bg-purple-50 text-purple-800 ring-1 ring-inset ring-purple-600/20',
   // The brand palette has no orange, so this one status uses literal values.
-  orange: 'bg-[#fff1e6] text-[#9a3f0b] ring-1 ring-inset ring-[#e8590c]/25',
+  orange: 'bg-orange-50 text-orange-800 ring-1 ring-inset ring-orange-600/25',
   red: 'bg-red-50 text-red-800 ring-1 ring-inset ring-red-600/20',
   gray: 'bg-stone-100 text-stone-700 ring-1 ring-inset ring-stone-400/30',
 }
@@ -79,4 +79,10 @@ export function formatPetAge(years?: number | null, months?: number | null): str
     return y === 1 ? '1 year' : `${y} years`
   }
   return m === 1 ? '1 month' : `${m} months`
+}
+
+/** Shared pet-label presentation. Descriptions and stored values stay unchanged. */
+export function formatPetLabel(value?: string | null): string {
+  return (value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+    .replace(/(^|[\s/\-])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toLocaleUpperCase())
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchPet } from '../services/apiService'
 import type { Pet } from '../types'
-import { formatCurrency, capitalize, formatPetAge, formatDate } from '../utils/format'
+import { getStatusColor, formatPetLabel, formatCurrency, capitalize, formatPetAge, formatDate } from '../utils/format'
 import { Spinner, ErrorState } from '../components/UI'
 import { useAuth } from '../context/AuthContext'
 import { Icon, PawMark } from '../components/Icons'
@@ -79,7 +79,7 @@ function Lightbox({ src, alt, onClose }: LightboxProps) {
         // Dark translucent backdrop (::backdrop does not work reliably in all
         // browsers alongside Tailwind purge, so we replicate it with a full-
         // screen bg on the dialog itself)
-        'bg-primary-900/85 backdrop-blur-sm',
+        'bg-black/85',
         // Flex centre the image
         'flex items-center justify-center',
         // Sit on top of everything else
@@ -175,7 +175,7 @@ export default function PetDetailPage() {
             {activeImage?.image ? (
               <button
                 type="button"
-                aria-label={`View enlarged photo of ${pet.name}`}
+                aria-label={`View enlarged photo of ${formatPetLabel(pet.name)}`}
                 onClick={() => openLightbox(activeImage.image, activeImage.caption || pet.name)}
                 className="group block h-full w-full cursor-zoom-in focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
               >
@@ -186,7 +186,7 @@ export default function PetDetailPage() {
                 />
                 {/* Subtle expand hint on hover */}
                 <span
-                  className="absolute bottom-12 right-3 flex items-center gap-1 rounded-full bg-primary-900/75 px-2.5 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+                  className="absolute bottom-12 right-3 flex items-center gap-1 rounded-full bg-black/75 px-2.5 py-1 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
                   aria-hidden="true"
                 >
                   <Icon name="expand" className="h-3.5 w-3.5" />
@@ -216,7 +216,7 @@ export default function PetDetailPage() {
                 >
                   <Icon name="chevronRight" className="h-5 w-5" />
                 </button>
-                <span data-testid="pet-gallery-counter" className="absolute bottom-3 right-3 rounded-full bg-primary-900/80 px-2.5 py-0.5 text-xs font-medium text-white">
+                <span data-testid="pet-gallery-counter" className="absolute bottom-3 right-3 rounded-full bg-black/80 px-2.5 py-0.5 text-xs font-medium text-white">
                   {activeIndex + 1} / {images.length}
                 </span>
               </>
@@ -229,13 +229,13 @@ export default function PetDetailPage() {
                   key={img.id}
                   type="button"
                   onClick={() => setActiveImageIndex(idx)}
-                  aria-label={`View photo ${idx + 1} of ${pet.name}`}
+                  aria-label={`View photo ${idx + 1} of ${formatPetLabel(pet.name)}`}
                   aria-current={idx === activeIndex}
                   className={`h-20 w-full rounded-md border-2 object-cover transition-opacity focus:outline-none focus:ring-2 focus:ring-primary-500 ${
                     idx === activeIndex ? 'border-accent-400 opacity-100' : 'border-transparent opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <img src={img.image} alt={img.caption || `${pet.name} photo ${idx + 1}`} className="h-full w-full object-cover rounded-md pointer-events-none" />
+                  <img src={img.image} alt={img.caption || `${formatPetLabel(pet.name)} photo ${idx + 1}`} className="h-full w-full object-cover rounded-md pointer-events-none" />
                 </button>
               ))}
             </div>
@@ -244,27 +244,27 @@ export default function PetDetailPage() {
 
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-4xl font-extrabold text-primary-900 sm:text-5xl">{pet.name}</h1>
-            <span className="rounded-full bg-accent-100 px-3 py-1 text-sm font-semibold capitalize text-primary-900 ring-1 ring-inset ring-accent-300">
+            <h1 className="pet-name text-3xl font-bold text-stone-900 sm:text-4xl">{formatPetLabel(pet.name)}</h1>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusColor(pet.status)}`}>
               {pet.status.replace(/_/g, ' ')}
             </span>
           </div>
           <p className="mt-3 text-lg text-stone-600">
-            {capitalize(pet.species)} · {pet.breed || 'Mixed'} · {formatPetAge(pet.age_years, pet.age_months)}
+            {capitalize(pet.species)} · {formatPetLabel(pet.breed) || 'Mixed'} · {formatPetAge(pet.age_years, pet.age_months)}
           </p>
 
           <div className="mt-7 space-y-3 rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
             <InfoRow label="Gender" value={capitalize(pet.gender)} />
             <InfoRow label="Size" value={pet.size ? capitalize(pet.size) : '—'} />
             {pet.weight_kg && <InfoRow label="Weight" value={`${pet.weight_kg} kg`} />}
-            <InfoRow label="Color" value={pet.color || '—'} />
+            <InfoRow label="Color" value={formatPetLabel(pet.color) || '—'} />
             <InfoRow label="At the center since" value={pet.arrival_date ? formatDate(pet.arrival_date) : '—'} />
           </div>
 
           {pet.description && (
             <div className="mt-8">
-              <h2 className="text-xl font-bold text-primary-900">About {pet.name}</h2>
-              <p className="mt-2 max-w-prose leading-relaxed text-stone-600 whitespace-pre-line">{pet.description}</p>
+              <h2 className="text-xl font-bold text-primary-900">About {formatPetLabel(pet.name)}</h2>
+              <p className="mt-2 max-w-prose leading-relaxed text-stone-600 pet-copy">{pet.description}</p>
             </div>
           )}
 
@@ -276,14 +276,14 @@ export default function PetDetailPage() {
                 to={`/applications/new?pet=${pet.id}`}
                 className="btn btn-accent btn-lg"
               >
-                Apply to Adopt {pet.name}
+                Apply to Adopt {formatPetLabel(pet.name)}
               </Link>
             ) : (
               <Link
                 to={`/register?pet=${pet.id}`}
                 className="btn btn-accent btn-lg"
               >
-                Sign up to Adopt {pet.name}
+                Sign up to Adopt {formatPetLabel(pet.name)}
               </Link>
             )}
           </div>

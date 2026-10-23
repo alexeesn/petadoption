@@ -67,48 +67,63 @@ export default function GoogleSignInButton({ onCredential, onError, disabled }: 
   const containerRef = useRef<HTMLDivElement>(null);
   const [unavailable, setUnavailable] = useState('');
   const busyRef = useRef(false);
+  const [buttonWidth, setButtonWidth] = useState(0);
+  const renderedWidth = useRef(0);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const measure = () => setButtonWidth(Math.min(340, Math.floor(container.getBoundingClientRect().width)));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [unavailable]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) {
       setUnavailable('Google sign-in is not configured for this environment.');
       return;
     }
-    if (disabled) return;
-    if (containerRef.current?.childElementCount) return; // already rendered
+    if (disabled || !buttonWidth) return;
+    if (containerRef.current?.childElementCount && renderedWidth.current === buttonWidth) return;
 
     let cancelled = false;
 
     loadGoogleIdentity()
       .then(() => {
         if (cancelled || !window.google?.accounts?.id) return;
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: (response) => {
-            if (busyRef.current) return;
-            if (response?.credential) {
-              busyRef.current = true;
-              Promise.resolve(onCredential(response.credential))
-                .catch((err: unknown) => {
-                  const message =
-                    (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-                    'Google sign-in failed. Please try again.';
-                  onError?.(message);
-                })
-                .finally(() => {
-                  busyRef.current = false;
-                });
-            } else {
-              onError?.('Google sign-in did not return a credential.');
-            }
-          },
-        });
-        if (containerRef.current && !containerRef.current.childElementCount) {
+        if (!containerRef.current?.childElementCount) {
+          window.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: (response) => {
+              if (busyRef.current) return;
+              if (response?.credential) {
+                busyRef.current = true;
+                Promise.resolve(onCredential(response.credential))
+                  .catch((err: unknown) => {
+                    const message =
+                      (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
+                      'Google sign-in failed. Please try again.';
+                    onError?.(message);
+                  })
+                  .finally(() => {
+                    busyRef.current = false;
+                  });
+              } else {
+                onError?.('Google sign-in did not return a credential.');
+              }
+            },
+          });
+        }
+        if (containerRef.current && (!containerRef.current.childElementCount || renderedWidth.current !== buttonWidth)) {
+          containerRef.current.replaceChildren();
+          renderedWidth.current = buttonWidth;
           window.google.accounts.id.renderButton(containerRef.current, {
             theme: 'outline',
             size: 'large',
             text: 'continue_with',
             shape: 'pill',
-            width: 340,
+            width: String(buttonWidth),
           });
         }
       })
@@ -119,15 +134,15 @@ export default function GoogleSignInButton({ onCredential, onError, disabled }: 
     return () => {
       cancelled = true;
     };
-  }, [onCredential, onError, disabled]);
+  }, [onCredential, onError, disabled, buttonWidth]);
 
   if (unavailable) {
-    return <p className="mt-2 text-center text-sm text-slate-400">{unavailable}</p>;
+    return <p className="mt-2 text-center text-sm text-slate-500">{unavailable}</p>;
   }
 
   return (
     <div>
-      <div ref={containerRef} className="flex justify-center" aria-label="Continue with Google" />
+      <div ref={containerRef} className="flex min-w-0 w-full justify-center" aria-label="Continue with Google" />
     </div>
   );
 }
