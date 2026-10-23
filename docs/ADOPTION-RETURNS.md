@@ -42,6 +42,10 @@ payment receipt, adoption export, payment export and both monthly reports) show:
 - **Downloaded by:** the authenticated staff/admin's current name, email and
   role. This is separate from the staff who originally completed/processed the
   transaction, and cannot be supplied through query parameters.
+  Lowercase name parts are capitalized for display (for example, `alexis
+  teodosio` becomes `Alexis Teodosio`) consistently across PDF attribution,
+  signatures and transaction text. Existing mixed-case names and email addresses
+  are preserved; account data is not changed.
 - **Generated on:** the current date/time in Philippine time, explicitly
   labeled `PHT (UTC+08:00)`. Original transaction/return dates stay historical.
 

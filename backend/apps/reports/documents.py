@@ -44,7 +44,13 @@ def text(value):
 
 
 def name(user):
-    return (user.full_name.strip() or user.email) if user else 'Not recorded'
+    """Capitalize lowercase name parts for PDF display, retaining intentional casing."""
+    if not user:
+        return 'Not recorded'
+    full_name = user.full_name.strip()
+    if not full_name:
+        return user.email
+    return ' '.join(part.title() if part.islower() else part for part in full_name.split())
 
 
 def person(user):

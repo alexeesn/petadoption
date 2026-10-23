@@ -56,17 +56,23 @@ class PdfDownloadMetadataTests(BaseAPITestCase):
         return response, _extract_pdf_text(response.content)
 
     def test_all_six_pdf_downloads_identify_requesting_staff_and_current_philippine_time(self):
+        self.downloader.first_name = "alexis"
+        self.downloader.last_name = "teodosio"
+        self.downloader.save(update_fields=["first_name", "last_name"])
         self.authenticate(self.downloader)
         before = self.snapshot()
         for url in self.urls:
             with self.subTest(url=url):
                 response, content = self.download(url)
-                for value in (b"Downloaded by:", b"Download Operator", b"downloader@example.test", b"Staff",
+                for value in (b"Downloaded by:", b"Alexis Teodosio", b"downloader@example.test", b"Staff",
                               b"Generated on:", b"24 October 2026, 00:15:30", b"PHT", b"UTC+08:00"):
                     self.assertIn(value, content)
                 self.assertEqual(self.snapshot(), before)
                 if url in ("/api/adoptions/export-pdf/", "/api/payments/export-pdf/"):
                     self.assertIn("2026-10-24.pdf", response["Content-Disposition"])
+        self.downloader.refresh_from_db()
+        self.assertEqual(self.downloader.first_name, "alexis")
+        self.assertEqual(self.downloader.last_name, "teodosio")
 
     def test_downloader_changes_per_request_without_replacing_original_recorder(self):
         for user in (self.downloader, self.admin):
