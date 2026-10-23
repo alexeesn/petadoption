@@ -3,8 +3,10 @@ import { Card, Loading, ErrorMessage, Empty, Table } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { documentService, openDocument, saveDocument } from '../services/apiService';
 import type { Document } from '../types';
+import { useToast } from '../context/ToastContext';
 
 export default function DocumentsPage() {
+  const toast = useToast();
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -26,7 +28,7 @@ export default function DocumentsPage() {
     if (!window.confirm('Delete this document?')) return;
     documentService
       .remove(id)
-      .then(load)
+      .then(() => { toast.success('Document deleted', 'The document has been removed.'); load(); })
       .catch(() => setError('Failed to delete document.'));
   };
 

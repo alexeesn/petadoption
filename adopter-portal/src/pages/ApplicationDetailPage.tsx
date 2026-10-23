@@ -1,3 +1,4 @@
+import { useToast } from '../context/ToastContext'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchApplication, cancelApplication, uploadDocument, fetchAppointments, createAppointment, fetchNotifications } from '../services/apiService'
@@ -55,12 +56,14 @@ function isWeekday(dateStr: string): boolean {
 }
 
 export default function ApplicationDetailPage() {
+  const toast = useToast()
   const { id } = useParams<{ id: string }>()
   const [app, setApp] = useState<Application | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [notice, setNotice] = useState('')
+  const [cancelError, setCancelError] = useState('')
   const [extraType, setExtraType] = useState('other')
   const [extraFile, setExtraFile] = useState<File | null>(null)
   const [uploadError, setUploadError] = useState('')
@@ -132,6 +135,7 @@ export default function ApplicationDetailPage() {
       setAppointments((prev) => [appointment, ...prev])
       setVisitDate('')
       setNotice('Appointment request submitted. Staff will review your requested date.')
+      toast.success('Appointment requested', 'Your requested visit date has been sent to the team for review.')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: Record<string, string[] | string> } }
       const data = anyErr?.response?.data
@@ -147,13 +151,15 @@ export default function ApplicationDetailPage() {
   const handleCancel = async () => {
     if (!id || !window.confirm('Are you sure you want to cancel this application?')) return
     setCancelling(true)
+    setCancelError('')
     setNotice('')
     try {
       const updated = await cancelApplication(id)
       setApp(updated)
       setNotice('Application cancelled.')
+      toast.success('Application cancelled', 'Your application status has been updated.')
     } catch {
-      setNotice('Could not cancel the application.')
+      setCancelError('Could not cancel the application. Please try again.')
     } finally {
       setCancelling(false)
     }
@@ -183,6 +189,7 @@ export default function ApplicationDetailPage() {
       setApp(refreshed)
       setExtraFile(null)
       setNotice('Document uploaded and attached to this application.')
+      toast.success('Document uploaded', 'The file is now attached to your application.')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: Record<string, string[] | string> } }
       const detail = anyErr?.response?.data?.file
@@ -232,6 +239,7 @@ export default function ApplicationDetailPage() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-6"><Link to={`/pets/${app.pet}`} className="text-sm font-semibold text-primary-700">For {app.pet_name} →</Link><p className="text-xs text-stone-500">Last updated {formatDate(app.updated_at)}</p></div>
         <section className="mt-6 rounded-lg bg-primary-50 p-5"><h2 className="text-sm font-bold text-primary-900">What's next</h2><p className="mt-2 text-sm leading-7 text-stone-700">{nextStep}</p></section>
 
+        {cancelError && <Alert type="error">{cancelError}</Alert>}
         {notice && (
           <div className="mt-4">
             <Alert type="success">{notice}</Alert>

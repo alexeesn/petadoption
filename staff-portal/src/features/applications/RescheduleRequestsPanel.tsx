@@ -4,8 +4,10 @@ import { DecisionDialog } from '../../components/DecisionDialog';
 import { rescheduleService } from '../../services/apiService';
 import type { PaginatedResponse, RescheduleRequest } from '../../types';
 import { formatDate, formatDateTime } from '../../utils/format';
+import { useToast } from '../../context/ToastContext';
 
 export function RescheduleRequestsPanel({ onScheduleChanged }: { onScheduleChanged: () => void }) {
+  const toast = useToast();
   const [rows, setRows] = useState<RescheduleRequest[]>([]);
   const [status, setStatus] = useState('pending');
   const [page, setPage] = useState(1);
@@ -64,6 +66,7 @@ export function RescheduleRequestsPanel({ onScheduleChanged }: { onScheduleChang
         requireReason={!decision.approve} onClose={() => setDecision(null)} onConfirm={async (reason) => {
           if (decision.approve) await rescheduleService.approve(decision.row.id);
           else await rescheduleService.reject(decision.row.id, reason);
+          toast.success(decision.approve ? 'Reschedule approved' : 'Reschedule request rejected', `${decision.row.pet_name}'s request has been reviewed.`);
           setSuccess(decision.approve ? 'Reschedule approved. The adopter has been notified.' : 'Request rejected. The original appointment is unchanged and the adopter has been notified.');
           setRefresh((v) => v + 1);
           onScheduleChanged();

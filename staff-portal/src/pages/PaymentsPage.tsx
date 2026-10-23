@@ -1,3 +1,4 @@
+import { useToast } from '../context/ToastContext';
 import { useEffect, useState } from 'react';
 import {
   Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select, Input, Textarea,
@@ -66,6 +67,7 @@ function readError(e: unknown, fallback: string): string {
  * Payment Records — single staff destination for recording onsite payments and viewing payment history.
  */
 export default function PaymentsPage() {
+  const toast = useToast();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -198,6 +200,7 @@ export default function PaymentsPage() {
       })
       .then((res) => {
         const payment = res.data as Payment;
+        toast.success('Payment recorded', payment.receipt_number ? `Receipt: ${payment.receipt_number}` : 'The payment has been saved.');
         // The returned transaction is persisted backend data. Hide entry
         // immediately, then re-read the same summary used on return/refresh.
         setSelectedSummary((current) => current && current.application_id === appt.application

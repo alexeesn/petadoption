@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/UI';
 import GoogleSignInButton from '../components/GoogleSignInButton';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export default function LoginPage() {
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -24,6 +26,7 @@ export default function LoginPage() {
         setError('This account does not have staff access.');
         return;
       }
+      toast.success('Signed in', 'Welcome to your staff workspace.');
       navigate('/');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string; detail?: string } } };
@@ -43,6 +46,7 @@ export default function LoginPage() {
         setError('This account does not have staff access. Google accounts are created as adopters only.');
         return;
       }
+      toast.success('Signed in', 'Welcome to your staff workspace.');
       navigate('/');
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string; detail?: string } } };

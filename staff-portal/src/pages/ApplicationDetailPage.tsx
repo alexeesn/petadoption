@@ -21,6 +21,7 @@ import {
 } from '../services/apiService';
 import type { Application, Appointment, Document, Payment, Pet } from '../types';
 import { formatDate, formatDateTime, formatFileSize, formatPetAge } from '../utils/format';
+import { useToast } from '../context/ToastContext';
 
 /**
  * Mirrors Application.VALID_TRANSITIONS in
@@ -132,6 +133,7 @@ function SectionCard({ title, children }: { title: string; children: ReactNode }
 }
 
 export default function ApplicationDetailPage() {
+  const toast = useToast();
   const { id } = useParams<{ id: string }>();
   const [app, setApp] = useState<Application | null>(null);
   const [pet, setPet] = useState<Pet | null>(null);
@@ -212,6 +214,7 @@ export default function ApplicationDetailPage() {
         setApp(res.data);
         setNotes(res.data.staff_notes || '');
         setNotice(`Application set to "${humanise(res.data.status)}".`);
+        toast.success(`Application ${humanise(res.data.status)}`, `The application for ${res.data.pet_name} has been updated.`);
       })
       .catch((e) => setActionError(e.response?.data?.error || 'Failed to update status.'))
       .finally(() => setBusy(false));
@@ -228,6 +231,7 @@ export default function ApplicationDetailPage() {
         setApp(res.data);
         setNotes(res.data.staff_notes || '');
         setNotice('Internal notes saved.');
+        toast.success('Notes saved', 'Your internal review notes have been updated.');
       })
       .catch((e) => setActionError(e.response?.data?.error || 'Failed to save notes.'))
       .finally(() => setBusy(false));
@@ -274,6 +278,7 @@ export default function ApplicationDetailPage() {
         }),
       )
       .then((res: { data: { receipt_number?: string } }) => {
+        toast.success('Payment recorded', res.data.receipt_number ? `Receipt: ${res.data.receipt_number}` : 'The payment has been saved.');
         setOnsiteNotice(
           `Payment of ${ADOPTION_FEE} recorded` +
             (res.data.receipt_number ? ` · Receipt ${res.data.receipt_number}` : '') +
@@ -327,6 +332,7 @@ export default function ApplicationDetailPage() {
     applicationService
       .completeAdoption(app.id, onsiteNotes.trim())
       .then((res) => {
+        toast.success('Adoption completed', `${res.data.pet_name} is now marked as adopted.`);
         setApp(res.data);
         setNotes(res.data.staff_notes || '');
         setOnsiteNotes('');

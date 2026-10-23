@@ -1,9 +1,11 @@
+import { useToast } from '../context/ToastContext'
 import { useState, FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import { Alert, FieldError } from '../components/UI'
 
 export default function ResetPasswordPage() {
+  const toast = useToast()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialEmail = searchParams.get('email') || ''
@@ -28,6 +30,7 @@ export default function ResetPasswordPage() {
         email, otp, new_password: newPassword, new_password_confirm: confirmPassword,
       })
       setSuccess('Password reset successfully! You can now log in.')
+      toast.success('Password updated', 'You can now sign in with your new password.')
       setTimeout(() => navigate('/login'), 1500)
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: { error?: string; new_password_confirm?: string[] } } }

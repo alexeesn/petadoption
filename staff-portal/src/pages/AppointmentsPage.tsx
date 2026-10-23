@@ -7,6 +7,7 @@ import { PageHeader } from '../layouts/DashboardLayout';
 import { appointmentService } from '../services/apiService';
 import type { Appointment } from '../types';
 import { formatDate } from '../utils/format';
+import { useToast } from '../context/ToastContext';
 
 const STATUS_FILTERS = [
   { value: 'pending_confirmation', label: 'Pending confirmation' },
@@ -28,6 +29,7 @@ const STATUS_FILTERS = [
  * Payments are recorded under Payment Records.
  */
 export default function AppointmentsPage() {
+  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const rescheduleTab = searchParams.get('tab') === 'reschedules';
   const [noShow, setNoShow] = useState<Appointment | null>(null);
@@ -66,6 +68,7 @@ export default function AppointmentsPage() {
     appointmentService
       .approve(appointment.id)
       .then(() => {
+        toast.success('Appointment confirmed', `${appointment.pet_name}'s visit date has been confirmed.`);
         setSuccess(
           `Visit date confirmed for ${appointment.adopter_email}. The adoption record is now scheduled. Payment may be recorded under Payment Records when received onsite.`,
         );
@@ -90,6 +93,7 @@ export default function AppointmentsPage() {
     appointmentService
       .reject(rejectingId, reason.trim())
       .then(() => {
+        toast.success('Appointment request rejected', 'The decision has been saved. The adopter can request another date.');
         setSuccess('Requested date rejected. The adopter can choose another date.');
         setRejectingId('');
         setReason('');
@@ -237,6 +241,7 @@ export default function AppointmentsPage() {
         description={`Record that the adopter did not attend ${noShow.pet_name}'s visit on ${formatDate(noShow.requested_date)}. This does not cancel the adoption.`}
         onClose={() => setNoShow(null)} onConfirm={async (reason) => {
           await appointmentService.markNoShow(noShow.id, reason);
+          toast.success('No-show recorded', `${noShow.pet_name}'s appointment has been updated.`);
           setSuccess('No-show recorded. The adopter has been notified and can request a new date.');
           load();
         }} />}

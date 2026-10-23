@@ -2,8 +2,10 @@ import { useState, FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Alert, FieldError } from '../components/UI'
+import { useToast } from '../context/ToastContext'
 
 export default function VerifyEmailPage() {
+  const toast = useToast()
   const { verifyEmail } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -20,6 +22,7 @@ export default function VerifyEmailPage() {
     setLoading(true)
     try {
       await verifyEmail(email, otp)
+      toast.success('Email verified', 'Your account is verified and ready to use.')
       // Auto-login: token was stored by verifyEmail, go straight to the
       // pet browsing (preserving any pet the user was about to adopt).
       const petParam = searchParams.get('pet')

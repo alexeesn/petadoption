@@ -1,3 +1,4 @@
+import { useToast } from '../context/ToastContext';
 import { useEffect, useRef, useState } from 'react';
 import {
   Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button, Select,
@@ -45,6 +46,7 @@ function reportFilename(): string {
  * certificate downloads.
  */
 export default function AdoptionsPage() {
+  const toast = useToast();
   const [cancellingRecord, setCancellingRecord] = useState<AdoptionRecord | null>(null);
   const [cancellationSuccess, setCancellationSuccess] = useState('');
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
@@ -143,6 +145,7 @@ export default function AdoptionsPage() {
     applicationService
       .completeAdoption(completionRecord.application_id)
       .then(() => {
+        toast.success('Adoption completed', `${completionRecord.pet_name} is now marked as adopted.`);
         closeCompletion();
         load();
       })
@@ -414,6 +417,7 @@ export default function AdoptionsPage() {
         description={`Cancel ${cancellingRecord.pet_name}'s Scheduled adoption for ${cancellingRecord.adopter_email}. This closes the application and active appointments. Existing payments are retained; no automatic refund is issued.`}
         onClose={() => setCancellingRecord(null)} onConfirm={async (reason) => {
           await adoptionService.cancel(cancellingRecord.id, reason);
+          toast.success('Adoption cancelled', `${cancellingRecord.pet_name}'s adoption record has been updated.`);
           setCancellationSuccess('Adoption cancelled. Its application and active appointments are closed; payment history is retained.');
           load();
         }} />}

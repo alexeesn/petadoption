@@ -5,6 +5,7 @@ import type { Application, AdopterProfile, Pet } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
 import { capitalize, getStatusColor, formatPetAge } from '../utils/format'
 import { Icon } from '../components/Icons'
+import { useToast } from '../context/ToastContext'
 
 interface ApplicationForm {
   why_adopt: string
@@ -75,6 +76,7 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 const STEPS = ['Application', 'Documents', 'Review'] as const
 
 export default function NewApplicationPage() {
+  const toast = useToast()
   const [searchParams] = useSearchParams()
   const petId = searchParams.get('pet') || ''
   const navigate = useNavigate()
@@ -227,6 +229,7 @@ export default function NewApplicationPage() {
       }))
       const created = await createApplication(petId, { ...form }, documents)
       setSubmitted(created as Application)
+      toast.success('Application submitted', 'Your application and documents were received. Track updates in My Applications.')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: Record<string, unknown> } }
       const data = anyErr?.response?.data

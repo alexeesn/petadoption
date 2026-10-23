@@ -3,8 +3,10 @@ import { FormEvent, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Alert } from '../components/UI'
 import GoogleSignInButton from '../components/GoogleSignInButton'
+import { useToast } from '../context/ToastContext'
 
 export default function RegisterPage() {
+  const toast = useToast()
   const { register, loginWithGoogle } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -31,6 +33,7 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(form)
+      toast.success('Account created', 'Verify your email to continue your adoption journey.')
       navigate(petParam ? `/verify-email?email=${encodeURIComponent(form.email)}&pet=${petParam}` : `/verify-email?email=${encodeURIComponent(form.email)}`)
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: Record<string, string | string[]> } }
@@ -44,6 +47,7 @@ export default function RegisterPage() {
     setGoogleLoading(true)
     try {
       await loginWithGoogle(credential)
+      toast.success('Signed in', 'Your account is ready. Find your next companion.')
       navigate(petParam ? `/pets/${petParam}` : '/pets')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: { error?: string } } }

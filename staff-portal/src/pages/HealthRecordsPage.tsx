@@ -4,6 +4,7 @@ import { PageHeader } from '../layouts/DashboardLayout';
 import { healthService } from '../services/apiService';
 import type { HealthRecord, Pet } from '../types';
 import { formatPetLabel } from '../utils/format';
+import { useToast } from '../context/ToastContext';
 
 const emptyForm = {
   pet: '',
@@ -43,6 +44,7 @@ function describeSaveError(err: unknown): string {
 }
 
 export default function HealthRecordsPage() {
+  const toast = useToast();
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,6 +130,7 @@ export default function HealthRecordsPage() {
     request
       .then(() => {
         setSuccess(editing ? 'Health record updated.' : 'Health record created.');
+        toast.success(editing ? 'Health record updated' : 'Health record added', 'The medical details have been saved.');
         if (!editing) setPage(1);
         setShowForm(false);
         setEditing(null);

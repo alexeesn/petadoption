@@ -2,8 +2,10 @@ import { useState, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { Alert, FieldError } from '../components/UI'
+import { useToast } from '../context/ToastContext'
 
 export default function ForgotPasswordPage() {
+  const toast = useToast()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
@@ -16,6 +18,7 @@ export default function ForgotPasswordPage() {
     setLoading(true)
     try {
       await api.post('/auth/forgot-password/', { email })
+      toast.success('Reset request received', 'If the email is registered, check your inbox for a reset code.')
       setSuccess("If an account exists for that email, a reset code has been sent.")
       setTimeout(() => navigate(`/reset-password?email=${encodeURIComponent(email)}`), 1500)
     } catch (err: unknown) {

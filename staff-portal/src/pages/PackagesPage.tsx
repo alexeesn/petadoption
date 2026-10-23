@@ -3,8 +3,10 @@ import { Card, Loading, ErrorMessage, Empty, Table, Button, Input, Textarea } fr
 import { PageHeader } from '../layouts/DashboardLayout';
 import { packageService } from '../services/apiService';
 import type { AdoptionPackage } from '../types';
+import { useToast } from '../context/ToastContext';
 
 export default function PackagesPage() {
+  const toast = useToast();
   const [packages, setPackages] = useState<AdoptionPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -35,6 +37,7 @@ export default function PackagesPage() {
       .create(form)
       .then(() => {
         setSuccess('Package created.');
+        toast.success('Package added', `${form.name} has been saved.`);
         setShowForm(false);
         setForm({ name: '', description: '', price: '0', is_active: true });
         load();
@@ -45,7 +48,7 @@ export default function PackagesPage() {
 
   const handleDelete = (id: string) => {
     if (!window.confirm('Delete this package?')) return;
-    packageService.remove(id).then(load).catch(() => setError('Failed to delete package.'));
+    packageService.remove(id).then(() => { toast.success('Package deleted', 'The package has been removed.'); load(); }).catch(() => setError('Failed to delete package.'));
   };
 
   return (

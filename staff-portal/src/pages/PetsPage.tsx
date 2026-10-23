@@ -5,6 +5,7 @@ import { petService } from '../services/apiService';
 import { formatPetAge, formatPetLabel } from '../utils/format';
 import { PawMark } from '../components/Icons';
 import type { Pet, PetImage } from '../types';
+import { useToast } from '../context/ToastContext';
 
 const emptyForm = {
   name: '',
@@ -56,6 +57,7 @@ function describeSaveError(err: unknown): string {
 }
 
 export default function PetsPage() {
+  const toast = useToast();
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -236,6 +238,7 @@ export default function PetsPage() {
         photos.forEach(({ file }) => fd.append('images', file));
         await petService.create(fd);
       }
+      toast.success(editing ? 'Pet updated' : 'Pet added', `${formatPetLabel(form.name)} has been saved to your pet records.`);
       clearPhotos();
       setRemovedPhotos([]);
       setShowForm(false);

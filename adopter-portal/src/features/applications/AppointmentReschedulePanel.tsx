@@ -3,6 +3,7 @@ import type { Appointment, RescheduleRequest } from '../../types'
 import { fetchRescheduleRequests, requestAppointmentReschedule } from '../../services/apiService'
 import { Alert, Spinner } from '../../components/UI'
 import { formatDate, capitalize } from '../../utils/format'
+import { useToast } from '../../context/ToastContext'
 
 interface Props {
   applicationId: string
@@ -17,6 +18,7 @@ function todayISO(): string {
 }
 
 export function AppointmentReschedulePanel({ applicationId, applicationStatus, appointments, onUpdated }: Props) {
+  const toast = useToast()
   const [requests, setRequests] = useState<RescheduleRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -82,6 +84,7 @@ export function AppointmentReschedulePanel({ applicationId, applicationStatus, a
             setNotice('')
             try {
               const saved = await requestAppointmentReschedule(target.id, date, reason.trim())
+              toast.success('Reschedule requested', 'Your request has been submitted for staff review.')
               setRequests((rows) => [saved, ...rows])
               setShowForm(false)
               setDate('')

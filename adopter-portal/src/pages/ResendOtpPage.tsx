@@ -2,8 +2,10 @@ import { useState, FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../services/api'
 import { Alert } from '../components/UI'
+import { useToast } from '../context/ToastContext'
 
 export default function ResendOtpPage() {
+  const toast = useToast()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialEmail = searchParams.get('email') || ''
@@ -18,6 +20,7 @@ export default function ResendOtpPage() {
     setLoading(true)
     try {
       await api.post('/auth/resend-otp/', { email })
+      toast.success('Verification request received', 'Check your inbox for your verification code.')
       setSuccess('A new verification code has been sent.')
       setTimeout(() => navigate(`/verify-email?email=${encodeURIComponent(email)}`), 1500)
     } catch (err: unknown) {

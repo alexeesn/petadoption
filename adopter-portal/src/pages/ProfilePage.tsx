@@ -1,3 +1,4 @@
+import { useToast } from '../context/ToastContext'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { fetchAdopterProfile, updateAdopterProfile } from '../services/apiService'
@@ -154,6 +155,7 @@ function parseAges(agesStr?: string | null, count?: number | null): string[] {
 }
 
 export default function ProfilePage() {
+  const toast = useToast()
   const [saved, setSaved] = useState<AdopterProfile | null>(null)
   const [form, setForm] = useState<ProfileForm>(EMPTY)
   const [editing, setEditing] = useState(false)
@@ -391,6 +393,7 @@ export default function ProfilePage() {
       setChildAges(parseAges(savedData.children_ages, savedData.number_of_children))
       setEditing(false)
       setSuccess('Profile updated successfully. You can now start an adoption application.')
+      toast.success('Profile saved', 'Your updated information has been saved.')
     } catch (err: unknown) {
       // Surface server-side field errors when available.
       const response = (err as { response?: { data?: Record<string, unknown> } })?.response

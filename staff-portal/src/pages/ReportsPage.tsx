@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Card, Loading, ErrorMessage, Button, Select } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { reportService } from '../services/apiService';
+import { useToast } from '../context/ToastContext';
 
 const REPORT_TYPES = [
   { value: 'payment', label: 'Payment Report' },
@@ -34,6 +35,7 @@ const YEARS = [
 ];
 
 export default function ReportsPage() {
+  const toast = useToast();
   const [reportType, setReportType] = useState('payment');
   const [selectedMonth, setSelectedMonth] = useState(String(currentMonth));
   const [selectedYear, setSelectedYear] = useState(String(currentYear));
@@ -69,6 +71,7 @@ export default function ReportsPage() {
         anchor.remove();
         URL.revokeObjectURL(url);
         setSuccess(`${reportType === 'payment' ? 'Payment' : 'Adoption'} Report for ${monthLabel} ${yearNum} generated and downloaded.`);
+        toast.success('Report ready', 'Your PDF download has started.');
       })
       .catch(() => {
         setError('Failed to generate monthly report PDF. Please try again.');

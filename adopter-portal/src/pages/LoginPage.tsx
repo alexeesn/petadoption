@@ -3,8 +3,10 @@ import { FormEvent, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { Alert, FieldError } from '../components/UI'
 import GoogleSignInButton from '../components/GoogleSignInButton'
+import { useToast } from '../context/ToastContext'
 
 export default function LoginPage() {
+  const toast = useToast()
   const { login, loginWithGoogle } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -19,6 +21,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
+      toast.success('Signed in', 'Welcome back to PawConnect.')
       navigate('/applications')
     } catch (err: unknown) {
       const anyErr = err as { response?: { data?: { error?: string } } }
@@ -32,6 +35,7 @@ export default function LoginPage() {
     setGoogleLoading(true)
     try {
       await loginWithGoogle(credential)
+      toast.success('Signed in', 'Welcome back to PawConnect.')
       navigate('/applications')
     } finally {
       setGoogleLoading(false)
