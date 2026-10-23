@@ -287,6 +287,7 @@ class AppointmentFollowupTests(BaseAPITestCase):
         self.assertEqual(self.app.status, "cancelled")
 
     def test_completion_closes_a_pending_request_but_retains_history(self):
+        self.make_past_visit()
         request = self.request_change().data
         Payment.objects.create(application=self.app, amount="500.00", status="completed")
         self.authenticate(self.staff)

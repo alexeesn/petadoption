@@ -4,7 +4,6 @@ Service module for on-site adoption fee payment handling.
 from decimal import Decimal, InvalidOperation
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.utils import timezone
 
 from apps.audit.models import AuditLog
 from apps.notifications.models import create_notification
@@ -60,8 +59,9 @@ def record_onsite_payment(
     if application.status != Application.Status.APPROVED:
         raise ValidationError("Only an approved application can receive an onsite payment.")
 
-    if not payment_date:
-        payment_date = timezone.localdate()
+    from apps.appointments.eligibility import require_onsite_visit, onsite_payment_date
+    appointment = require_onsite_visit(application)
+    payment_date = onsite_payment_date(payment_date, appointment)
 
     payment = Payment(
         application=application,

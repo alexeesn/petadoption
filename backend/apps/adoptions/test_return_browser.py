@@ -39,12 +39,25 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
             adoption_date=appointment.requested_date, staff_member=staff,
         )
         payment = Payment.objects.create(application=app, amount="500.00", status="completed", method="cash")
+        future_pet = Pet.objects.create(name="Future Visit Buddy", species="cat", age_years=1, status="pending")
+        future_app = Application.objects.create(adopter=adopter, pet=future_pet, status="approved")
+        future_date = timezone.localdate() + timedelta(days=8)
+        while future_date.weekday() >= 5:
+            future_date += timedelta(days=1)
+        future_appointment = Appointment.objects.create(
+            application=future_app, adopter=adopter, pet=future_pet, status="confirmed", requested_date=future_date,
+        )
+        future_record = AdoptionRecord.objects.create(
+            application=future_app, adopter=adopter, pet=future_pet, appointment=future_appointment,
+            adoption_date=future_date, staff_member=staff,
+        )
         receipt = payment.receipt_number
         fixture = {
             "api": self.live_server_url,
             "staff": {"token": Token.objects.create(user=staff).key, "user": dict(UserSerializer(staff).data)},
             "adopter": {"token": Token.objects.create(user=adopter).key, "user": dict(UserSerializer(adopter).data)},
             "application": str(app.pk), "record": str(record.pk), "pet": str(pet.pk), "receipt": receipt,
+            "futureApplication": str(future_app.pk), "futureAppointment": str(future_appointment.pk),
         }
         root = Path(__file__).resolve().parents[3]
         environment = {**os.environ, "PAWCONNECT_FIXTURE": json.dumps(fixture),
@@ -65,7 +78,10 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
         self.assertEqual(payment.status, "completed")
         self.assertEqual(payment.receipt_number, receipt)
         self.assertEqual(payment.adoption_id, record.pk)
-        self.assertEqual(AdoptionRecord.objects.count(), 1)
+        self.assertEqual(AdoptionRecord.objects.count(), 2)
+        future_record.refresh_from_db()
+        self.assertEqual(future_record.status, "scheduled")
+        self.assertFalse(Payment.objects.filter(application=future_app).exists())
         self.assertEqual(Payment.objects.count(), 1)
         self.assertEqual(AuditLog.objects.filter(action="adoption_returned").count(), 1)
         self.assertEqual(Notification.objects.filter(title="Adoption Returned", user=adopter).count(), 1)

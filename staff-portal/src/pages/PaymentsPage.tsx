@@ -6,7 +6,7 @@ import {
 import { PageHeader } from '../layouts/DashboardLayout';
 import { paymentService, appointmentService, applicationService } from '../services/apiService';
 import type { Payment, PaginatedResponse, Appointment, PaymentSummary } from '../types';
-import { formatDate, formatDateTime, formatCurrency } from '../utils/format';
+import { formatDate, formatDateTime, formatCurrency, philippineDate } from '../utils/format';
 
 /** Matches Payment.Status.choices in backend/apps/payments/models.py. */
 const PAYMENT_STATUS_FILTERS = [
@@ -91,7 +91,7 @@ export default function PaymentsPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [payMethod, setPayMethod] = useState('cash');
   const [payReference, setPayReference] = useState('');
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(philippineDate());
   const [payNotes, setPayNotes] = useState('');
   const [payReceived, setPayReceived] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -421,7 +421,9 @@ export default function PaymentsPage() {
                       ))}
                     </div>
                   ) : !selectedSummary.can_record_payment ? (
-                    <p className="text-sm text-slate-600">This application is not eligible for onsite payment.</p>
+                    <p role="status" className="text-sm text-slate-600">
+                      {selectedSummary.onsite_visit?.message || 'This application is not eligible for onsite payment.'}
+                    </p>
                   ) : (
                     <form onSubmit={handleRecordPaymentSubmit} aria-label="Record onsite payment" className="space-y-4">
                       <Select
@@ -436,6 +438,8 @@ export default function PaymentsPage() {
                           label="Payment Date"
                           type="date"
                           value={payDate}
+                          min={selectedSummary.onsite_visit?.appointment_date || undefined}
+                          max={philippineDate()}
                           onChange={(e) => setPayDate(e.target.value)}
                         />
                         <Input

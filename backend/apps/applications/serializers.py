@@ -7,7 +7,7 @@ from apps.adopters.models import AdopterProfile
 from apps.documents.serializers import DocumentSerializer
 from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
 from apps.payments.models import Payment
-from apps.appointments.models import Appointment
+from apps.appointments.eligibility import onsite_visit_state
 from .models import Application
 
 
@@ -36,6 +36,10 @@ class ApplicationSerializer(serializers.ModelSerializer):
     total_paid = serializers.SerializerMethodField()
     is_fee_paid = serializers.SerializerMethodField()
     turnover_eligible = serializers.SerializerMethodField()
+    onsite_visit = serializers.SerializerMethodField()
+
+    def get_onsite_visit(self, obj):
+        return onsite_visit_state(obj)
 
     class Meta:
         model = Application
@@ -47,14 +51,14 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "additional_notes", "privacy_consent", "require_home_visit", "no_home_visit_reason",
             "staff_notes", "reviewed_by", "reviewed_by_email",
             "reviewed_at", "rejection_reason", "documents",
-            "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible",
+            "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible", "onsite_visit",
             "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "adopter", "adopter_email", "adopter_name", "adopter_profile",
             "pet_name", "reviewed_by",
             "reviewed_by_email", "reviewed_at", "documents",
-            "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible",
+            "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible", "onsite_visit",
             "created_at", "updated_at",
         ]
 
@@ -92,8 +96,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
     def get_turnover_eligible(self, obj):
         if obj.status != Application.Status.APPROVED:
             return False
-        has_confirmed = obj.appointments.filter(status=Appointment.Status.CONFIRMED).exists()
-        if not has_confirmed:
+        if not onsite_visit_state(obj)["date_reached"]:
             return False
         total = (
             obj.payments.filter(status=Payment.Status.COMPLETED).aggregate(

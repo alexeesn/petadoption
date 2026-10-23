@@ -175,6 +175,11 @@ export default function AdoptionsPage() {
           message: 'A confirmed onsite visit appointment is required before the pet can be handed over.',
         },
         {
+          met: completionApp?.onsite_visit?.date_reached === true,
+          label: 'Confirmed appointment date reached (Philippine time)',
+          message: completionApp?.onsite_visit?.message || 'The confirmed appointment date must be reached before adoption completion.',
+        },
+        {
           met: Boolean(completionRecord.is_fee_paid),
           label: `Adoption fee paid (₱${completionRecord.adoption_fee ?? '500.00'})`,
           message: `The adoption fee must be fully paid before completion (total completed: ${formatCurrency(completionRecord.total_paid ?? '0.00')}).`,
@@ -393,10 +398,11 @@ export default function AdoptionsPage() {
                         variant="secondary"
                         className="text-xs px-2.5 py-1"
                         onClick={() => openCompletion(rec)}
-                        disabled={completing}
+                        disabled={completing || rec.onsite_visit?.date_reached !== true}
                       >
                         Complete Adoption
                       </Button>
+                      {rec.onsite_visit?.message && <p className="w-full max-w-xs text-xs text-slate-600">{rec.onsite_visit.message}</p>}
                       <Button variant="danger" className="text-xs px-2.5 py-1"
                         disabled={completing} onClick={() => { setCancellationSuccess(''); setCancellingRecord(rec); }}>
                         Cancel Adoption

@@ -20,7 +20,7 @@ import {
   saveDocument,
 } from '../services/apiService';
 import type { Application, Appointment, Document, Payment, Pet } from '../types';
-import { formatDate, formatDateTime, formatFileSize, formatPetAge } from '../utils/format';
+import { formatDate, formatDateTime, formatFileSize, formatPetAge, philippineDate } from '../utils/format';
 import { useToast } from '../context/ToastContext';
 
 /**
@@ -72,9 +72,7 @@ const PAYMENT_METHODS = [
 ];
 
 function todayISO(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
+  return philippineDate();
 }
 
 function humanise(value: string) {
@@ -250,6 +248,10 @@ export default function ApplicationDetailPage() {
 
   const recordPayment = () => {
     if (!app) return;
+    if (!app.onsite_visit?.date_reached) {
+      setOnsiteError(app.onsite_visit?.message || 'The confirmed appointment date must be reached first.');
+      return;
+    }
     if (!paymentReceived) {
       setOnsiteError(
         'Confirm that the payment has actually been received onsite before recording it.',
@@ -318,6 +320,10 @@ export default function ApplicationDetailPage() {
 
   const completeAdoption = () => {
     if (!app) return;
+    if (!app.onsite_visit?.date_reached) {
+      setOnsiteError(app.onsite_visit?.message || 'The confirmed appointment date must be reached first.');
+      return;
+    }
     if (!handoverConfirmed) {
       // Defensive: the button is disabled until confirmed, but never rely on
       // frontend-only gating for a business rule.
@@ -652,6 +658,10 @@ export default function ApplicationDetailPage() {
                 <span className="font-semibold text-slate-900">₱{ADOPTION_FEE}</span>
               </p>
 
+              {app.status === 'approved' && app.onsite_visit?.message && (
+                <p role="status" className="mb-5 text-sm text-amber-800">{app.onsite_visit.message}</p>
+              )}
+
               {app.status === 'approved' && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
@@ -665,6 +675,8 @@ export default function ApplicationDetailPage() {
                       label="Payment Date"
                       type="date"
                       value={payDate}
+                      min={app.onsite_visit?.appointment_date || undefined}
+                      max={philippineDate()}
                       onChange={(e) => setPayDate(e.target.value)}
                     />
                   </div>
@@ -690,7 +702,7 @@ export default function ApplicationDetailPage() {
                       type="checkbox"
                       checked={paymentReceived}
                       onChange={(e) => setPaymentReceived(e.target.checked)}
-                      disabled={paymentBusy || completionBusy}
+                      disabled={paymentBusy || completionBusy || app.onsite_visit?.date_reached !== true}
                       className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span>
@@ -722,7 +734,7 @@ export default function ApplicationDetailPage() {
                       type="checkbox"
                       checked={handoverConfirmed}
                       onChange={(e) => setHandoverConfirmed(e.target.checked)}
-                      disabled={completionBusy}
+                      disabled={completionBusy || app.onsite_visit?.date_reached !== true}
                       className="mt-0.5 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span>
@@ -733,7 +745,7 @@ export default function ApplicationDetailPage() {
                   <div className="mt-3 flex flex-wrap items-center gap-3">
                     <Button
                       onClick={recordPayment}
-                      disabled={paymentBusy || completionBusy || !paymentReceived}
+                      disabled={paymentBusy || completionBusy || !paymentReceived || app.onsite_visit?.date_reached !== true}
                     >
                       {paymentBusy ? 'Saving…' : 'Record Payment'}
                     </Button>
@@ -741,7 +753,7 @@ export default function ApplicationDetailPage() {
                       variant="secondary"
                       onClick={completeAdoption}
                       disabled={
-                        completionBusy || paymentBusy || payments.length === 0 || !handoverConfirmed
+                        completionBusy || paymentBusy || payments.length === 0 || !handoverConfirmed || app.onsite_visit?.date_reached !== true
                       }
                     >
                       {completionBusy ? 'Completing…' : 'Complete Adoption'}

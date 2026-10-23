@@ -2,7 +2,8 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils import timezone
-from rest_framework import viewsets, permissions, status
+from django.db import transaction
+from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .constants import PROTOTYPE_ADOPTION_FEE
@@ -171,7 +172,19 @@ class PaymentViewSet(viewsets.ModelViewSet):
         resp["Cache-Control"] = "private, no-store"
         return resp
 
+    @transaction.atomic
     def perform_create(self, serializer):
+        from apps.applications.models import Application
+        from apps.appointments.eligibility import require_onsite_visit, onsite_payment_date
+        application = Application.objects.select_for_update().get(pk=serializer.validated_data["application"].pk)
+        try:
+            appointment = require_onsite_visit(application)
+            if serializer.validated_data.get("payment_date"):
+                serializer.validated_data["payment_date"] = onsite_payment_date(
+                    serializer.validated_data["payment_date"], appointment,
+                )
+        except ValidationError as exc:
+            raise serializers.ValidationError({"appointment": exc.messages})
         payment = serializer.save(processed_by=self.request.user)
         from apps.audit.models import AuditLog
         AuditLog.objects.create(

@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.accounts.tests import BaseAPITestCase
 from apps.appointments.models import Appointment
+from apps.appointments.testing import OnsiteFlowTestCase, visit_on
 from apps.notifications.models import Notification
 from apps.pets.models import Pet
 from apps.applications.models import Application
@@ -14,7 +15,7 @@ from apps.packages.models import AdoptionPackage
 from apps.payments.models import Payment
 
 
-class PaymentRulesTests(BaseAPITestCase):
+class PaymentRulesTests(OnsiteFlowTestCase):
 
     def setUp(self):
         super().setUp()
@@ -40,6 +41,7 @@ class PaymentRulesTests(BaseAPITestCase):
         self.assertEqual(pkg.price, 0)
 
     def test_paid_package_can_regenerate_receipt(self):
+        visit_on(self.app, timezone.localdate())
         pkg = AdoptionPackage.objects.create(name="Premium Kit", price=500, description="Premium kit")
         # Create a payment for the paid package
         self.authenticate_staff()
@@ -63,7 +65,7 @@ def next_weekday(days_ahead=1):
     return day
 
 
-class OnsiteAdoptionCompletionTests(BaseAPITestCase):
+class OnsiteAdoptionCompletionTests(OnsiteFlowTestCase):
     """Onsite payment recording + explicit adoption completion.
 
     These tests drive the real HTTP endpoints (``POST /api/payments/`` and
@@ -90,17 +92,12 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
 
     def confirm_appointment(self, application=None):
         application = application or self.application
-        return Appointment.objects.create(
-            application=application,
-            adopter=application.adopter,
-            pet=application.pet,
-            requested_date=next_weekday(),
-            status=Appointment.Status.CONFIRMED,
-        )
+        return visit_on(application, timezone.localdate())
 
     def record_payment(self, application=None):
         """Record the onsite fee through the canonical staff-only endpoint."""
         application = application or self.application
+        self.confirm_appointment(application)
         self.authenticate(self.staff)
         return self.client.post(
             "/api/payments/record-onsite/",
@@ -183,7 +180,8 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.assertEqual(AdoptionRecord.objects.count(), 0)
 
     def test_completion_requires_a_confirmed_appointment(self):
-        self.record_payment()
+        # Historical paid data must not bypass a missing confirmed visit.
+        Payment.objects.create(application=self.application, amount="500.00", status="completed")
         # No appointment at all.
         self.assertEqual(self.complete().status_code, 400)
 
@@ -298,7 +296,7 @@ class OnsiteAdoptionCompletionTests(BaseAPITestCase):
         self.assertNotIn("staff_notes", resp.data)
 
 
-class PaymentCreationRegressionTests(BaseAPITestCase):
+class PaymentCreationRegressionTests(OnsiteFlowTestCase):
     """Regression tests for payment creation via POST /api/payments/.
 
     These verify the full HTTP endpoint, ensuring that the field values
@@ -320,6 +318,7 @@ class PaymentCreationRegressionTests(BaseAPITestCase):
         )
 
     def _create_payment(self, **overrides):
+        visit_on(self.application, timezone.localdate())
         payload = {
             "application": str(self.application.id),
             "amount": self.ADOPTION_FEE,
@@ -452,7 +451,7 @@ class PaymentCreationRegressionTests(BaseAPITestCase):
 
 
 
-class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
+class Phase2OnsitePaymentAndTurnoverTests(OnsiteFlowTestCase):
     """Focused tests for Phase 2: backend business rules, on-site payment hardening,
     and safe pet turnover confirmation.
     """
@@ -469,17 +468,12 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
         self.application = Application.objects.create(
             adopter=self.adopter, pet=self.pet, status="approved"
         )
-        self.visit_date = next_weekday()
+        self.visit_date = timezone.localdate()
+        self.confirm_appointment()
 
     def confirm_appointment(self, app=None):
         target = app or self.application
-        return Appointment.objects.create(
-            application=target,
-            adopter=target.adopter,
-            pet=target.pet,
-            requested_date=self.visit_date,
-            status=Appointment.Status.CONFIRMED,
-        )
+        return visit_on(target, self.visit_date)
 
     # -------------------------------------------------------------------------
     # Payment Tests
@@ -865,6 +859,7 @@ class Phase2OnsitePaymentAndTurnoverTests(BaseAPITestCase):
 
     def test_turnover_rejected_when_appointment_not_confirmed(self):
         """Appointment not confirmed: turnover rejected."""
+        self.application.appointments.all().delete()
         self.authenticate(self.staff)
         Payment.objects.create(
             application=self.application,
@@ -1095,6 +1090,8 @@ class Phase21PaymentReassignmentTests(BaseAPITestCase):
     def test_create_new_payment_for_different_application_is_allowed(self):
         """Creating a new payment for any application is always allowed
         (through the canonical onsite flow)."""
+        from apps.appointments.eligibility import philippine_today
+        visit_on(self.app2, philippine_today())
         self.authenticate(self.staff)
         resp = self.client.post(
             "/api/payments/record-onsite/",
@@ -1469,6 +1466,8 @@ class PaymentIntegrityGateTests(BaseAPITestCase):
         self.assertFalse(resp.data["is_fee_paid"])
 
     def test_canonical_onsite_flow_still_records_completed_with_server_receipt(self):
+        from apps.appointments.eligibility import philippine_today
+        visit_on(self.app, philippine_today())
         self.authenticate(self.staff)
         resp = self.client.post(
             "/api/payments/record-onsite/",
@@ -1580,7 +1579,7 @@ class IndividualReceiptPdfTests(BaseAPITestCase):
         self.assertNotIn(b"OTHER-TRANSACTION-ONLY", text)
 
 
-class FixedOnsitePaymentTests(BaseAPITestCase):
+class FixedOnsitePaymentTests(OnsiteFlowTestCase):
     """The one-time obligation is application-scoped and enforced by both routes."""
 
     def setUp(self):
@@ -1589,6 +1588,7 @@ class FixedOnsitePaymentTests(BaseAPITestCase):
         self.adopter = self.create_user(email="fixed-adopter@example.com")
         self.pet = Pet.objects.create(name="Fixed fee pet", species="dog", age_years=2, status="pending")
         self.app = Application.objects.create(adopter=self.adopter, pet=self.pet, status="approved")
+        visit_on(self.app, timezone.localdate())
         self.authenticate(self.staff)
 
     def record(self, route="canonical", **overrides):
@@ -1675,6 +1675,7 @@ class FixedOnsitePaymentTests(BaseAPITestCase):
         self.assertEqual(self.record().status_code, 201)
         pet = Pet.objects.create(name="Another pet", species="cat", age_years=1)
         self.app = Application.objects.create(adopter=self.adopter, pet=pet, status="approved")
+        visit_on(self.app, timezone.localdate())
         self.assertTrue(self.summary().data["can_record_payment"])
         self.assertEqual(self.record("application").status_code, 201)
         self.assertEqual(Payment.objects.filter(status="completed").count(), 2)

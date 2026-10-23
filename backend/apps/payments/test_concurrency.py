@@ -7,6 +7,8 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.applications.models import Application
+from apps.appointments.eligibility import philippine_today
+from apps.appointments.testing import visit_on
 from apps.audit.models import AuditLog
 from apps.notifications.models import Notification
 from apps.pets.models import Pet
@@ -20,6 +22,7 @@ class ConcurrentFixedPaymentTests(TransactionTestCase):
         adopter = User.objects.create_user(email="concurrent-adopter@example.com")
         pet = Pet.objects.create(name="Concurrency pet", species="cat", age_years=1)
         app = Application.objects.create(adopter=adopter, pet=pet, status="approved")
+        visit_on(app, philippine_today())
         barrier = Barrier(2)
 
         def record(url):

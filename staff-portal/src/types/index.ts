@@ -64,6 +64,12 @@ export interface Pet {
   updated_at: string;
 }
 
+export interface OnsiteVisitState {
+  appointment_date: string | null;
+  date_reached: boolean;
+  message: string;
+}
+
 export interface Application {
   id: string;
   adopter: string;
@@ -96,6 +102,7 @@ export interface Application {
   total_paid?: string;
   is_fee_paid?: boolean;
   turnover_eligible?: boolean;
+  onsite_visit?: OnsiteVisitState;
 }
 
 export interface Document {
@@ -158,6 +165,7 @@ export interface AdoptionPackage {
 }
 
 export interface AdoptionRecord {
+  onsite_visit?: OnsiteVisitState;
   id: string;
   /** Backend-generated permanent transaction ID (only set when completed). */
   transaction_id?: string | null;
@@ -260,6 +268,7 @@ export interface Payment {
  * the backend's adoption_fee field.
  */
 export interface PaymentSummary {
+  onsite_visit?: OnsiteVisitState;
   application_id: string;
   adoption_fee: string;
   total_paid: string;

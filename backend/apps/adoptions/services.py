@@ -228,15 +228,8 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
     if app.status != "approved":
         raise ValidationError("Only an approved application can be completed as an adoption.")
 
-    appointment = (
-        app.appointments.filter(status="confirmed")
-        .order_by("-requested_date")
-        .first()
-    )
-    if not appointment:
-        raise ValidationError(
-            "The onsite visit date must be confirmed before turnover can be completed."
-        )
+    from apps.appointments.eligibility import require_onsite_visit, philippine_today
+    appointment = require_onsite_visit(app)
 
     total_completed = (
         app.payments.filter(status=Payment.Status.COMPLETED).aggregate(
@@ -250,7 +243,7 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
             f"Total completed: ₱{total_completed:.2f}."
         )
 
-    today = timezone.localdate()
+    today = philippine_today()
     now = timezone.now()
 
     # Lock the Pet row as well under the transaction to ensure pet state remains atomic

@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
 from apps.payments.models import Payment
+from apps.appointments.eligibility import onsite_visit_state
 from .models import AdoptionRecord
 
 
@@ -21,6 +22,10 @@ class AdoptionRecordSerializer(serializers.ModelSerializer):
     adoption_fee = serializers.SerializerMethodField()
     total_paid = serializers.SerializerMethodField()
     is_fee_paid = serializers.SerializerMethodField()
+    onsite_visit = serializers.SerializerMethodField()
+
+    def get_onsite_visit(self, obj):
+        return onsite_visit_state(obj.application)
 
     class Meta:
         model = AdoptionRecord
@@ -29,7 +34,7 @@ class AdoptionRecordSerializer(serializers.ModelSerializer):
             "adopter", "adopter_email", "staff_member", "staff_email",
             "appointment", "appointment_id", "appointment_date", "appointment_status",
             "status", "adoption_date", "completed_date", "completed_at",
-            "adoption_fee", "total_paid", "is_fee_paid",
+            "adoption_fee", "total_paid", "is_fee_paid", "onsite_visit",
             "notes", "return_reason", "return_date", "returned_at",
             "cancellation_reason", "cancelled_at", "created_at", "updated_at",
         ]
@@ -40,7 +45,7 @@ class AdoptionRecordSerializer(serializers.ModelSerializer):
             "cancellation_reason", "cancelled_at",
             "return_reason", "return_date", "returned_at",
             "completed_date", "completed_at",
-            "adoption_fee", "total_paid", "is_fee_paid",
+            "adoption_fee", "total_paid", "is_fee_paid", "onsite_visit",
             "created_at", "updated_at",
         ]
 

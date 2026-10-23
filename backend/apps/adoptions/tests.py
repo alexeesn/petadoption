@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from apps.accounts.tests import BaseAPITestCase
 from apps.appointments.models import Appointment
+from apps.appointments.testing import OnsiteFlowTestCase
 from apps.audit.models import AuditLog
 from apps.pets.models import Pet
 from apps.applications.models import Application
@@ -152,7 +153,7 @@ def next_weekday(days_ahead=1):
     return day
 
 
-class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
+class AppointmentApprovalSchedulesAdoptionTests(OnsiteFlowTestCase):
     """Approving the onsite visit date schedules the adoption record.
 
     Staff never create a Scheduled record by hand: the appointment approval
@@ -395,6 +396,7 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
         self.assertEqual(record.status, "scheduled")
 
         # Existing onsite payment workflow.
+        self.arrive_on(self.visit_date)
         self.assertEqual(self.record_payment().status_code, 201)
 
         resp = self.complete()
@@ -415,7 +417,7 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
         self.assertEqual(record.adoption_date, self.visit_date)
 
 
-class CompletedAdoptionTransactionTests(BaseAPITestCase):
+class CompletedAdoptionTransactionTests(OnsiteFlowTestCase):
     """Regression tests for completed adoption transactions (pet release).
 
     Verifies the business rule that a completed transaction is defined by a
@@ -433,7 +435,7 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         self.application = Application.objects.create(
             adopter=self.adopter, pet=self.pet, status="approved"
         )
-        self.visit_date = next_weekday()
+        self.visit_date = timezone.localdate()
 
     def _setup_scheduled_and_paid(self, app=None, pet=None, adopter=None):
         target_app = app or self.application
@@ -642,7 +644,7 @@ class CompletedAdoptionTransactionTests(BaseAPITestCase):
         self.assertEqual(rec.transaction_id, original_tx_id)  # unchanged
         self.assertEqual(rec.notes, "Updated note")
 
-class Phase21HandoverHardeningTests(BaseAPITestCase):
+class Phase21HandoverHardeningTests(OnsiteFlowTestCase):
     """Phase 2.1 - Require explicit physical handover boolean true.
 
     Every completion route (confirm-turnover, complete-adoption, PATCH /api/adoptions/{id}/)
@@ -660,7 +662,7 @@ class Phase21HandoverHardeningTests(BaseAPITestCase):
         self.application = Application.objects.create(
             adopter=self.adopter, pet=self.pet, status="approved"
         )
-        self.visit_date = next_weekday()
+        self.visit_date = timezone.localdate()
         # Confirm appointment and record payment so only handover blocks completion
         self.authenticate(self.adopter)
         apt_resp = self.client.post(
@@ -669,6 +671,7 @@ class Phase21HandoverHardeningTests(BaseAPITestCase):
         )
         self.authenticate(self.staff)
         self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
+        self.arrive_on(Appointment.objects.get(pk=apt_resp.data['id']).requested_date)
         self.client.post(
             "/api/payments/record-onsite/",
             {"application": str(self.application.id), "amount": self.PAYMENT_FEE,
@@ -734,6 +737,7 @@ class Phase21HandoverHardeningTests(BaseAPITestCase):
         )
         self.authenticate(self.staff)
         self.client.post(f"/api/appointments/{apt_resp.data['id']}/approve/")
+        self.arrive_on(Appointment.objects.get(pk=apt_resp.data['id']).requested_date)
         self.client.post(
             "/api/payments/record-onsite/",
             {"application": str(app2.id), "amount": self.PAYMENT_FEE,

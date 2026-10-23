@@ -597,6 +597,9 @@ class StaffAccessTests(RBACTestCaseBase):
         self.assertEqual(resp.status_code, 201)
 
     def test_payment_create(self):
+        from apps.appointments.eligibility import philippine_today
+        from apps.appointments.testing import visit_on
+        visit_on(self.app, philippine_today())
         resp = self.client.post("/api/payments/", {
             "application": str(self.app.id),
             "amount": 50, "method": "cash",

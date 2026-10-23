@@ -138,6 +138,19 @@ try {
   const paymentRow = staff.getByRole('row').filter({ hasText: fixture.receipt });
   await expect(paymentRow).toContainText('completed');
   await expect(paymentRow.getByRole('button', { name: 'Receipt PDF', exact: true })).toBeVisible();
+  await staff.getByRole('button', { name: '+ Record Onsite Payment', exact: true }).click();
+  await staff.getByLabel('Eligible Confirmed Appointment').selectOption(fixture.futureAppointment);
+  await expect(staff.getByRole('status').filter({ hasText: 'The appointment date has not arrived yet' })).toBeVisible();
+  await expect(staff.getByRole('form', { name: 'Record onsite payment' })).toHaveCount(0);
+  await staff.goto(`${staffUrl}/applications/${fixture.futureApplication}`);
+  await expect(staff.getByRole('button', { name: 'Record Payment', exact: true })).toBeDisabled();
+  await expect(staff.getByRole('button', { name: 'Complete Adoption', exact: true })).toBeDisabled();
+  await expect(staff.getByRole('status').filter({ hasText: 'The appointment date has not arrived yet' })).toBeVisible();
+  await staff.goto(`${staffUrl}/adoptions`);
+  const futureRow = staff.getByRole('row').filter({ hasText: 'Future Visit Buddy' });
+  await expect(futureRow.getByRole('button', { name: 'Complete Adoption', exact: true })).toBeDisabled();
+  await expect(futureRow).toContainText('The appointment date has not arrived yet');
+  console.log('Future appointments block payment entry and completion across Payment Records, Application Review and Adoption Records.');
   assert.deepEqual(errors, []);
   console.log('Adopter sees return details after reload; Payment Records retains the completed payment and receipt. No browser errors.');
 } finally {

@@ -422,7 +422,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         from apps.payments.constants import PROTOTYPE_ADOPTION_FEE
         from apps.payments.models import Payment
         from apps.payments.serializers import PaymentSerializer
-        from apps.appointments.models import Appointment
         from django.db.models import Sum
         from decimal import Decimal
 
@@ -433,8 +432,9 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             or Decimal("0.00")
         )
         is_paid = total >= PROTOTYPE_ADOPTION_FEE
-        has_appt = app.appointments.filter(status=Appointment.Status.CONFIRMED).exists()
-        eligible = (app.status == Application.Status.APPROVED) and has_appt and is_paid
+        from apps.appointments.eligibility import onsite_visit_state
+        visit = onsite_visit_state(app)
+        eligible = (app.status == Application.Status.APPROVED) and visit["date_reached"] and is_paid
 
         return Response({
             "application_id": str(app.id),
@@ -443,9 +443,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "is_fee_paid": is_paid,
             "can_record_payment": (
                 app.status == Application.Status.APPROVED
+                and visit["date_reached"]
                 and not app.payments.filter(status=Payment.Status.COMPLETED).exists()
             ),
             "turnover_eligible": eligible,
+            "onsite_visit": visit,
             "payments": PaymentSerializer(
                 app.payments.all(), many=True, context=self.get_serializer_context()
             ).data,
