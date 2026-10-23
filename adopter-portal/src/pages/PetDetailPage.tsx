@@ -255,8 +255,7 @@ export default function PetDetailPage() {
 
           <div className="mt-7 space-y-3 rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
             <InfoRow label="Gender" value={capitalize(pet.gender)} />
-            <InfoRow label="Size" value={pet.size ? capitalize(pet.size) : '—'} />
-            {pet.weight_kg && <InfoRow label="Weight" value={`${pet.weight_kg} kg`} />}
+            <InfoRow label="Weight" value={pet.weight_kg != null ? `${pet.weight_kg} kg` : 'Not recorded'} />
             <InfoRow label="Color" value={formatPetLabel(pet.color) || '—'} />
             <InfoRow label="At the center since" value={pet.arrival_date ? formatDate(pet.arrival_date) : '—'} />
           </div>

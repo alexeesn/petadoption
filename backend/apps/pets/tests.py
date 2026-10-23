@@ -1,4 +1,5 @@
 import base64
+from decimal import Decimal
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
@@ -163,6 +164,74 @@ class PetTests(BaseAPITestCase):
                 user=staff,
             ).exists()
         )
+
+
+class PetWeightTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate(self.create_staff())
+
+    def test_weight_survives_multipart_create_list_detail_and_edit(self):
+        response = self.client.post('/api/pets/', {
+            'name': 'Luna', 'species': 'cat', 'weight_kg': '4.50',
+        }, format='multipart')
+        self.assertEqual(response.status_code, 201, response.data)
+        pet = Pet.objects.get(pk=response.data['id'])
+        self.assertEqual(pet.weight_kg, Decimal('4.50'))
+        self.assertEqual(response.data['weight_kg'], '4.50')
+
+        updated = self.client.patch(f'/api/pets/{pet.pk}/', {
+            'weight_kg': '5.25',
+        }, format='json')
+        self.assertEqual(updated.status_code, 200, updated.data)
+        pet.refresh_from_db()
+        self.assertEqual(pet.weight_kg, Decimal('5.25'))
+        self.unauthenticate()
+        detail = self.client.get(f'/api/pets/{pet.pk}/')
+        listing = self.client.get('/api/pets/')
+        self.assertEqual(detail.data['weight_kg'], '5.25')
+        self.assertEqual(listing.data['results'][0]['weight_kg'], '5.25')
+
+    def test_unknown_weight_is_nullable_and_can_be_cleared(self):
+        response = self.client.post('/api/pets/', {
+            'name': 'Luna', 'species': 'cat',
+        }, format='multipart')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertIsNone(response.data['weight_kg'])
+        url = f"/api/pets/{response.data['id']}/"
+        self.assertEqual(self.client.patch(url, {'weight_kg': '0.01'}, format='json').status_code, 200)
+        cleared = self.client.patch(url, {'weight_kg': None}, format='json')
+        self.assertEqual(cleared.status_code, 200, cleared.data)
+        self.assertIsNone(Pet.objects.get(pk=response.data['id']).weight_kg)
+
+    def test_invalid_weights_are_rejected_on_create_and_edit(self):
+        pet = Pet.objects.create(name='Luna', species='cat', weight_kg=Decimal('4.50'))
+        for weight in ['-1', '0', '1.234', '10000', 'NaN', 'small']:
+            with self.subTest(weight=weight):
+                created = self.client.post('/api/pets/', {
+                    'name': 'Invalid', 'species': 'cat', 'weight_kg': weight,
+                }, format='multipart')
+                self.assertEqual(created.status_code, 400, created.data)
+                self.assertIn('weight_kg', created.data)
+                edited = self.client.patch(f'/api/pets/{pet.pk}/', {
+                    'weight_kg': weight,
+                }, format='json')
+                self.assertEqual(edited.status_code, 400, edited.data)
+                self.assertIn('weight_kg', edited.data)
+        pet.refresh_from_db()
+        self.assertEqual(pet.weight_kg, Decimal('4.50'))
+        self.assertEqual(Pet.objects.count(), 1)
+
+    def test_public_weight_range_filter_uses_saved_weights(self):
+        for weight in ['0.10', '4.50', '5.25', '28.50', None]:
+            Pet.objects.create(name=f'Weight {weight}', species='cat', weight_kg=weight)
+        self.unauthenticate()
+        response = self.client.get('/api/pets/', {
+            'weight_kg__gte': '4.50', 'weight_kg__lte': '5.25',
+        })
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['count'], 2)
+        self.assertEqual({p['weight_kg'] for p in response.data['results']}, {'4.50', '5.25'})
 
 
 # A valid 1x1 PNG so DRF's ImageField (Pillow) accepts the upload.
@@ -402,7 +471,7 @@ class PetAgeMigrationTests(TransactionTestCase):
     """
 
     AGE_FIELD_MIGRATION = ("pets", "0002_pet_age_years_and_arrival_date")
-    LATEST_MIGRATION = ("pets", "0003_pet_age_months_alter_pet_age_years")
+    LATEST_MIGRATION = ("pets", "0004_alter_pet_weight_kg")
     OLD_SCHEMA = ("pets", "0001_initial")
 
     def tearDown(self):

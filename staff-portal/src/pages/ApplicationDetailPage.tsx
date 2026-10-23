@@ -512,7 +512,7 @@ export default function ApplicationDetailPage() {
             <Detail label="Age" value={formatPetAge(pet?.age_years, pet?.age_months)} />
             <Detail label="Arrived at the center" value={pet?.arrival_date ? formatDate(pet.arrival_date) : ''} />
             <Detail label="Gender" value={pet?.gender ? humanise(pet.gender) : ''} />
-            <Detail label="Size" value={pet?.size ? humanise(pet.size) : ''} />
+            <Detail label="Weight" value={pet?.weight_kg != null ? `${pet.weight_kg} kg` : 'Not recorded'} />
             <Detail label="Color" value={pet?.color} />
             <Detail label="Pet status" value={pet ? <StatusBadge status={pet.status} /> : ''} />
             <Detail label="Vaccinated" value={pet ? (pet.is_vaccinated ? 'Yes' : 'No') : ''} />

@@ -51,7 +51,7 @@ export interface Pet {
   age_months: number;
   gender: string;
   size: string;
-  weight_kg?: string;
+  weight_kg?: string | null;
   color: string;
   description: string;
   arrival_date: string | null;

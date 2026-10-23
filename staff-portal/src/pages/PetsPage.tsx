@@ -13,7 +13,7 @@ const emptyForm = {
   age_years: '',
   age_months: '0',
   gender: 'unknown',
-  size: 'medium',
+  weight_kg: '',
   color: '',
   description: '',
   arrival_date: '',
@@ -33,7 +33,7 @@ function petToForm(pet: Pet) {
     age_years: pet.age_years !== undefined && pet.age_years !== null ? String(pet.age_years) : '',
     age_months: pet.age_months !== undefined && pet.age_months !== null ? String(pet.age_months) : '0',
     gender: pet.gender,
-    size: pet.size,
+    weight_kg: pet.weight_kg ?? '',
     color: pet.color,
     description: pet.description,
     arrival_date: pet.arrival_date ?? '',
@@ -191,6 +191,11 @@ export default function PetsPage() {
       setSubmitError(`Age (Months) must be a whole number between 0 and ${MAX_AGE_MONTHS}.`);
       return;
     }
+    const weight = form.weight_kg.trim();
+    if (weight !== '' && (!/^\d+(\.\d{1,2})?$/.test(weight) || Number(weight) < 0.01 || Number(weight) > 9999.99)) {
+      setSubmitError('Weight must be between 0.01 and 9999.99 kg, with up to 2 decimal places.');
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
@@ -198,6 +203,7 @@ export default function PetsPage() {
         //    this request can never remove a photo.
         await petService.update(editing.id, {
           ...form,
+          weight_kg: weight || null,
           age_years: ageYears,
           age_months: ageMonths,
           arrival_date: form.arrival_date || null,
@@ -219,7 +225,7 @@ export default function PetsPage() {
         fd.append('age_years', String(ageYears));
         fd.append('age_months', String(ageMonths));
         fd.append('gender', form.gender);
-        fd.append('size', form.size);
+        if (weight) fd.append('weight_kg', weight);
         fd.append('color', form.color);
         fd.append('description', form.description);
         if (form.arrival_date) fd.append('arrival_date', form.arrival_date);
@@ -297,16 +303,15 @@ export default function PetsPage() {
                 { value: 'unknown', label: 'Unknown' },
               ]}
             />
-            <Select
-              label="Size"
-              value={form.size}
-              onChange={(e) => setForm({ ...form, size: e.target.value })}
-              options={[
-                { value: 'small', label: 'Small' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'large', label: 'Large' },
-                { value: 'extra_large', label: 'Extra Large' },
-              ]}
+            <Input
+              label="Weight (kg)"
+              type="number"
+              min="0.01"
+              max="9999.99"
+              step="0.01"
+              placeholder="e.g. 4.5"
+              value={form.weight_kg}
+              onChange={(e) => setForm({ ...form, weight_kg: e.target.value })}
             />
             <Input label="Color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} />
             <Input
@@ -463,7 +468,7 @@ export default function PetsPage() {
               <div className="p-4">
                 <h4 className="pet-name text-xl font-bold text-stone-900">{formatPetLabel(form.name) || 'Pet name'}</h4>
                 <p className="mt-1 text-sm text-stone-600">{formatPetLabel(form.breed) || formatPetLabel(form.species)}{form.age_years !== '' && ` \u00b7 ${formatPetAge(Number(form.age_years), Number(form.age_months))}`}</p>
-                <p className="mt-1 text-sm text-stone-500">{formatPetLabel(form.gender)} &middot; {formatPetLabel(form.size.replace(/_/g, ' '))}</p>
+                <p className="mt-1 text-sm text-stone-500">{formatPetLabel(form.gender)}{form.weight_kg !== '' && ` · ${form.weight_kg} kg`}</p>
                 {form.color.trim() && <p className="mt-3 border-t border-stone-200 pt-3 text-sm text-stone-600">{formatPetLabel(form.color)}</p>}
                 <p className="pet-copy mt-3 text-stone-600">{form.description || 'Your description will appear here.'}</p>
               </div>
@@ -485,7 +490,7 @@ export default function PetsPage() {
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
-                  {['Name', 'Species', 'Breed', 'Age', 'Status', ''].map((h) => (
+                  {['Name', 'Species', 'Breed', 'Age', 'Weight (kg)', 'Status', ''].map((h) => (
                     <th key={h} scope="col" className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{h}</th>
                   ))}
                 </tr>
@@ -497,6 +502,7 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm text-slate-600 capitalize">{pet.species}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{formatPetLabel(pet.breed)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years, pet.age_months)}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{pet.weight_kg ?? 'Not recorded'}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openEdit(pet)} className="text-primary-600 hover:underline text-sm font-medium">Edit</button>

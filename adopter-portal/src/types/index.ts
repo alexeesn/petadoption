@@ -51,7 +51,7 @@ export interface Pet {
   is_vaccinated: boolean
   is_neutered: boolean
   adoption_fee?: number
-  weight_kg?: number
+  weight_kg?: string | null
   images?: PetImage[]
   primary_image?: PetImage | null
   health_summary?: PetHealthSummary | null

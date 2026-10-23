@@ -47,7 +47,7 @@ class PetListSerializer(serializers.ModelSerializer):
         model = Pet
         fields = [
             "id", "name", "species", "breed", "age_years", "age_months", "gender", "size",
-            "color", "status", "is_vaccinated", "is_neutered",
+            "weight_kg", "color", "status", "is_vaccinated", "is_neutered",
             "arrival_date", "primary_image", "created_at",
         ]
 

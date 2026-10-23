@@ -18,7 +18,11 @@ class PetViewSet(viewsets.ModelViewSet):
     queryset = Pet.objects.prefetch_related("images").all()
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["status", "species", "gender", "size", "is_vaccinated", "is_neutered"]
+    filterset_fields = {
+        "status": ["exact"], "species": ["exact"], "gender": ["exact"],
+        "size": ["exact"], "is_vaccinated": ["exact"], "is_neutered": ["exact"],
+        "weight_kg": ["gte", "lte"],
+    }
     search_fields = ["name", "breed", "description"]
     ordering_fields = ["name", "age_years", "age_months", "created_at"]
     ordering = ["-created_at"]

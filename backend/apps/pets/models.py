@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -54,7 +55,10 @@ class Pet(models.Model):
     )
     gender = models.CharField(max_length=10, choices=Gender.choices, default=Gender.UNKNOWN)
     size = models.CharField(max_length=15, choices=Size.choices, default=Size.MEDIUM)
-    weight_kg = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    weight_kg = models.DecimalField(
+        max_digits=6, decimal_places=2, blank=True, null=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
     color = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
     arrival_date = models.DateField(

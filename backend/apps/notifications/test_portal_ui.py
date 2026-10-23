@@ -35,6 +35,8 @@ class PortalUIBrowserTests(LiveServerTestCase):
             pet = Pet.objects.create(name="  bRUNo  " if index == 0 else f"Available Friend {index + 1:02d}", species="dog" if index % 2 else "cat", breed="sHIH   tZU" if index == 0 else "Aspin" if index % 2 else "Puspin", color="tAN  AND  wHITE" if index == 0 else "", age_years=2, gender="female", description="Friendly and gentle.\nEnjoys a quiet home." if index == 0 else "A saved public pet description.")
             if index == 0:
                 public_pet = str(pet.pk)
+            pet.weight_kg = '4.50'
+            pet.save(update_fields=['weight_kg'])
         apps = {}
         for status, name in [("approved", "Milo"), ("adoption_completed", "Luna"), ("pending_documents", "Coco"), ("rejected", "Zoro")]:
             pet = Pet.objects.create(name=name, species="dog", status="adopted" if status == "adoption_completed" else "pending")

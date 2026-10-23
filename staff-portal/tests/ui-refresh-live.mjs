@@ -117,6 +117,15 @@ try {
   await adopter.getByRole('link', { name: 'Next page', exact: true }).click();
   await expect(adopter.locator('.pet-card')).toHaveCount(6);
   assert.notEqual(await adopter.locator('.pet-card h3').first().innerText(), firstPageName);
+  await expect(adopter.locator('.pet-card').first()).toContainText('4.50 kg');
+  await adopter.getByLabel('Min weight (kg)', { exact: true }).fill('5');
+  await adopter.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(adopter.getByText('No pets match your search.', { exact: true })).toBeVisible();
+  await adopter.getByLabel('Min weight (kg)', { exact: true }).fill('4');
+  await adopter.getByLabel('Max weight (kg)', { exact: true }).fill('4.5');
+  await adopter.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(adopter.locator('.pet-card')).toHaveCount(20);
+  await noOverflow(adopter);
   checks++;
 
   const countBefore = (await read('adopter', '/notifications/unread-count/')).unread_count;
@@ -190,7 +199,17 @@ try {
 
   // Staff editor and public pet detail must present the same saved labels.
   await staff.goto(`${origins.staff}/pets`);
+  await staff.getByRole('row').filter({ hasText: 'Available Friend 26' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(staff.getByLabel('Weight (kg)', { exact: true })).toHaveValue('4.50');
+  await staff.getByRole('button', { name: 'Cancel', exact: true }).click();
   await staff.getByRole('button', { name: 'Add New Pet', exact: true }).click();
+  await expect(staff.getByLabel('Size', { exact: true })).toHaveCount(0);
+  const weight = staff.getByLabel('Weight (kg)', { exact: true });
+  await expect(weight).toHaveValue('');
+  await weight.fill('-1');
+  assert.equal(await weight.evaluate(input => input.checkValidity()), false);
+  await weight.fill('4.5');
+  assert.equal(await weight.evaluate(input => input.checkValidity()), true);
   await staff.getByLabel('Name', { exact: true }).fill('  bRUNo  ');
   await staff.getByLabel('Breed', { exact: true }).fill('sHIH   tZU');
   await staff.getByLabel('Color', { exact: true }).fill('tAN  AND  wHITE');
@@ -200,10 +219,12 @@ try {
   await expect(preview.getByRole('heading', { name: 'Bruno', exact: true })).toBeVisible();
   await expect(preview).toContainText('Shih Tzu');
   await expect(preview).toContainText('Tan And White');
+  await expect(preview).toContainText('4.5 kg');
   await expect(staff.getByLabel('Name', { exact: true })).toHaveValue('  bRUNo  ');
   await adopter.goto(`${origins.adopter}/pets/${fixture.public_pet}`);
   await expect(adopter.getByRole('heading', { name: 'Bruno', exact: true })).toBeVisible();
   await expect(adopter.getByText('Tan And White', { exact: true })).toBeVisible();
+  await expect(adopter.getByText('4.50 kg', { exact: true })).toBeVisible();
   await expect(adopter.getByText('Friendly and gentle.', { exact: false })).toBeVisible();
   for (const mode of ['light', 'dark']) {
     for (const page of [adopter, staff]) {

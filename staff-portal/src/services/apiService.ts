@@ -96,7 +96,7 @@ export const petService = {
   create: (data: Record<string, unknown> | FormData) =>
     api.post('/pets/', data, data instanceof FormData ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined),
   // PATCH so editing only the fields sent by the Edit Pet form leaves every
-  // other pet field (status, weight, ...) untouched. Photos live on their own
+  // other pet field (status, ...) untouched. Photos live on their own
   // endpoint and are therefore never affected by a pet information update.
   update: (id: string, data: Record<string, unknown>) => api.patch(`/pets/${id}/`, data),
   remove: (id: string) => api.delete(`/pets/${id}/`),
