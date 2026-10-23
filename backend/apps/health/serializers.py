@@ -20,6 +20,13 @@ class HealthRecordSerializer(serializers.ModelSerializer):
     # The staff list shows the pet by name; `pet` alone is a UUID.
     pet_name = serializers.CharField(source="pet.name", read_only=True)
 
+    def validate_pet(self, value):
+        if self.instance is not None and value.pk != self.instance.pet_id:
+            raise serializers.ValidationError(
+                "A health record cannot be moved to another pet. Edit that pet's own record instead."
+            )
+        return value
+
     class Meta:
         model = HealthRecord
         fields = [

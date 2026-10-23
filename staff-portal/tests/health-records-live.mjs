@@ -1,0 +1,108 @@
+// Only run through HealthRecordBrowserTests: no writes to the development DB.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { chromium, expect as baseExpect } from '@playwright/test';
+
+const fixture = JSON.parse(process.env.PAWCONNECT_HEALTH_FIXTURE || 'null');
+if (!fixture || !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(fixture.api) || fixture.api.endsWith(':8000')) throw Error('Isolated live-server fixture is required.');
+const origin = 'http://127.0.0.1:5195';
+const expect = baseExpect.configure({ timeout: 15000 });
+const errors = [];
+let browser;
+let page;
+process.env.VITE_API_BASE_URL = '/api';
+const source = `import { createServer } from 'vite'; const server = await createServer({ configFile:'vite.config.ts', envFile:false, logLevel:'error', server:{host:'127.0.0.1',port:5195,strictPort:true,proxy:{'/api':{target:${JSON.stringify(fixture.api)},changeOrigin:true}}} }); await server.listen(); console.log('HEALTH_UI_READY');`;
+const server = spawn(process.execPath, ['--input-type=module', '-e', source], { env: process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+
+async function read(path) {
+  const response = await fetch(`${fixture.api}/api${path}`, { headers: { Authorization: `Token ${fixture.staff.token}` } });
+  assert.equal(response.status, 200);
+  return response.json();
+}
+
+try {
+  await new Promise((resolve, reject) => {
+    let stderr = '';
+    const timer = setTimeout(() => reject(Error(`Vite startup timed out: ${stderr}`)), 30000);
+    server.stderr.on('data', data => { stderr += data.toString(); });
+    server.stdout.on('data', data => { if (data.toString().includes('HEALTH_UI_READY')) { clearTimeout(timer); resolve(); } });
+    server.on('error', error => { clearTimeout(timer); reject(error); });
+    server.on('exit', code => { clearTimeout(timer); reject(Error(`Vite exited (${code}): ${stderr}`)); });
+  });
+  browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  await context.addInitScript(auth => {
+    localStorage.setItem('staff_auth_token', auth.token);
+    localStorage.setItem('staff_auth_user', JSON.stringify(auth.user));
+  }, fixture.staff);
+  page = await context.newPage();
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`${origin}/health`);
+  await expect(page.getByRole('heading', { name: 'Health Records', exact: true })).toBeVisible();
+  await expect(page.locator('tbody tr')).toHaveCount(20);
+  await page.getByRole('navigation', { name: 'Health record pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Add Health Record', exact: true }).click();
+  const choice = page.getByRole('combobox', { name: 'Pet', exact: true });
+  await expect(choice).toBeEnabled();
+  // Eligible choices are fetched across pages; existing pets are never offered.
+  await expect(choice.locator('option')).toHaveCount(26);
+  assert.ok((await choice.locator('option').allTextContents()).every(name => !name.startsWith('Recorded')));
+  await choice.selectOption(fixture.eligible_pet);
+  // Even an older medical date must not hide a newly added record.
+  await page.getByLabel('Record Date', { exact: true }).fill('2025-10-01');
+  await page.getByLabel('Diagnosis', { exact: true }).fill('Initial checkup');
+  await page.getByLabel('Treatment', { exact: true }).fill('Rest and monitoring');
+  await page.getByLabel('Veterinarian Name', { exact: true }).fill('Dr. Reyes');
+  await page.getByLabel('Veterinary Clinic', { exact: true }).fill('PawCare');
+  await page.getByLabel('Next Checkup Date', { exact: true }).fill('2026-10-15');
+  await page.getByLabel('Notes', { exact: true }).fill('Initial care plan');
+  const created = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/health-records/'));
+  await page.getByRole('button', { name: 'Save Record', exact: true }).click();
+  const createResponse = await created;
+  assert.equal(createResponse.status(), 201);
+  const record = await createResponse.json();
+  await expect(page.getByText('Health record created.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Health record pages' })).toContainText('Page 1');
+  await expect(page.locator('tbody tr').first()).toContainText('Eligible 24');
+  await page.getByRole('row').filter({ hasText: 'Eligible 24' }).getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toHaveValue('Initial checkup');
+  await expect(page.getByLabel('Treatment', { exact: true })).toHaveValue('Rest and monitoring');
+  await expect(page.getByLabel('Veterinarian Name', { exact: true })).toHaveValue('Dr. Reyes');
+  await expect(page.getByLabel('Veterinary Clinic', { exact: true })).toHaveValue('PawCare');
+  await expect(page.getByLabel('Next Checkup Date', { exact: true })).toHaveValue('2026-10-15');
+  await expect(page.getByLabel('Pet', { exact: true })).toHaveAttribute('readonly', '');
+  await page.getByLabel('Diagnosis', { exact: true }).fill('Recovered after follow-up');
+  await page.getByLabel('Notes', { exact: true }).fill('Updated care plan');
+  await page.getByLabel('Next Checkup Date', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect(page.getByText('Health record updated.', { exact: true })).toBeVisible();
+  const saved = await read(`/health-records/${record.id}/`);
+  assert.equal(saved.pet, fixture.eligible_pet);
+  assert.equal(saved.diagnosis, 'Recovered after follow-up');
+  assert.equal(saved.next_checkup_date, null);
+  await page.reload();
+  await expect(page.getByRole('row').filter({ hasText: 'Eligible 24' })).toContainText('Recovered after follow-up');
+  await page.getByRole('button', { name: 'Add Health Record', exact: true }).click();
+  await expect(choice.locator('option')).toHaveCount(25);
+  assert.ok(!(await choice.locator('option').allTextContents()).some(name => name.includes('Eligible 24')));
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Health record pages' }).getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.locator('tbody tr')).toHaveCount(6);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const card = page.getByRole('article').first();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit Health Record', exact: true })).toBeVisible();
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  await page.getByLabel('Notes', { exact: true }).fill('Cancelled edit must not save');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.deepEqual(errors, []);
+  console.log('PASS: live health record create/edit/reload, existing-pet exclusion, complete paginated choices, nullable date clearing, record pagination, mobile Edit and Cancel.');
+} catch (error) {
+  if (page) console.error((await page.locator('body').innerText()).slice(0, 3500));
+  throw error;
+} finally {
+  await browser?.close();
+  server.kill();
+}

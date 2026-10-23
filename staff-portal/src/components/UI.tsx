@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useId } from 'react';
 import { PawMark } from './Icons';
 
 interface StatusBadgeProps {
@@ -147,10 +147,12 @@ export function Textarea({
   required?: boolean;
   placeholder?: string;
 }) {
+  const id = useId();
   return (
-    <label className="block">
-      <span className="field-label mb-1.5">{label}</span>
+    <div className="block">
+      <label htmlFor={id} className="field-label mb-1.5">{label}</label>
       <textarea
+        id={id}
         value={value}
         onChange={onChange}
         rows={rows}
@@ -158,7 +160,7 @@ export function Textarea({
         placeholder={placeholder}
         className="field-input"
       />
-    </label>
+    </div>
   );
 }
 

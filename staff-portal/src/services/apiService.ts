@@ -1,5 +1,5 @@
 import api from './api';
-import type { User, Notification, PaginatedResponse } from '../types';
+import type { User, Notification, PaginatedResponse, Pet, HealthRecord } from '../types';
 
 export async function login(email: string, password: string) {
   const res = await api.post('/auth/login/', { email, password });
@@ -156,9 +156,21 @@ export const reviewService = {
 
 // ----- Health Records -----
 export const healthService = {
-  list: (params?: Record<string, unknown>) => api.get('/health-records/', { params }),
+  list: (params?: Record<string, unknown>) => api.get<PaginatedResponse<HealthRecord>>('/health-records/', { params }),
+  eligiblePets: async (): Promise<Pet[]> => {
+    const pets: Pet[] = [];
+    let page = 1;
+    let hasNext = true;
+    while (hasNext) {
+      const { data } = await api.get<PaginatedResponse<Pet>>('/health-records/eligible-pets/', { params: { page } });
+      pets.push(...data.results);
+      hasNext = data.next !== null;
+      page += 1;
+    }
+    return pets;
+  },
   create: (data: Record<string, unknown>) => api.post('/health-records/', data),
-  update: (id: string, data: Record<string, unknown>) => api.put(`/health-records/${id}/`, data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/health-records/${id}/`, data),
   remove: (id: string) => api.delete(`/health-records/${id}/`),
   vaccinations: (params?: Record<string, unknown>) => api.get('/health-records/vaccinations/', { params }),
 };

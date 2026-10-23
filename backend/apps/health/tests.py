@@ -1,6 +1,6 @@
 from datetime import date
 
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 from apps.accounts.tests import BaseAPITestCase
 from apps.pets.models import Pet
 from apps.health.models import HealthRecord, Vaccination
@@ -110,10 +110,13 @@ class HealthRecordCreationTests(BaseAPITestCase):
 
     def test_created_record_appears_in_the_list_and_detail(self):
         self.authenticate(self.staff)
+        other_pet = Pet.objects.create(name='Earlier patient', species='cat')
+        HealthRecord.objects.create(pet=other_pet, record_date='2099-01-01')
         created_id = self.create_record().data["id"]
 
         listed = self.client.get("/api/health-records/")
         self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.data['results'][0]['id'], created_id)
         rows = {row["id"]: row for row in listed.data["results"]}
         self.assertIn(created_id, rows)
         self.assertEqual(rows[created_id]["pet_name"], "Buddy")
@@ -164,6 +167,139 @@ class HealthRecordCreationTests(BaseAPITestCase):
         self.authenticate(self.adopter)
         self.assertEqual(self.create_record().status_code, 403)
         self.assertEqual(HealthRecord.objects.count(), 0)
+
+
+    def test_duplicate_creation_returns_edit_guidance_without_changing_record(self):
+        self.authenticate(self.staff)
+        first = self.create_record()
+        duplicate = self.create_record(diagnosis='Replacement must not be saved')
+        self.assertEqual(duplicate.status_code, 400, duplicate.data)
+        self.assertIn('Use Edit', str(duplicate.data['pet']))
+        self.assertEqual(HealthRecord.objects.filter(pet=self.pet).count(), 1)
+        self.assertEqual(HealthRecord.objects.get(pk=first.data['id']).diagnosis, self.FORM_PAYLOAD['diagnosis'])
+
+    def test_staff_can_edit_fields_and_clear_next_checkup(self):
+        self.authenticate(self.staff)
+        created = self.create_record()
+        second_staff = self.create_staff(email='health-editor@example.com')
+        self.authenticate(second_staff)
+        update = self.client.patch(f"/api/health-records/{created.data['id']}/", {
+            'pet': str(self.pet.pk), 'record_date': '2026-02-01',
+            'diagnosis': 'Recovered', 'treatment': 'Rest', 'notes': 'Edited care plan',
+            'veterinarian_name': 'Dr. Santos', 'veterinary_clinic': 'Updated clinic',
+            'next_checkup_date': None, 'created_by': str(second_staff.pk),
+        }, format='json')
+        self.assertEqual(update.status_code, 200, update.data)
+        record = HealthRecord.objects.get(pk=created.data['id'])
+        self.assertEqual(record.pet_id, self.pet.pk)
+        self.assertEqual(str(record.record_date), '2026-02-01')
+        self.assertEqual(record.diagnosis, 'Recovered')
+        self.assertEqual(record.treatment, 'Rest')
+        self.assertEqual(record.notes, 'Edited care plan')
+        self.assertEqual(record.veterinarian_name, 'Dr. Santos')
+        self.assertEqual(record.veterinary_clinic, 'Updated clinic')
+        self.assertIsNone(record.next_checkup_date)
+        self.assertEqual(record.created_by_id, self.staff.pk)
+        self.assertEqual(HealthRecord.objects.count(), 1)
+        detail = self.client.get(f'/api/health-records/{record.pk}/')
+        self.assertEqual(detail.data['diagnosis'], 'Recovered')
+        self.assertIsNone(detail.data['next_checkup_date'])
+
+    def test_edit_cannot_move_record_to_another_pet(self):
+        self.authenticate(self.staff)
+        created = self.create_record()
+        other_pet = Pet.objects.create(name='Luna', species='cat')
+        for method in [self.client.patch, self.client.put]:
+            response = method(f"/api/health-records/{created.data['id']}/", {
+                'pet': str(other_pet.pk), 'record_date': '2026-02-01',
+            }, format='json')
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertIn('pet', response.data)
+        self.assertEqual(HealthRecord.objects.get(pk=created.data['id']).pet_id, self.pet.pk)
+
+    def test_existing_dated_history_is_preserved_and_can_be_edited(self):
+        first = HealthRecord.objects.create(pet=self.pet, record_date='2025-01-01', notes='Old visit')
+        second = HealthRecord.objects.create(pet=self.pet, record_date='2026-01-01', notes='Recent visit')
+        self.authenticate(self.staff)
+        response = self.client.patch(f'/api/health-records/{second.pk}/', {
+            'pet': str(self.pet.pk), 'notes': 'Updated recent visit',
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(HealthRecord.objects.filter(pet=self.pet).count(), 2)
+        first.refresh_from_db()
+        self.assertEqual(first.notes, 'Old visit')
+        self.assertEqual(self.create_record().status_code, 400)
+
+    def test_eligible_choices_exclude_records_on_every_page(self):
+        for index in range(25):
+            recorded_pet = Pet.objects.create(name=f'Recorded {index:02d}', species='dog')
+            HealthRecord.objects.create(pet=recorded_pet, record_date='2026-01-01')
+            Pet.objects.create(name=f'Eligible {index:02d}', species='cat')
+        # The pet from setUp also has a record; it must not leak into choices.
+        HealthRecord.objects.create(pet=self.pet, record_date='2026-01-01')
+        self.authenticate(self.staff)
+        choices = []
+        for page in [1, 2]:
+            response = self.client.get('/api/health-records/eligible-pets/', {'page': page})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data['count'], 25)
+            choices.extend(response.data['results'])
+        self.assertEqual(len(choices), 25)
+        self.assertTrue(all(choice['name'].startswith('Eligible') for choice in choices))
+        self.assertEqual(
+            [choice['name'] for choice in choices],
+            [f'Eligible {index:02d}' for index in reversed(range(25))],
+        )
+        self.assertEqual(len({choice['id'] for choice in choices}), 25)
+
+    def test_eligible_pet_disappears_after_creation(self):
+        self.authenticate(self.staff)
+        before = self.client.get('/api/health-records/eligible-pets/')
+        self.assertEqual(before.data['count'], 1)
+        self.assertEqual(self.create_record().status_code, 201)
+        after = self.client.get('/api/health-records/eligible-pets/')
+        self.assertEqual(after.data['count'], 0)
+
+    def test_eligibility_and_edit_remain_staff_only(self):
+        self.authenticate(self.staff)
+        created = self.create_record()
+        url = f"/api/health-records/{created.data['id']}/"
+        self.authenticate(self.adopter)
+        self.assertEqual(self.client.get('/api/health-records/eligible-pets/').status_code, 403)
+        self.assertEqual(self.client.patch(url, {'notes': 'Not allowed'}, format='json').status_code, 403)
+        self.unauthenticate()
+        self.assertIn(self.client.get('/api/health-records/eligible-pets/').status_code, [401, 403])
+        self.assertIn(self.client.patch(url, {'notes': 'Not allowed'}, format='json').status_code, [401, 403])
+
+
+class HealthRecordConcurrencyTests(TransactionTestCase):
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_simultaneous_adds_create_only_one_record(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        from django.db import connections
+        from rest_framework.test import APIClient
+        from apps.accounts.models import User
+
+        staff = User.objects.create_user(email='health-concurrent@example.test', role='staff', is_email_verified=True)
+        pet = Pet.objects.create(name='Concurrent patient', species='dog')
+        barrier = Barrier(2)
+
+        def submit():
+            try:
+                client = APIClient()
+                client.force_authenticate(staff)
+                barrier.wait(timeout=10)
+                return client.post('/api/health-records/', {
+                    'pet': str(pet.pk), 'record_date': '2026-01-01',
+                }, format='json').status_code
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: submit(), range(2)))
+        self.assertEqual(sorted(results), [201, 400])
+        self.assertEqual(HealthRecord.objects.filter(pet=pet).count(), 1)
 
 
 class AdopterPetHealthSummaryTests(BaseAPITestCase):
