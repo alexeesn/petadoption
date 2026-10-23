@@ -419,13 +419,15 @@ class AppointmentDecisionEmailTests(BaseAPITestCase):
 
     def approve(self, appointment):
         self.authenticate(self.staff)
-        return self.client.post(f"/api/appointments/{appointment.id}/approve/")
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(f"/api/appointments/{appointment.id}/approve/")
 
     def reject(self, appointment, reason):
         self.authenticate(self.staff)
-        return self.client.post(
-            f"/api/appointments/{appointment.id}/reject/", {"reason": reason}
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(
+                f"/api/appointments/{appointment.id}/reject/", {"reason": reason}
+            )
 
     @staticmethod
     def display_date(value):

@@ -12,6 +12,15 @@ from .models import Application
 
 
 class ApplicationSerializer(serializers.ModelSerializer):
+    def validate_status(self, value):
+        if self.instance is not None and self.instance.status == "cancelled" and value != "cancelled":
+            raise serializers.ValidationError("A cancelled application cannot be reopened.")
+        if self.instance is not None and self.instance.status == "approved" and value == "cancelled":
+            raise serializers.ValidationError("Cancel the scheduled adoption through the adoption cancellation action.")
+        if self.instance is not None and self.instance.status == "approved" and value != "approved":
+            raise serializers.ValidationError("Use the coordinated adoption action to complete or cancel an approved application.")
+        return value
+
     adopter_email = serializers.EmailField(source="adopter.email", read_only=True)
     # Applicant information for the staff review page.  A user always has an
     # email, but the one-to-one profile is created lazily, so it is resolved

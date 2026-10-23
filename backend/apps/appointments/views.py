@@ -1,4 +1,5 @@
 from django.db import IntegrityError, transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -16,7 +17,10 @@ from .serializers import (
     AppointmentCreateSerializer,
     AppointmentRejectSerializer,
     AppointmentSerializer,
+    RescheduleInputSerializer,
+    RescheduleRequestSerializer,
 )
+from .services import ensure_open_application, mark_no_show, request_reschedule
 
 
 def _can_review(user):
@@ -35,7 +39,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     """
 
     queryset = Appointment.objects.select_related(
-        "application", "pet", "adopter", "reviewed_by"
+        "application", "application__adoption_record", "pet", "adopter", "reviewed_by"
     ).all()
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = AppointmentSerializer
@@ -69,6 +73,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         application = serializer.validated_data["application"]
         try:
             with transaction.atomic():
+                from apps.applications.models import Application
+                application = Application.objects.select_for_update().get(pk=application.pk)
+                try:
+                    ensure_open_application(application)
+                    if application.reschedule_requests.filter(status="pending").exists():
+                        raise DjangoValidationError("Wait for the pending reschedule request to be reviewed.")
+                except DjangoValidationError as exc:
+                    return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
                 appointment = Appointment.objects.create(
                     application=application,
                     adopter=application.adopter,
@@ -118,11 +130,19 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="approve")
+    @transaction.atomic
     def approve(self, request, pk=None):
         """Confirm the requested date: pending_confirmation -> confirmed."""
         appointment = self.get_object()
         if not _can_review(request.user):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        from apps.applications.models import Application
+        application = Application.objects.select_for_update().get(pk=appointment.application_id)
+        appointment = Appointment.objects.select_for_update().get(pk=appointment.pk)
+        try:
+            ensure_open_application(application)
+        except DjangoValidationError as exc:
+            return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
         if not appointment.can_transition_to(Appointment.Status.CONFIRMED):
             return Response(
                 {
@@ -170,17 +190,25 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # Only reached on a real pending_confirmation -> confirmed transition
         # (an already-confirmed appointment returned 400 above), so a repeated
         # or retried approve request cannot email the adopter twice.
-        send_appointment_approved_email(appointment)
+        transaction.on_commit(lambda: send_appointment_approved_email(appointment))
         return Response(
             AppointmentSerializer(appointment, context=self.get_serializer_context()).data
         )
 
     @action(detail=True, methods=["post"], url_path="reject")
+    @transaction.atomic
     def reject(self, request, pk=None):
         """Reject the requested date: pending_confirmation -> rejected."""
         appointment = self.get_object()
         if not _can_review(request.user):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        from apps.applications.models import Application
+        application = Application.objects.select_for_update().get(pk=appointment.application_id)
+        appointment = Appointment.objects.select_for_update().get(pk=appointment.pk)
+        try:
+            ensure_open_application(application)
+        except DjangoValidationError as exc:
+            return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = AppointmentRejectSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -228,7 +256,33 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         # Only reached on a real pending_confirmation -> rejected transition with
         # a validated non-blank reason, so repeating or retrying the reject
         # request cannot email the adopter twice.
-        send_appointment_rejected_email(appointment)
+        transaction.on_commit(lambda: send_appointment_rejected_email(appointment))
         return Response(
             AppointmentSerializer(appointment, context=self.get_serializer_context()).data
         )
+
+    @action(detail=True, methods=["post"], url_path="mark-no-show")
+    def mark_no_show(self, request, pk=None):
+        appointment = self.get_object()
+        if not _can_review(request.user):
+            return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            appointment = mark_no_show(
+                appointment, request.user, request.data.get("reason"), request.data.get("confirmed")
+            )
+        except DjangoValidationError as exc:
+            return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(AppointmentSerializer(appointment, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="request-reschedule")
+    def request_reschedule(self, request, pk=None):
+        appointment = self.get_object()
+        if not request.user.is_adopter:
+            return Response({"error": "Only adopters can request a new date."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = RescheduleInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            reschedule = request_reschedule(appointment, request.user, **serializer.validated_data)
+        except DjangoValidationError as exc:
+            return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(RescheduleRequestSerializer(reschedule).data, status=status.HTTP_201_CREATED)

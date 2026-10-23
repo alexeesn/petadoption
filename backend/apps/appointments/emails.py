@@ -5,9 +5,8 @@ Follows the same delivery pattern as apps/applications/emails.py and
 apps/accounts/emails.py: Django's send_mail with a branded HTML template
 rendered from backend/templates/emails/ plus a plain-text fallback.
 
-Only these two appointment emails belong to the appointment decision. The
-adoption application approval email stays in apps/applications/emails.py and
-is untouched.
+Visit and reschedule decisions reuse the configured Django transport. The
+adoption application approval email stays in apps/applications/emails.py.
 """
 import logging
 
@@ -19,6 +18,14 @@ from django.template.loader import render_to_string
 from .models import Appointment
 
 logger = logging.getLogger(__name__)
+
+
+def send_followup_email(application, title, message):
+    """Use the existing configured Django email transport for follow-up decisions."""
+    url = f"{settings.ADOPTER_PORTAL_URL}/applications/{application.pk}"
+    _send(title, f"Hello {application.adopter.full_name or application.adopter.email},\n\n{message}\n\nView your application: {url}\n\nPawConnect",
+          "emails/appointment_followup.html", {"title": title, "message": message, "application_url": url},
+          application.adopter.email)
 
 APPROVED_SUBJECT = "Your PawConnect appointment has been approved"
 REJECTED_SUBJECT = "Your PawConnect appointment needs a new date"

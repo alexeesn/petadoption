@@ -1,4 +1,5 @@
 import api from '../services/api'
+import type { Appointment, RescheduleRequest } from '../types'
 
 export async function fetchPets(params?: Record<string, string>) {
   const { data } = await api.get('/pets/', { params })
@@ -97,9 +98,17 @@ export async function fetchAdoptionRecords() {
  * signed-in adopter's own appointments.
  */
 export async function fetchAppointments(applicationId: string) {
-  const { data } = await api.get('/appointments/', { params: { application: applicationId } })
-  const results = Array.isArray(data) ? data : data.results || []
-  return results
+  const rows: Appointment[] = []
+  let page = 1
+  let next = true
+  while (next) {
+    const { data } = await api.get('/appointments/', { params: { application: applicationId, page } })
+    if (Array.isArray(data)) return [...rows, ...data]
+    rows.push(...data.results)
+    next = Boolean(data.next)
+    page += 1
+  }
+  return rows
 }
 
 export async function createAppointment(applicationId: string, requestedDate: string) {
@@ -108,6 +117,24 @@ export async function createAppointment(applicationId: string, requestedDate: st
     requested_date: requestedDate,
   })
   return data
+}
+
+export async function fetchRescheduleRequests(applicationId: string): Promise<RescheduleRequest[]> {
+  const rows: RescheduleRequest[] = []
+  let page = 1
+  let next = true
+  while (next) {
+    const { data } = await api.get('/appointments/reschedule-requests/', { params: { application: applicationId, page } })
+    rows.push(...data.results as RescheduleRequest[])
+    next = Boolean(data.next)
+    page += 1
+  }
+  return rows
+}
+
+export async function requestAppointmentReschedule(appointmentId: string, requestedDate: string, reason: string): Promise<RescheduleRequest> {
+  const { data } = await api.post(`/appointments/${appointmentId}/request-reschedule/`, { requested_date: requestedDate, reason })
+  return data as RescheduleRequest
 }
 
 export async function fetchAdoptionRecord(id: string) {

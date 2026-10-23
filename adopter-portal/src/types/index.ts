@@ -120,6 +120,20 @@ export interface AdoptionRecord {
   created_at: string
 }
 
+export interface RescheduleRequest {
+  id: string
+  application: string
+  appointment: string
+  original_date: string
+  requested_date: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  decision_note: string
+  reviewed_at: string | null
+  reviewed_by_email: string | null
+  created_at: string
+}
+
 export interface Appointment {
   id: string
   application: string
@@ -129,7 +143,8 @@ export interface Appointment {
   pet: string
   pet_name: string
   requested_date: string
-  status: 'pending_confirmation' | 'confirmed' | 'rejected'
+  status: 'pending_confirmation' | 'confirmed' | 'rejected' | 'no_show' | 'rescheduled' | 'cancelled'
+  no_show_reason?: string
   reviewed_by?: string | null
   reviewed_by_email?: string | null
   reviewed_at?: string | null

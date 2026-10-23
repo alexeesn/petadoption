@@ -86,7 +86,9 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         resp = self.client.post("/api/adoptions/", {"application_id": str(self.app.id)})
         self.assertEqual(resp.status_code, 201)
         adoption_id = resp.data["id"]
-        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {"status": "cancelled"})
+        resp = self.client.patch(f"/api/adoptions/{adoption_id}/", {
+            "status": "cancelled", "reason": "Adopter withdrew", "confirmed": True,
+        }, format="json")
         self.assertEqual(resp.status_code, 200)
         self.pet.refresh_from_db()
         self.assertEqual(self.pet.status, "available")
@@ -304,7 +306,7 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
         # Existing staff action on the Adoption Records page.
         self.authenticate(self.staff)
         resp = self.client.patch(
-            f"/api/adoptions/{record.id}/", {"status": "cancelled"}
+            f"/api/adoptions/{record.id}/", {"status": "cancelled", "reason": "Adopter withdrew", "confirmed": True}, format="json"
         )
         self.assertEqual(resp.status_code, 200)
 
@@ -313,10 +315,12 @@ class AppointmentApprovalSchedulesAdoptionTests(BaseAPITestCase):
         again = schedule_adoption_record_for_appointment(
             Appointment.objects.get(id=appointment["id"]), self.staff
         )
-        self.assertEqual(again.id, record.id)
+        # Cancellation now closes the appointment/application as well, so
+        # scheduling refuses it entirely rather than returning a schedulable row.
+        self.assertIsNone(again)
         self.assertEqual(AdoptionRecord.objects.count(), 1)
-        again.refresh_from_db()
-        self.assertEqual(again.status, "cancelled")
+        record.refresh_from_db()
+        self.assertEqual(record.status, "cancelled")
 # ----- Test 3: rejected appointment schedules nothing ---------------
 
     def test_rejected_appointment_does_not_create_a_scheduled_record(self):

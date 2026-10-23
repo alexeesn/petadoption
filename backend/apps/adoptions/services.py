@@ -277,6 +277,8 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
     # Idempotent retry: already completed under the lock, return unchanged
     if not created and record.status == AdoptionRecord.Status.COMPLETED:
         return record
+    if not created and record.status in (AdoptionRecord.Status.CANCELLED, AdoptionRecord.Status.RETURNED):
+        raise ValidationError("A closed adoption record cannot be completed.")
 
     previous_record_status = record.status
 
@@ -318,6 +320,8 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
 
     app.status = "adoption_completed"
     app.save(update_fields=["status"])
+    from apps.appointments.services import close_pending_reschedules
+    close_pending_reschedules(app, staff_user, "Adoption completed at the confirmed visit.")
 
     AuditLog.objects.create(
         user=staff_user,
@@ -344,4 +348,60 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
         notification_type="adoption",
         link=f"/applications/{app.id}",
     )
+    return record
+
+
+@transaction.atomic
+def cancel_scheduled_adoption(record, staff, reason, confirmed):
+    """Close a scheduled adoption, preserving payments and every historical row."""
+    from apps.applications.models import Application
+    from apps.appointments.models import Appointment
+    from apps.appointments.services import (
+        audit, notify_adopter, require_confirmation, require_staff, required_reason, close_pending_reschedules,
+    )
+    from apps.pets.models import Pet
+
+    require_staff(staff)
+    require_confirmation(confirmed)
+    reason = required_reason(reason)
+    application = Application.objects.select_for_update().get(pk=record.application_id)
+    pet = Pet.objects.select_for_update().get(pk=application.pet_id)
+    record = AdoptionRecord.objects.select_for_update().get(pk=record.pk)
+    if record.status == AdoptionRecord.Status.CANCELLED:
+        return record  # Retry preserves the original reason, timestamp and audit.
+    if record.status != AdoptionRecord.Status.SCHEDULED:
+        raise ValidationError("Only a Scheduled adoption may be cancelled. Completed adoptions cannot be cancelled.")
+    if not application.can_transition_to(Application.Status.CANCELLED):
+        raise ValidationError("This application cannot be cancelled in its current state.")
+    previous_app_status = application.status
+    now = timezone.now()
+    record.status = AdoptionRecord.Status.CANCELLED
+    record.cancellation_reason = reason
+    record.cancelled_at = now
+    record.save(update_fields=["status", "cancellation_reason", "cancelled_at", "updated_at"])
+    application.status = Application.Status.CANCELLED
+    application.save(update_fields=["status", "updated_at"])
+    audit(staff, "adoption_cancelled", record, "scheduled", f"cancelled: {reason}")
+    audit(staff, "status_change", application, previous_app_status, "cancelled")
+    for appointment in application.appointments.select_for_update().filter(status__in=Appointment.ACTIVE_STATUSES):
+        previous = appointment.status
+        appointment.status = Appointment.Status.CANCELLED
+        appointment.reviewed_by = staff
+        appointment.reviewed_at = now
+        appointment.save(update_fields=["status", "reviewed_by", "reviewed_at", "updated_at"])
+        audit(staff, "appointment_cancelled", appointment, previous, f"cancelled: {reason}")
+    close_pending_reschedules(application, staff, f"Adoption cancelled: {reason}")
+    other_reservations = (
+        Application.objects.filter(pet=pet, status=Application.Status.APPROVED).exclude(pk=application.pk).exists()
+        or AdoptionRecord.objects.filter(pet=pet, status__in=["scheduled", "completed"]).exclude(pk=record.pk).exists()
+    )
+    if not other_reservations and pet.status in (Pet.Status.PENDING, Pet.Status.RESERVED):
+        previous = pet.status
+        pet.status = Pet.Status.AVAILABLE
+        pet.save(update_fields=["status", "updated_at"])
+        audit(staff, "status_change", pet, previous, "available")
+    notify_adopter(application, "Adoption Cancelled", (
+        f"Your adoption of {pet.name} has been cancelled. Reason: {reason}. "
+        "Existing payment records have been retained; cancellation does not automatically issue a refund."
+    ), notification_type="adoption")
     return record

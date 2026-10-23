@@ -4,6 +4,7 @@ import { fetchApplication, cancelApplication, uploadDocument, fetchAppointments,
 import type { Application, Appointment } from '../types'
 import { Spinner, ErrorState, Alert, FieldError } from '../components/UI'
 import { formatDate, getStatusColor, capitalize } from '../utils/format'
+import { AppointmentReschedulePanel } from '../features/applications/AppointmentReschedulePanel'
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.txt']
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -63,7 +64,7 @@ export default function ApplicationDetailPage() {
     Promise.all([
       fetchApplication(id),
       // Appointment history for this application (own appointments only).
-      fetchAppointments(id).catch(() => [] as Appointment[]),
+      fetchAppointments(id),
     ])
       .then(([application, appointments]) => {
         setApp(application)
@@ -172,7 +173,7 @@ export default function ApplicationDetailPage() {
     (a) => a.status === 'pending_confirmation' || a.status === 'confirmed'
   )
   const lastRejectedAppointment = appointments.find((a) => a.status === 'rejected')
-  const canChooseVisitDate = app.status === 'approved' && !activeAppointment
+  const canChooseVisitDate = app.status === 'approved' && !activeAppointment && !appointments.some((a) => a.status === 'no_show')
 
   return (
     <div className="max-w-3xl">
@@ -358,6 +359,11 @@ export default function ApplicationDetailPage() {
             )}
           </div>
         )}
+
+        {(app.status === 'approved' || appointments.length > 0) && <AppointmentReschedulePanel
+          key={app.id} applicationId={app.id} applicationStatus={app.status} appointments={appointments}
+          onUpdated={async () => { if (id) setAppointments(await fetchAppointments(id) as Appointment[]) }}
+        />}
 
         {DOCUMENTS_REQUESTED.includes(app.status) && (
           <div className="mt-6 rounded-md border border-primary-200 bg-primary-50 p-4">

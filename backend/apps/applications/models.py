@@ -31,7 +31,7 @@ class Application(models.Model):
         "under_review": ["pending_documents", "additional_info_requested", "approved", "rejected"],
         "pending_documents": ["under_review", "cancelled"],
         "additional_info_requested": ["under_review", "cancelled"],
-        "approved": ["adoption_completed"],
+        "approved": ["adoption_completed", "cancelled"],
         "rejected": [],
         "cancelled": [],
         "adoption_completed": [],

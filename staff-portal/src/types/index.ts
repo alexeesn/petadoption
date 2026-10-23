@@ -172,6 +172,9 @@ export interface AdoptionRecord {
   /** Confirmed onsite visit this record was scheduled from (null when none). */
   appointment_id?: string | null;
   appointment_date?: string | null;
+  appointment_status?: string | null;
+  cancellation_reason?: string;
+  cancelled_at?: string | null;
   status: string;
   adoption_date: string | null;
   completed_date?: string | null;
@@ -196,13 +199,32 @@ export interface Appointment {
   pet: string;
   pet_name: string;
   requested_date: string;
-  status: 'pending_confirmation' | 'confirmed' | 'rejected';
+  status: 'pending_confirmation' | 'confirmed' | 'rejected' | 'no_show' | 'rescheduled' | 'cancelled';
+  no_show_reason?: string;
+  can_mark_no_show?: boolean;
   reviewed_by?: string | null;
   reviewed_by_email?: string | null;
   reviewed_at?: string | null;
   rejection_reason: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface RescheduleRequest {
+  id: string;
+  application: string;
+  appointment: string;
+  original_date: string;
+  requested_date: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  adopter_email: string;
+  pet_name: string;
+  reviewed_by_email: string | null;
+  reviewed_at: string | null;
+  decision_note: string;
+  replacement_appointment: string | null;
+  created_at: string;
 }
 
 export interface Payment {

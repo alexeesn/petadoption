@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, Loading, ErrorMessage, Empty, Table } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { notificationService } from '../services/apiService';
@@ -31,7 +32,11 @@ export default function NotificationsPage() {
           <Table headers={['Title', 'Message', 'Read', 'Created']}>
             {notifs.map((n) => (
               <tr key={n.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-sm font-medium text-slate-900">{n.title}</td>
+                <td className="px-4 py-3 text-sm font-medium text-slate-900">
+                  {n.link?.startsWith('/') && !n.link.startsWith('//')
+                    ? <Link className="text-primary-700 underline hover:text-primary-900" to={n.link}>{n.title}</Link>
+                    : n.title}
+                </td>
                 <td className="px-4 py-3 text-sm text-slate-600">{n.message}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{n.is_read ? 'Yes' : 'No'}</td>
                 <td className="px-4 py-3 text-sm text-slate-500">

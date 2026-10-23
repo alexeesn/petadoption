@@ -6,6 +6,7 @@ import { PageHeader } from '../layouts/DashboardLayout';
 import { adoptionService, applicationService } from '../services/apiService';
 import type { AdoptionRecord, Application, PaginatedResponse } from '../types';
 import { formatDate, formatDateTime, formatCurrency } from '../utils/format';
+import { DecisionDialog } from '../components/DecisionDialog';
 
 /** Matches AdoptionRecord.Status.choices in backend/apps/adoptions/models.py. */
 const STATUS_FILTERS = [
@@ -44,6 +45,8 @@ function reportFilename(): string {
  * certificate downloads.
  */
 export default function AdoptionsPage() {
+  const [cancellingRecord, setCancellingRecord] = useState<AdoptionRecord | null>(null);
+  const [cancellationSuccess, setCancellationSuccess] = useState('');
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -162,7 +165,7 @@ export default function AdoptionsPage() {
             : 'The adoption application for this record could not be verified.',
         },
         {
-          met: Boolean(completionRecord.appointment_id),
+          met: Boolean(completionRecord.appointment_id) && completionRecord.appointment_status === 'confirmed',
           label: 'Confirmed onsite visit date',
           message: 'A confirmed onsite visit appointment is required before the pet can be handed over.',
         },
@@ -257,6 +260,7 @@ export default function AdoptionsPage() {
         title="Adoption Records"
         subtitle="Persisted adoption records. Each completed adoption has an individual official PDF download. Use Export All Filtered PDF for aggregate records."
       />
+      {cancellationSuccess && <p role="status" className="mb-4 text-sm text-green-800">{cancellationSuccess}</p>}
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Select
@@ -334,7 +338,13 @@ export default function AdoptionsPage() {
                   <td className="px-4 py-3 text-xs text-slate-500" title={rec.application_id}>
                     {shortId(rec.application_id)}
                   </td>
-                  <td className="px-4 py-3"><StatusBadge status={rec.status} /></td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={rec.status} />
+                    {rec.status === 'cancelled' && <div className="mt-1 max-w-xs text-xs text-slate-600">
+                      <p>{rec.cancellation_reason || 'No cancellation reason recorded.'}</p>
+                      {rec.cancelled_at && <p>{formatDateTime(rec.cancelled_at)}</p>}
+                    </div>}
+                  </td>
                   <td className="px-4 py-3 text-sm text-slate-500">
                     {rec.completed_at
                       ? formatDateTime(rec.completed_at)
@@ -347,6 +357,7 @@ export default function AdoptionsPage() {
                     {rec.appointment_id && rec.appointment_date
                       ? `${formatDate(rec.appointment_date)}`
                       : '—'}
+                    {rec.appointment_status && <div className="mt-1"><StatusBadge status={rec.appointment_status} /></div>}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {rec.status === 'completed' ? (
@@ -359,6 +370,7 @@ export default function AdoptionsPage() {
                         {downloadingId === rec.id ? 'PDF…' : 'Download PDF'}
                       </Button>
                     ) : rec.status === 'scheduled' ? (
+                      <div className="flex flex-wrap gap-2">
                       <Button
                         variant="secondary"
                         className="text-xs px-2.5 py-1"
@@ -367,6 +379,11 @@ export default function AdoptionsPage() {
                       >
                         Complete Adoption
                       </Button>
+                      <Button variant="danger" className="text-xs px-2.5 py-1"
+                        disabled={completing} onClick={() => { setCancellationSuccess(''); setCancellingRecord(rec); }}>
+                        Cancel Adoption
+                      </Button>
+                      </div>
                     ) : (
                       <span className="text-xs text-slate-400">—</span>
                     )}
@@ -393,6 +410,13 @@ export default function AdoptionsPage() {
           </div>
         </>
       )}
+      {cancellingRecord && <DecisionDialog title="Cancel Adoption"
+        description={`Cancel ${cancellingRecord.pet_name}'s Scheduled adoption for ${cancellingRecord.adopter_email}. This closes the application and active appointments. Existing payments are retained; no automatic refund is issued.`}
+        onClose={() => setCancellingRecord(null)} onConfirm={async (reason) => {
+          await adoptionService.cancel(cancellingRecord.id, reason);
+          setCancellationSuccess('Adoption cancelled. Its application and active appointments are closed; payment history is retained.');
+          load();
+        }} />}
       {completionRecord && (
         <dialog
           ref={dialogRef}

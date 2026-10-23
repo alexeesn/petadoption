@@ -12,6 +12,9 @@ decision from the adoption application decision:
 Approving an adoption application never creates an appointment — the adopter
 always chooses the date themselves from the adopter portal.
 
+Reschedule requests retain the original appointment until staff approve a
+confirmed replacement; no-show, rescheduled and cancelled visits stay in history.
+
 Center operating schedule (project-provided): Monday-Friday, 8:00 AM-5:00 PM.
 """
 import uuid
@@ -83,13 +86,18 @@ class Appointment(models.Model):
         CONFIRMED = "confirmed", "Confirmed"
         REJECTED = "rejected", "Rejected"
         NO_SHOW = "no_show", "No-show"
+        RESCHEDULED = "rescheduled", "Rescheduled"
+        CANCELLED = "cancelled", "Cancelled"
 
     # Only these statuses block a new request for the same application.
     ACTIVE_STATUSES = (Status.PENDING_CONFIRMATION, Status.CONFIRMED)
 
     VALID_TRANSITIONS = {
-        "pending_confirmation": ["confirmed", "rejected"],
-        "confirmed": [],
+        "pending_confirmation": ["confirmed", "rejected", "cancelled"],
+        "confirmed": ["no_show", "rescheduled", "cancelled"],
+        "no_show": [],
+        "rescheduled": [],
+        "cancelled": [],
         "rejected": [],
     }
 
@@ -157,3 +165,45 @@ class Appointment(models.Model):
     def clean(self):
         # Also validates dates created through Django admin / shell.
         validate_visit_date(self.requested_date)
+
+
+class RescheduleRequest(models.Model):
+    """An adopter's proposed date. The original appointment stays unchanged until approved."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        CANCELLED = "cancelled", "Cancelled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    application = models.ForeignKey(
+        "applications.Application", on_delete=models.CASCADE, related_name="reschedule_requests"
+    )
+    appointment = models.ForeignKey(
+        Appointment, on_delete=models.PROTECT, related_name="reschedule_requests"
+    )
+    original_date = models.DateField()
+    requested_date = models.DateField(validators=[validate_visit_date])
+    reason = models.TextField(max_length=2000)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reviewed_reschedules",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+    replacement_appointment = models.ForeignKey(
+        Appointment, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="approved_reschedules",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["application"], condition=models.Q(status="pending"),
+                name="unique_pending_reschedule_per_application",
+            ),
+        ]

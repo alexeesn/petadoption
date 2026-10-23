@@ -165,6 +165,7 @@ export const healthService = {
 
 // ----- Adoptions -----
 export const adoptionService = {
+  cancel: (id: string, reason: string) => api.post(`/adoptions/${id}/cancel/`, { reason, confirmed: true }),
   list: (params?: Record<string, unknown>) => api.get('/adoptions/', { params }),
   create: (data: Record<string, unknown>) => api.post('/adoptions/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/adoptions/${id}/`, data),
@@ -181,15 +182,21 @@ export const adoptionService = {
 
 // ----- Appointments (onsite visit dates) -----
 export const appointmentService = {
+  markNoShow: (id: string, reason: string) => api.post(`/appointments/${id}/mark-no-show/`, { reason, confirmed: true }),
   list: (params?: Record<string, unknown>) => api.get('/appointments/', { params }),
   retrieve: (id: string) => api.get(`/appointments/${id}/`),
-  // Confirm or reject the requested date. These are the only ways an
-  // appointment status changes (the API does not accept PATCH).
+  // Appointment decisions are explicit actions (the API does not accept PATCH).
   approve: (id: string) => api.post(`/appointments/${id}/approve/`),
   reject: (id: string, reason: string) => api.post(`/appointments/${id}/reject/`, { reason }),
 };
 
 // ----- Packages -----
+export const rescheduleService = {
+  list: (params?: Record<string, unknown>) => api.get('/appointments/reschedule-requests/', { params }),
+  approve: (id: string) => api.post(`/appointments/reschedule-requests/${id}/approve/`, { confirmed: true }),
+  reject: (id: string, reason: string) => api.post(`/appointments/reschedule-requests/${id}/reject/`, { reason, confirmed: true }),
+};
+
 export const packageService = {
   list: (params?: Record<string, unknown>) => api.get('/packages/', { params }),
   create: (data: Record<string, unknown>) => api.post('/packages/', data),

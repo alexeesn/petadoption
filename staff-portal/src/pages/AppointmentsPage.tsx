@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { DecisionDialog } from '../components/DecisionDialog';
+import { RescheduleRequestsPanel } from '../features/applications/RescheduleRequestsPanel';
 import { Card, Loading, Empty, StatusBadge, Button } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { appointmentService } from '../services/apiService';
@@ -9,6 +12,9 @@ const STATUS_FILTERS = [
   { value: 'pending_confirmation', label: 'Pending confirmation' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'rejected', label: 'Rejected' },
+  { value: 'no_show', label: 'No-show' },
+  { value: 'rescheduled', label: 'Rescheduled' },
+  { value: 'cancelled', label: 'Cancelled' },
   { value: '', label: 'All' },
 ];
 
@@ -22,6 +28,11 @@ const STATUS_FILTERS = [
  * Payments are recorded under Payment Records.
  */
 export default function AppointmentsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rescheduleTab = searchParams.get('tab') === 'reschedules';
+  const [noShow, setNoShow] = useState<Appointment | null>(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ count: 0, next: false, previous: false });
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [statusFilter, setStatusFilter] = useState('pending_confirmation');
   const [loading, setLoading] = useState(true);
@@ -36,16 +47,17 @@ export default function AppointmentsPage() {
     setLoading(true);
     setError('');
     appointmentService
-      .list(statusFilter ? { status: statusFilter } : {})
+      .list({ page, ...(statusFilter ? { status: statusFilter } : {}) })
       .then((res) => {
         const items = res.data.results as Appointment[];
         setAppointments(items);
+        setPagination({ count: res.data.count, next: Boolean(res.data.next), previous: Boolean(res.data.previous) });
       })
       .catch(() => setError('Failed to load appointment requests.'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [statusFilter]);
+  useEffect(load, [statusFilter, page]);
 
   const handleApprove = (appointment: Appointment) => {
     setBusyId(appointment.id);
@@ -98,11 +110,16 @@ export default function AppointmentsPage() {
         subtitle="Adopters with an approved application choose an onsite visit date. Confirm or reject the requested date here. Confirming a date does not record payment or complete the adoption; onsite payments are handled in Payment Records."
       />
 
+      <div className="mb-4 flex flex-wrap gap-3" aria-label="Appointment sections">
+        <Button variant={rescheduleTab ? 'outline' : 'primary'} onClick={() => setSearchParams({})}>Appointments</Button>
+        <Button variant={rescheduleTab ? 'primary' : 'outline'} onClick={() => setSearchParams({ tab: 'reschedules' })}>Reschedule Requests</Button>
+      </div>
+      {rescheduleTab ? <RescheduleRequestsPanel onScheduleChanged={load} /> : <>
       <div className="mb-4 flex flex-wrap gap-2">
         {STATUS_FILTERS.map((filter) => (
           <button
             key={filter.value || 'all'}
-            onClick={() => setStatusFilter(filter.value)}
+            onClick={() => { setStatusFilter(filter.value); setPage(1); }}
             className={`px-3 py-1.5 rounded-md text-sm border ${
               statusFilter === filter.value
                 ? 'bg-primary-600 text-white border-primary-600'
@@ -154,6 +171,12 @@ export default function AppointmentsPage() {
                 </div>
                 <StatusBadge status={appointment.status} />
               </div>
+              {appointment.status === 'no_show' && <p className="mt-2 text-sm text-amber-800">
+                No-show: {appointment.no_show_reason || 'No arrival recorded.'} A missed visit does not automatically cancel the adoption. See Reschedule Requests for follow-up decisions.
+              </p>}
+              {appointment.can_mark_no_show && <div className="mt-3">
+                <Button variant="danger" onClick={() => setNoShow(appointment)}>Mark as No-show</Button>
+              </div>}
 
               {appointment.status === 'pending_confirmation' && (
                 <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -204,6 +227,19 @@ export default function AppointmentsPage() {
           ))}
         </div>
       )}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button variant="outline" disabled={loading || !pagination.previous} onClick={() => setPage((v) => v - 1)}>Previous</Button>
+        <span className="text-sm">Page {page} · {pagination.count} appointments</span>
+        <Button variant="outline" disabled={loading || !pagination.next} onClick={() => setPage((v) => v + 1)}>Next</Button>
+      </div>
+      </>}
+      {noShow && <DecisionDialog title="Mark as No-show"
+        description={`Record that the adopter did not attend ${noShow.pet_name}'s visit on ${formatDate(noShow.requested_date)}. This does not cancel the adoption.`}
+        onClose={() => setNoShow(null)} onConfirm={async (reason) => {
+          await appointmentService.markNoShow(noShow.id, reason);
+          setSuccess('No-show recorded. The adopter has been notified and can request a new date.');
+          load();
+        }} />}
     </div>
   );
 }

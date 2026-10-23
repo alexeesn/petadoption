@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.applications.models import Application
 
-from .models import Appointment, validate_visit_date
+from .models import Appointment, RescheduleRequest, validate_visit_date
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
@@ -14,6 +14,17 @@ class AppointmentSerializer(serializers.ModelSerializer):
     reviewed_by_email = serializers.EmailField(
         source="reviewed_by.email", read_only=True, default=None
     )
+    can_mark_no_show = serializers.SerializerMethodField()
+
+    def get_can_mark_no_show(self, obj):
+        from .services import visit_has_ended
+        record = getattr(obj.application, "adoption_record", None)
+        return (
+            obj.status == Appointment.Status.CONFIRMED
+            and obj.application.status == Application.Status.APPROVED
+            and (record is None or record.status == "scheduled")
+            and visit_has_ended(obj)
+        )
 
     class Meta:
         model = Appointment
@@ -21,12 +32,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "id", "application", "adopter", "adopter_email", "adopter_name",
             "pet", "pet_name", "requested_date", "status",
             "reviewed_by", "reviewed_by_email", "reviewed_at",
-            "rejection_reason", "created_at", "updated_at",
+            "rejection_reason", "no_show_reason", "can_mark_no_show", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "application", "adopter", "adopter_email", "adopter_name",
             "pet", "pet_name", "status", "reviewed_by", "reviewed_by_email",
-            "reviewed_at", "rejection_reason", "created_at", "updated_at",
+            "reviewed_at", "rejection_reason", "no_show_reason", "can_mark_no_show", "created_at", "updated_at",
         ]
 
 
@@ -84,3 +95,23 @@ class AppointmentRejectSerializer(serializers.Serializer):
                 "A reason is required when rejecting an appointment date."
             )
         return reason
+
+
+class RescheduleInputSerializer(serializers.Serializer):
+    requested_date = serializers.DateField(validators=[validate_visit_date])
+    reason = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class RescheduleRequestSerializer(serializers.ModelSerializer):
+    adopter_email = serializers.EmailField(source="application.adopter.email", read_only=True)
+    pet_name = serializers.CharField(source="application.pet.name", read_only=True)
+    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, default=None)
+
+    class Meta:
+        model = RescheduleRequest
+        fields = [
+            "id", "application", "appointment", "original_date", "requested_date", "reason", "status",
+            "adopter_email", "pet_name", "reviewed_by_email", "reviewed_at", "decision_note",
+            "replacement_appointment", "created_at",
+        ]
+        read_only_fields = fields

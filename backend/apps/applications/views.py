@@ -46,6 +46,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return ApplicationStatusUpdateSerializer
         return ApplicationSerializer
 
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        # A staff edit must not overwrite a cancellation/completion that just
+        # committed while this request was waiting for the application row.
+        application = self.get_object()
+        Application.objects.select_for_update().get(pk=application.pk)
+        return super().update(request, *args, **kwargs)
+
     def get_queryset(self):
         user = self.request.user
         if user.is_staff_role or user.is_admin_role:
@@ -165,6 +173,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer = ApplicationStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data["status"]
+        if app.status == Application.Status.APPROVED and new_status == Application.Status.CANCELLED:
+            return Response(
+                {"error": "Cancel the scheduled adoption from Adoption Records, with a reason and confirmation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if not app.can_transition_to(new_status):
             return Response(
                 {"error": f"Cannot transition from '{app.status}' to '{new_status}'."},
@@ -240,6 +253,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
         return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
 
+    @transaction.atomic
     def _confirm_turnover(self, app, request):
         """Confirm pet turnover and finalize the adoption transaction for *app*.
 
@@ -258,6 +272,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if not (request.user.is_staff_role or request.user.is_admin_role):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
+        app = Application.objects.select_for_update().get(pk=app.pk)
         # Idempotent retry: already completed, return serialized data
         if app.status == Application.Status.ADOPTION_COMPLETED:
             if hasattr(app, "adoption_record"):
@@ -337,7 +352,12 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             app.staff_notes = notes
             app.save(update_fields=["staff_notes"])
 
-        complete_application_adoption(app, request.user, notes=notes, handover_confirmed=True)
+        from django.core.exceptions import ValidationError
+        try:
+            complete_application_adoption(app, request.user, notes=notes, handover_confirmed=True)
+        except ValidationError as exc:
+            transaction.set_rollback(True)
+            return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
 
         app.refresh_from_db()
         return Response(ApplicationSerializer(app, context=self.get_serializer_context()).data)
@@ -434,6 +454,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
         app = self.get_object()
+        if app.status == Application.Status.APPROVED:
+            return Response(
+                {"error": "Please contact staff to cancel an approved adoption."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if app.adopter != request.user:
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
         if not app.can_transition_to("cancelled"):

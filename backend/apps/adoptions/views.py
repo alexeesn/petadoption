@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from .models import AdoptionRecord, _generate_transaction_id
 from .serializers import AdoptionRecordSerializer, AdoptionCreateSerializer
-from .services import is_handover_confirmed, complete_application_adoption
+from .services import is_handover_confirmed, complete_application_adoption, cancel_scheduled_adoption
 from .pdf import build_adoption_records_pdf
 from apps.accounts.permissions import IsStaff
 from apps.notifications.models import create_notification
@@ -153,6 +153,8 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         new_status = request.data.get("status")
+        if new_status == "cancelled":
+            return self._cancel_record(instance, request)
         if new_status:
             if new_status == instance.status:
                 # Idempotent retry with same status - do not re-run transitions or regenerate IDs
@@ -192,9 +194,6 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
                 instance.return_reason = request.data.get("return_reason", "")
                 instance.pet.status = "available"
                 instance.pet.save(update_fields=["status"])
-            if new_status == "cancelled":
-                instance.pet.status = "available"
-                instance.pet.save(update_fields=["status"])
             instance.save()
             from apps.audit.models import AuditLog
             AuditLog.objects.create(
@@ -232,3 +231,16 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
                 link=f"/adoptions/{instance.id}",
             )
         return super().update(request, *args, **kwargs)
+
+    def _cancel_record(self, record, request):
+        try:
+            record = cancel_scheduled_adoption(
+                record, request.user, request.data.get("reason"), request.data.get("confirmed")
+            )
+        except DjangoValidationError as exc:
+            return Response({"error": exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(AdoptionRecordSerializer(record, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        return self._cancel_record(self.get_object(), request)
