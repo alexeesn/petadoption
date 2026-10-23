@@ -6,6 +6,9 @@ The application itself still targets PostgreSQL in dev/production.
 
 from .development import *
 
+# A developer's local demo switch must not change the normal test workflow.
+NO_SHOW_DEMO_ENABLED = False
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",

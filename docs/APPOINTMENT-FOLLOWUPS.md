@@ -12,6 +12,19 @@ Implemented flow:
 - Adopters receive in-app notifications and email for review decisions, no-show and adoption cancellation. Email uses the existing Django transport and is dispatched after commit. SMTP delivery still depends on the deployment configuration.
 - Existing handover/fee validation and individual receipt/adoption PDFs remain in force. Completion closes any pending reschedule request without deleting it. Generic cancellation routes cannot bypass the coordinated service.
 
+## Local no-show demo
+
+Set `NO_SHOW_DEMO_ENABLED=True` in the root `.env` and restart the Django
+development server. Eligible confirmed appointments always offer **Mark as
+No-show**, including future appointments. The switch has no expiry. Staff still
+provide a reason and explicit confirmation; saving records the real no-show
+decision and notifications. Existing records are not changed by enabling it.
+Other payment/completion date rules and real timestamps are unchanged.
+
+After the report, set `NO_SHOW_DEMO_ENABLED=False` and restart Django to restore
+the normal 5 PM Philippine-time cutoff. Production (`DEBUG=False`) always uses
+that normal cutoff, regardless of this setting.
+
 ## API
 
 - `POST /api/appointments/{id}/request-reschedule/`: owner only; `requested_date`, `reason`.

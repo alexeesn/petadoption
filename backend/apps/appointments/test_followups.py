@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch
 
 from django.core import mail
+from django.test import override_settings
 from django.utils import timezone
 
 from apps.accounts.tests import BaseAPITestCase
@@ -196,6 +197,29 @@ class AppointmentFollowupTests(BaseAPITestCase):
             self.assertEqual(self.client.post(url, data, format="json").status_code, 400)
         with patch("django.utils.timezone.now", return_value=datetime(2026, 10, 23, 9, 0, tzinfo=dt_timezone.utc)):
             self.assertEqual(self.client.post(url, data, format="json").status_code, 200)
+
+    @override_settings(DEBUG=True, NO_SHOW_DEMO_ENABLED=True)
+    def test_demo_exposes_and_saves_manual_no_show_for_future_visit(self):
+        self.appointment.requested_date = self.new_date
+        self.appointment.save(update_fields=["requested_date"])
+        url = f"/api/appointments/{self.appointment.pk}/mark-no-show/"
+        self.authenticate(self.adopter)
+        self.assertEqual(self.client.post(url, {"reason": "Absent", "confirmed": True}, format="json").status_code, 403)
+        self.authenticate(self.staff)
+        response = self.client.get(f"/api/appointments/{self.appointment.pk}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["can_mark_no_show"])
+        for data in ({"confirmed": True}, {"reason": "Demo absence"}):
+            self.assertEqual(self.client.post(url, data, format="json").status_code, 400)
+        with self.captureOnCommitCallbacks(execute=True):
+            saved = self.client.post(url, {"reason": "Demo absence", "confirmed": True}, format="json")
+        self.assertEqual(saved.status_code, 200, saved.data)
+        self.assertEqual(saved.data["status"], "no_show")
+        self.assertFalse(saved.data["can_mark_no_show"])
+        self.app.refresh_from_db()
+        self.record.refresh_from_db()
+        self.assertEqual(self.app.status, "approved")
+        self.assertEqual(self.record.status, "scheduled")
 
     def test_new_booking_cannot_bypass_pending_reschedule(self):
         self.appointment.status = "no_show"
