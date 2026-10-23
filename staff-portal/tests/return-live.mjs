@@ -149,9 +149,12 @@ try {
   await expect(staff.getByRole('status').filter({ hasText: 'The appointment date has not arrived yet' })).toBeVisible();
   await expect(staff.getByRole('form', { name: 'Record onsite payment' })).toHaveCount(0);
   await staff.goto(`${staffUrl}/applications/${fixture.futureApplication}`);
-  await expect(staff.getByRole('button', { name: 'Record Payment', exact: true })).toBeDisabled();
-  await expect(staff.getByRole('button', { name: 'Complete Adoption', exact: true })).toBeDisabled();
-  await expect(staff.getByRole('status').filter({ hasText: 'The appointment date has not arrived yet' })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Application Review', exact: true })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Uploaded Documents', exact: true })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Internal staff notes', exact: true })).toBeVisible();
+  await expect(staff.getByRole('heading', { name: 'Onsite Adoption Transaction', exact: true })).toHaveCount(0);
+  await expect(staff.getByRole('button', { name: 'Record Payment', exact: true })).toHaveCount(0);
+  await expect(staff.getByRole('button', { name: 'Complete Adoption', exact: true })).toHaveCount(0);
   await staff.goto(`${staffUrl}/adoptions`);
   const futureRow = staff.getByRole('row').filter({ hasText: 'Future Visit Buddy' });
   await expect(futureRow.getByRole('button', { name: 'Complete Adoption', exact: true })).toBeDisabled();
@@ -172,7 +175,7 @@ try {
   assert.equal(Buffer.concat(cancellationChunks).subarray(0, 4).toString(), '%PDF');
   assert.equal((await read(`/api/adoptions/${fixture.futureRecord}/`)).status, 'cancelled');
   console.log('Cancelled adoption PDF downloaded; Payment Records exposes only the Completed filter.');
-  console.log('Future appointments block payment entry and completion across Payment Records, Application Review and Adoption Records.');
+  console.log('Application Review shows application details without duplicate transaction controls; Payment Records and Adoption Records enforce appointment dates.');
   assert.deepEqual(errors, []);
   console.log('Adopter sees return details after reload; Payment Records retains the completed payment and receipt. No browser errors.');
 } finally {

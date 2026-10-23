@@ -135,9 +135,9 @@ export default function AdoptionsPage() {
 
   /**
    * Submit to the canonical adoption-completion endpoint
-   * (POST /api/applications/{id}/complete-adoption/, the same endpoint used by
-   * the Application Review page), then refresh the table. The backend owns all
-   * validation: approved application, confirmed appointment, fully paid fee,
+   * (POST /api/applications/{id}/complete-adoption/), then refresh the table.
+   * The backend owns all validation: approved application, confirmed
+   * appointment, fully paid fee,
    * and the strict boolean handover confirmation carried by the service call.
    */
   const confirmCompletion = () => {

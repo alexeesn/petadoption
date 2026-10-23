@@ -265,18 +265,18 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
 
 - **Actor**: Staff (`http://localhost:5174`)
 - **Action**:
-  1. Navigate to **Schedule** (`/appointments`) or the Application Detail page.
-  2. Locate the "On-site Adoption Fee" transaction panel for the confirmed appointment.
+  1. Navigate to **Payment Records** (`/payments`) and click **+ Record Onsite Payment**.
+  2. Select the application under **Eligible Confirmed Appointment**.
   3. Notice the standard prototype adoption fee displays **₱500.00**.
-  4. Leave the confirmation checkbox unchecked and click **Record payment**.
-  5. Observe the validation error: *"Confirm that the payment has actually been received onsite before recording it."*
+  4. Leave the confirmation checkbox unchecked.
+  5. Verify that **Record Payment & Generate Receipt** is disabled.
   6. Check the required box: `[x] I confirm the payment has actually been received onsite`.
   7. Enter:
-     - Amount: `500.00`
+     - Amount is fixed at `500.00`; it is not an editable input.
      - Payment Method: `Cash`
      - Reference / OR Number: `OR-2026-MANUAL-01`
      - Notes: `Received cash payment onsite from adopter.`
-  8. Click **Record payment**.
+  8. Click **Record Payment & Generate Receipt**.
 - **Expected Result**:
   - Success banner appears: *"Payment of ₱500.00 recorded · Receipt REC-XXXXXXXXXXXX."*
   - The payment status is marked **Completed** with a permanent unique receipt identifier.
@@ -287,19 +287,18 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
 
 ---
 
-### Step 8: Verify Payment Totals and Remaining Balance
+### Step 8: Verify the Completed Payment and Receipt
 
 - **Actor**: Staff (`http://localhost:5174`)
 - **Action**:
-  1. Look at the Payment Summary card on the Application Detail or Schedule page.
+  1. In **Payment Records**, select the paid appointment again to view its completed payment summary.
   2. Observe the breakdown:
-     - Adoption Fee: `₱500.00`
-     - Total Completed Payment: `₱500.00`
-     - Remaining Balance: `₱0.00`
-     - Fee Status: `Paid in Full`
-     - Turnover Eligibility: `Eligible`
+     - Required Onsite Payment: `₱500.00`
+     - Recorded amount: `₱500.00`
+     - Status: `Completed`
+     - Receipt ID, payment date, recorded timestamp and **Download Receipt PDF**.
 - **Expected Result**:
-  - Payment is fully satisfied. The Turnover panel enables the completion controls.
+  - The payment form is replaced by its saved summary. **Adoption Records** provides completion once the visit date and handover requirements are met.
 - **What to Verify**:
   - Check network tab for `GET /api/applications/<id>/payment-summary/`:
     `"is_fee_paid": true`, `"turnover_eligible": true`.
@@ -315,7 +314,7 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
   1. Explain to the defense panel that PawConnect enforces financial integrity at the backend service layer.
   2. If an application has only partial payment (e.g. ₱200.00 of ₱500.00) or pending payment, the turnover endpoint strictly rejects completion with HTTP 400:
      *"The required adoption fee of ₱500.00 has not been fully paid."*
-  3. Confirm that the UI "Confirm turnover and complete adoption" button remains locked or will be rejected by DRF if the fee is not met.
+  3. Confirm that **Complete Adoption** in **Adoption Records** remains locked or will be rejected by DRF if the fee is not met.
 - **Expected Result**:
   - System prevents pet turnover whenever the completed amount is below ₱500.00.
 - **What to Verify**:
@@ -327,12 +326,12 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
 
 - **Actor**: Staff (`http://localhost:5174`)
 - **Action**:
-  1. In the Staff Portal (on Schedule `/appointments` or Application Detail `/applications/:id`), scroll to the **Pet Turnover & Finalization** section.
+  1. In **Adoption Records** (`/adoptions`), find the Scheduled record and click **Complete Adoption**.
   2. Notice the handover button is disabled until the explicit checkbox is ticked.
   3. Check the confirmation checkbox:
      `[x] I confirm the pet has been physically handed over to the adopter.`
-  4. (Optional) Enter turnover notes: `Pet handed over in good health with vaccination booklet and collar.`
-  5. Click **Confirm turnover and complete adoption**.
+  4. Review the displayed application, appointment and payment eligibility.
+  5. Click **Complete Adoption** in the confirmation dialog.
 - **Expected Result**:
   - Success message: *"Adoption completed. The pet is now marked as adopted and is no longer available."*
   - Application status updates to **Adoption Completed**.

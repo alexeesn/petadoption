@@ -38,8 +38,10 @@ Application details, payment summaries and adoption-record responses include an
 
 The existing `can_record_payment` and `turnover_eligible` flags also incorporate
 the date guard. The staff Payment Records page hides early payment entry and
-shows this message; Application Review and Adoption Records disable completion
-until eligible. Date inputs use Philippine dates and appropriate min/max values.
+shows this message; Adoption Records disables completion until eligible.
+Application Review contains application details and review actions; onsite
+payments are recorded in Payment Records and completion in Adoption Records.
+Date inputs use Philippine dates and appropriate min/max values.
 
 No new models or migrations are required.
 
