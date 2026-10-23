@@ -18,3 +18,7 @@ EMAIL_BACKEND = os.environ.get(
 
 # CORS - allow all localhost origins for development
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Optional, expiring local preview of the no-show cutoff only.
+NO_SHOW_DEMO_NOW = os.environ.get("NO_SHOW_DEMO_NOW", "")
+NO_SHOW_DEMO_EXPIRES_AT = os.environ.get("NO_SHOW_DEMO_EXPIRES_AT", "")

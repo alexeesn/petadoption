@@ -1,9 +1,11 @@
 """Appointment follow-up decisions, serialized on the same application lock as turnover/payment."""
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from apps.accounts.models import User
 from apps.applications.models import Application
@@ -58,6 +60,17 @@ def notify_adopter(application, title, message, notification_type="appointment")
 def visit_has_ended(appointment):
     # Center hours are in the Philippines, independent of the server's timezone.
     now = timezone.localtime(timezone.now(), ZoneInfo("Asia/Manila"))
+    if settings.DEBUG:
+        # A local demo must expire using real time and never affect payment,
+        # completion, authentication, or timestamps written to the database.
+        try:
+            demo_now = parse_datetime(getattr(settings, "NO_SHOW_DEMO_NOW", ""))
+            expires_at = parse_datetime(getattr(settings, "NO_SHOW_DEMO_EXPIRES_AT", ""))
+        except (TypeError, ValueError):
+            demo_now = expires_at = None
+        if (demo_now and expires_at and timezone.is_aware(demo_now)
+                and timezone.is_aware(expires_at) and now < expires_at):
+            now = timezone.localtime(demo_now, ZoneInfo("Asia/Manila"))
     return appointment.requested_date < now.date() or (
         appointment.requested_date == now.date() and now.time() >= CENTER_CLOSING_TIME
     )

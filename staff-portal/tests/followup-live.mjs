@@ -1,6 +1,7 @@
 // Invoked only by Django's opt-in LiveServerTestCase with isolated fixture credentials.
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { expect } from '@playwright/test';
@@ -138,6 +139,12 @@ try {
   await dialog.getByRole('checkbox').check();
   await dialog.getByRole('button', { name: 'Mark as No-show', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  if (process.env.PAWCONNECT_PREVIEW_DIR) {
+    await staff.getByRole('button', { name: 'No-show', exact: true }).click();
+    await expect(staff.locator('.panel').filter({ hasText: 'NoShow Pet' })).toContainText('Adopter did not arrive');
+    await mkdir(process.env.PAWCONNECT_PREVIEW_DIR, { recursive: true });
+    await staff.screenshot({ path: path.join(process.env.PAWCONNECT_PREVIEW_DIR, 'no-show-status.png'), fullPage: true });
+  }
   await requestDate(adopter, appB, fixture.newDate, 'Please give me another visit date');
   await decide(staff, true);
   const history = await read(`/api/appointments/?application=${appB}`);
