@@ -268,6 +268,19 @@ class HealthRecordCreationTests(BaseAPITestCase):
         after = self.client.get('/api/health-records/eligible-pets/')
         self.assertEqual(after.data['count'], 0)
 
+    def test_pet_selection_filters_saved_records_without_changing_them(self):
+        first = HealthRecord.objects.create(pet=self.pet, record_date='2026-01-01', diagnosis='First patient')
+        other_pet = Pet.objects.create(name='Other patient', species='cat')
+        second = HealthRecord.objects.create(pet=other_pet, record_date='2026-01-02', diagnosis='Second patient')
+        before = list(HealthRecord.objects.order_by('pk').values())
+        self.authenticate(self.staff)
+        for pet, record in ((self.pet, first), (other_pet, second)):
+            response = self.client.get('/api/health-records/', {'pet': str(pet.pk)})
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data['count'], 1)
+            self.assertEqual(response.data['results'][0]['id'], str(record.pk))
+        self.assertEqual(list(HealthRecord.objects.order_by('pk').values()), before)
+
     def test_eligibility_and_edit_remain_staff_only(self):
         self.authenticate(self.staff)
         created = self.create_record()

@@ -157,6 +157,16 @@ export const reviewService = {
 // ----- Health Records -----
 export const healthService = {
   list: (params?: Record<string, unknown>) => api.get<PaginatedResponse<HealthRecord>>('/health-records/', { params }),
+  selectablePets: async (): Promise<Pet[]> => {
+    const pets: Pet[] = [];
+    let page = 1;
+    while (true) {
+      const { data } = await api.get<PaginatedResponse<Pet>>('/pets/', { params: { page } });
+      pets.push(...data.results);
+      if (data.next === null) return pets;
+      page += 1;
+    }
+  },
   eligiblePets: async (): Promise<Pet[]> => {
     const pets: Pet[] = [];
     let page = 1;

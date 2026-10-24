@@ -50,10 +50,37 @@ try {
   await page.getByRole('button', { name: 'Add Health Record', exact: true }).click();
   const choice = page.getByRole('combobox', { name: 'Pet', exact: true });
   await expect(choice).toBeEnabled();
-  // Eligible choices are fetched across pages; existing pets are never offered.
-  await expect(choice.locator('option')).toHaveCount(26);
-  assert.ok((await choice.locator('option').allTextContents()).every(name => !name.startsWith('Recorded')));
+  // All pets can be selected for viewing; an existing record is never an editable new form.
+  await expect(choice.locator('option')).toHaveCount(51);
+  const beforeSelection = await read(`/health-records/${fixture.recorded_record}/`);
+  const writes = [];
+  page.on('request', request => { if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) writes.push(request.url()); });
+  await choice.selectOption(fixture.recorded_pet);
+  await expect(page.getByRole('heading', { name: 'Saved Health Record', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toHaveValue('Existing history');
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save Record', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save Changes', exact: true })).toHaveCount(0);
+  assert.deepEqual(await read(`/health-records/${fixture.recorded_record}/`), beforeSelection);
+  await page.getByRole('button', { name: 'Edit Health Record', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Edit Health Record', exact: true })).toBeVisible();
+  assert.deepEqual(writes, [], 'Choosing Edit must not submit Save Changes.');
+  await expect(page.getByLabel('Pet', { exact: true })).toHaveAttribute('readonly', '');
+  await page.getByLabel('Diagnosis', { exact: true }).fill('Cancelled changes must not save');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  assert.deepEqual(await read(`/health-records/${fixture.recorded_record}/`), beforeSelection);
+  assert.deepEqual(writes, []);
+  await page.getByRole('button', { name: 'Add Health Record', exact: true }).click();
+  await expect(choice).toBeEnabled();
   await choice.selectOption(fixture.eligible_pet);
+  await page.getByLabel('Diagnosis', { exact: true }).fill('Unsaved draft for this pet');
+  await choice.selectOption(fixture.recorded_pet);
+  await expect(page.getByRole('heading', { name: 'Saved Health Record', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toHaveValue('Existing history');
+  await choice.selectOption(fixture.eligible_pet);
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toHaveValue('');
+  assert.deepEqual(await read(`/health-records/${fixture.recorded_record}/`), beforeSelection);
   const recordDate = page.getByLabel('Record Date', { exact: true });
   const nextCheckup = page.getByLabel('Next Checkup Date', { exact: true });
   await expect(recordDate).toHaveAttribute('max', fixture.today);
@@ -110,8 +137,11 @@ try {
   await page.reload();
   await expect(page.getByRole('row').filter({ hasText: 'Eligible 24' })).toContainText('Recovered after follow-up');
   await page.getByRole('button', { name: 'Add Health Record', exact: true }).click();
-  await expect(choice.locator('option')).toHaveCount(25);
-  assert.ok(!(await choice.locator('option').allTextContents()).some(name => name.includes('Eligible 24')));
+  await expect(choice.locator('option')).toHaveCount(51);
+  await choice.selectOption(fixture.eligible_pet);
+  await expect(page.getByRole('heading', { name: 'Saved Health Record', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toHaveValue('Recovered after follow-up');
+  await expect(page.getByLabel('Diagnosis', { exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('navigation', { name: 'Health record pages' }).getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.locator('tbody tr')).toHaveCount(6);
@@ -124,7 +154,7 @@ try {
   await page.getByLabel('Notes', { exact: true }).fill('Cancelled edit must not save');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.deepEqual(errors, []);
-  console.log('PASS: live health record create/edit/reload, existing-pet exclusion, complete paginated choices, nullable date clearing, record pagination, mobile Edit and Cancel.');
+  console.log('PASS: read-only pet selection never writes or changes saved records; explicit Edit/Save, draft isolation, complete choices, dates, create/reload, nullable clearing, pagination and mobile Cancel.');
 } catch (error) {
   if (page) console.error((await page.locator('body').innerText()).slice(0, 3500));
   throw error;

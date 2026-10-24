@@ -51,6 +51,9 @@ export default function HealthRecordsPage() {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<HealthRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<HealthRecord | null>(null);
+  const [loadingRecord, setLoadingRecord] = useState(false);
+  const [recordError, setRecordError] = useState('');
   const [loadingPets, setLoadingPets] = useState(false);
   const [petError, setPetError] = useState('');
   const [page, setPage] = useState(1);
@@ -62,6 +65,7 @@ export default function HealthRecordsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
   const today = philippineDate();
+  const viewingRecord = selectedRecord !== null && editing === null;
 
   useEffect(() => {
     let active = true;
@@ -84,19 +88,39 @@ export default function HealthRecordsPage() {
     let active = true;
     setLoadingPets(true);
     setPetError('');
-    healthService.eligiblePets()
+    healthService.selectablePets()
       .then((choices) => {
         if (!active) return;
         setPets(choices);
         setForm(current => ({ ...current, pet: choices.some(pet => pet.id === current.pet) ? current.pet : '' }));
       })
-      .catch(() => { if (active) setPetError('Could not load eligible pets. Please retry.'); })
+      .catch(() => { if (active) setPetError('Could not load pets. Please retry.'); })
       .finally(() => { if (active) setLoadingPets(false); });
     return () => { active = false; };
   }, [showForm, editing, refresh]);
 
+  useEffect(() => {
+    if (!showForm || editing || !form.pet) return;
+    let active = true;
+    setLoadingRecord(true);
+    setRecordError('');
+    healthService.list({ pet: form.pet })
+      .then(({ data }) => {
+        if (!active) return;
+        const record = data.results[0] ?? null;
+        setSelectedRecord(record);
+        if (record) setForm(recordToForm(record));
+      })
+      .catch(() => { if (active) setRecordError('Could not check the saved health record. Retry before saving.'); })
+      .finally(() => { if (active) setLoadingRecord(false); });
+    return () => { active = false; };
+  }, [showForm, editing, form.pet, refresh]);
+
   const openNew = () => {
     setEditing(null);
+    setSelectedRecord(null);
+    setLoadingRecord(false);
+    setRecordError('');
     setForm({ ...emptyForm });
     setPets([]);
     setLoadingPets(true);
@@ -109,6 +133,9 @@ export default function HealthRecordsPage() {
 
   const openEdit = (record: HealthRecord) => {
     setEditing(record);
+    setSelectedRecord(record);
+    setLoadingRecord(false);
+    setRecordError('');
     setForm(recordToForm(record));
     setSubmitError('');
     setSuccess('');
@@ -120,8 +147,9 @@ export default function HealthRecordsPage() {
     e.preventDefault();
     setSubmitError('');
     setSuccess('');
+    if (viewingRecord || loadingRecord || recordError) return;
     if (!form.pet) {
-      setSubmitError('Select a pet without a health record.');
+      setSubmitError('Select a pet.');
       return;
     }
     const currentDate = philippineDate();
@@ -148,6 +176,7 @@ export default function HealthRecordsPage() {
         if (!editing) setPage(1);
         setShowForm(false);
         setEditing(null);
+        setSelectedRecord(null);
         setForm({ ...emptyForm });
         setRefresh(current => current + 1);
       })
@@ -167,7 +196,7 @@ export default function HealthRecordsPage() {
 
       {showForm && (
         <Card className="mb-6 p-6">
-          <h3 className="text-lg font-medium text-primary-900 mb-4">{editing ? 'Edit Health Record' : 'New Health Record'}</h3>
+          <h3 className="text-lg font-medium text-primary-900 mb-4">{editing ? 'Edit Health Record' : viewingRecord ? 'Saved Health Record' : 'New Health Record'}</h3>
           <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
             {editing ? (
               <div>
@@ -182,7 +211,14 @@ export default function HealthRecordsPage() {
                   <select
                     className="field-input"
                     value={form.pet}
-                    onChange={(e) => setForm({ ...form, pet: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...emptyForm, pet: e.target.value });
+                      setSelectedRecord(null);
+                      setLoadingRecord(e.target.value !== '');
+                      setRecordError('');
+                      setSubmitError('');
+                      setSuccess('');
+                    }}
                     required
                     disabled={loadingPets || !!petError || submitting || pets.length === 0}
                     aria-describedby="health-pet-help"
@@ -191,11 +227,15 @@ export default function HealthRecordsPage() {
                     {pets.map(pet => <option key={pet.id} value={pet.id}>{formatPetLabel(pet.name)} ({pet.species})</option>)}
                   </select>
                 </label>
-                <p id="health-pet-help" className="mt-2 text-xs text-stone-500">Only pets without a health record are listed. Use Edit below for an existing record.</p>
-                {!loadingPets && !petError && pets.length === 0 && <p role="status" className="mt-2 text-sm text-stone-600">No pets need a new health record. Use Edit below to update an existing record.</p>}
+                <p id="health-pet-help" className="mt-2 text-xs text-stone-500">Saved records open read-only. Choose Edit Health Record to make changes. Changing the pet clears unsaved entries.</p>
+                {!loadingPets && !petError && pets.length === 0 && <p role="status" className="mt-2 text-sm text-stone-600">No pets are available.</p>}
                 {petError && <div role="alert" className="mt-2 text-sm text-red-600">{petError} <button type="button" className="font-semibold underline" onClick={() => setRefresh(current => current + 1)}>Retry loading pets</button></div>}
               </div>
             )}
+            {loadingRecord && <p role="status" className="text-sm text-stone-600">Checking saved health record...</p>}
+            {recordError && <p role="alert" className="text-sm text-red-600">{recordError} <button type="button" className="underline" onClick={() => setRefresh(current => current + 1)}>Retry</button></p>}
+            {viewingRecord && <p role="status" className="text-sm text-primary-800">Viewing the saved record for {formatPetLabel(selectedRecord.pet_name)}. These details stay unchanged until you choose Edit Health Record and Save Changes.</p>}
+            <fieldset disabled={viewingRecord || loadingRecord || !!recordError || submitting} className="space-y-4">
             <Input
               label="Record Date"
               type="date"
@@ -236,11 +276,18 @@ export default function HealthRecordsPage() {
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
+            </fieldset>
             {submitError && <p role="alert" className="text-red-600 text-sm">{submitError}</p>}
             <div className="flex flex-wrap gap-3 border-t border-stone-200 pt-4">
-              <Button type="submit" disabled={submitting || (!editing && (loadingPets || !!petError || pets.length === 0))}>
-                {submitting ? 'Saving...' : editing ? 'Save Changes' : 'Save Record'}
-              </Button>
+              {viewingRecord ? (
+                <Button key="start-edit" type="button" onClick={() => openEdit(selectedRecord)}>
+                  Edit Health Record
+                </Button>
+              ) : (
+                <Button key="save-record" type="submit" disabled={submitting || loadingRecord || !!recordError || (!editing && (loadingPets || !!petError || pets.length === 0))}>
+                  {submitting ? 'Saving...' : editing ? 'Save Changes' : 'Save Record'}
+                </Button>
+              )}
               <Button variant="outline" onClick={() => setShowForm(false)} disabled={submitting}>Cancel</Button>
             </div>
           </form>

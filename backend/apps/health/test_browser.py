@@ -19,7 +19,7 @@ from .models import HealthRecord
 
 @skipUnless(os.environ.get('PAWCONNECT_HEALTH_BROWSER_TESTS') == '1', 'Opt-in health record browser test')
 class HealthRecordBrowserTests(LiveServerTestCase):
-    def test_add_excludes_existing_pets_and_edit_persists(self):
+    def test_selection_is_read_only_and_explicit_edit_persists(self):
         staff = User.objects.create_user(email='health-browser@example.test', role='staff', is_email_verified=True)
         for index in range(25):
             pet = Pet.objects.create(name=f'Recorded {index:02d}', species='dog')
@@ -29,6 +29,8 @@ class HealthRecordBrowserTests(LiveServerTestCase):
         today = timezone.localtime(timezone.now(), ZoneInfo('Asia/Manila')).date()
         fixture = {
             'api': self.live_server_url, 'eligible_pet': str(eligible.pk),
+            'recorded_pet': str(pet.pk),
+            'recorded_record': str(HealthRecord.objects.get(pet=pet).pk),
             'today': today.isoformat(), 'yesterday': (today - timedelta(days=1)).isoformat(),
             'tomorrow': (today + timedelta(days=1)).isoformat(),
             'staff': {'token': Token.objects.create(user=staff).key, 'user': dict(UserSerializer(staff).data)},

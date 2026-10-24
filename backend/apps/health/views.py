@@ -1,7 +1,8 @@
 from django.db import transaction
-from rest_framework import viewsets, permissions, serializers
+from rest_framework import viewsets, permissions, serializers, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
 from .models import HealthRecord, Vaccination
 from .serializers import HealthRecordSerializer, VaccinationSerializer
 from apps.accounts.permissions import IsStaff
@@ -15,6 +16,8 @@ class HealthRecordViewSet(viewsets.ModelViewSet):
     )
     serializer_class = HealthRecordSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["pet"]
 
     @transaction.atomic
     def perform_create(self, serializer):
