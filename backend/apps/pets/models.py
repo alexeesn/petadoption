@@ -26,6 +26,8 @@ class Pet(models.Model):
         CAT = "cat", "Cat"
         OTHER = "other", "Other"
 
+    ACTIVE_STATUSES = (Status.AVAILABLE, Status.PENDING, Status.RESERVED, Status.UNDER_MEDICAL_CARE)
+
     class Size(models.TextChoices):
         SMALL = "small", "Small"
         MEDIUM = "medium", "Medium"

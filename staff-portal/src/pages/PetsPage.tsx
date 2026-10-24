@@ -6,6 +6,11 @@ import { formatPetAge, formatPetLabel, philippineDate } from '../utils/format';
 import { PawMark } from '../components/Icons';
 import type { Pet, PetImage } from '../types';
 import { useToast } from '../context/ToastContext';
+import { RecordScopeTabs } from '../components/RecordScopeTabs';
+import { useRecordFilters } from '../hooks/useRecordFilters';
+
+const PET_STATUSES = ['available', 'pending', 'reserved', 'under_medical_care', 'adopted', 'inactive'];
+const ACTIVE_PET_STATUSES = ['available', 'pending', 'reserved', 'under_medical_care'];
 
 const emptyForm = {
   name: '',
@@ -58,6 +63,9 @@ function describeSaveError(err: unknown): string {
 
 export default function PetsPage() {
   const toast = useToast();
+  const { scope, page, statusFilter, setScope, setPage, setStatusFilter } = useRecordFilters();
+  const [pagination, setPagination] = useState({ count: 0, next: false, previous: false });
+  const [refresh, setRefresh] = useState(0);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -92,17 +100,21 @@ export default function PetsPage() {
     setPhotos([]);
   };
 
-  const load = () => {
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError('');
     petService
-      .list()
-      .then((res) => setPets(res.data.results))
-      .catch(() => setError('Failed to load pets.'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, []);
+      .list({ scope, page, ...(statusFilter ? { status: statusFilter } : {}) })
+      .then(({ data }) => {
+        if (!active) return;
+        setPets(data.results);
+        setPagination({ count: data.count, next: !!data.next, previous: !!data.previous });
+      })
+      .catch(() => { if (active) setError('Failed to load pets.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [scope, page, statusFilter, refresh]);
 
   const openNew = () => {
     setEditing(null);
@@ -246,7 +258,8 @@ export default function PetsPage() {
       clearPhotos();
       setRemovedPhotos([]);
       setShowForm(false);
-      load();
+      if (!editing) setScope('active');
+      setRefresh(current => current + 1);
     } catch (err) {
       setSubmitError(describeSaveError(err));
     } finally {
@@ -261,6 +274,16 @@ export default function PetsPage() {
       <PageHeader title="Pets" subtitle="Manage pet inventory and details" />
       <div className="mb-6 flex items-center justify-between gap-4">
         <Button onClick={openNew}>Add New Pet</Button>
+      </div>
+      <RecordScopeTabs scope={scope} onChange={setScope} />
+      <p className="mb-4 text-sm text-stone-600">Active shows pets in the center's current care. Adopted and inactive pets remain in History.</p>
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <Select label="Status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)} options={[
+          { value: '', label: 'All statuses' },
+          ...PET_STATUSES.filter(status => scope === 'all' || ACTIVE_PET_STATUSES.includes(status) === (scope === 'active'))
+            .map(status => ({ value: status, label: status.replace(/_/g, ' ') })),
+        ]} />
+        {!loading && !error && <p className="text-sm text-stone-500">{pagination.count} pet{pagination.count === 1 ? '' : 's'} in this view</p>}
       </div>
 
       {showForm && (
@@ -520,6 +543,11 @@ export default function PetsPage() {
           </div>
         </Card>
       )}
+      {!error && pagination.count > 0 && <nav aria-label="Pet record pages" className="mt-4 flex flex-wrap items-center gap-3">
+        <Button variant="outline" disabled={loading || !pagination.previous} onClick={() => setPage(page - 1)}>Previous</Button>
+        <span className="text-sm text-stone-600">Page {page} · {pagination.count} pets</span>
+        <Button variant="outline" disabled={loading || !pagination.next} onClick={() => setPage(page + 1)}>Next</Button>
+      </nav>}
     </div>
   );
 }

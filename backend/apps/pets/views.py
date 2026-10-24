@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import Pet, PetImage
 from .serializers import PetSerializer, PetListSerializer, PetImageSerializer
 from apps.accounts.permissions import IsStaff
+from apps.filters import RecordScopeFilter
 
 
 class PetViewSet(viewsets.ModelViewSet):
@@ -17,7 +18,8 @@ class PetViewSet(viewsets.ModelViewSet):
     """
     queryset = Pet.objects.prefetch_related("images").all()
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter, RecordScopeFilter]
+    active_statuses = Pet.ACTIVE_STATUSES
     filterset_fields = {
         "status": ["exact"], "species": ["exact"], "gender": ["exact"],
         "size": ["exact"], "is_vaccinated": ["exact"], "is_neutered": ["exact"],

@@ -184,6 +184,7 @@ try {
   await staff.getByRole('button', { name: 'Notifications (131 unread)', exact: true }).click();
   await staff.getByRole('region', { name: 'Recent notifications' }).getByRole('link').filter({ hasText: 'Staff update 131' }).click();
   await expect(staff).toHaveURL(`${origins.staff}/applications`);
+  await staff.getByRole('group', { name: 'Record views' }).getByRole('button', { name: 'All records', exact: true }).click();
   await expect.poll(async () => (await read('staff', '/notifications/unread-count/')).unread_count).toBe(130);
   await expect(staff.getByRole('button', { name: 'Notifications (130 unread)', exact: true })).toBeVisible();
   await theme(staff, 'dark');

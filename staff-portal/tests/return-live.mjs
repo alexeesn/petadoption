@@ -70,6 +70,8 @@ try {
   await dialog.getByRole('checkbox').check();
   await dialog.getByRole('button', { name: 'Complete Adoption', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+  await staff.getByRole('group', { name: 'Record views' }).getByRole('button', { name: 'History', exact: true }).click();
   await expect(row.getByRole('button', { name: 'Mark as Returned', exact: true })).toBeVisible();
   const completed = await read(`/api/adoptions/${fixture.record}/`);
   const paymentBefore = await read('/api/payments/');
@@ -165,6 +167,7 @@ try {
   await dialog.getByRole('checkbox').check();
   await dialog.getByRole('button', { name: 'Cancel Adoption', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await staff.getByRole('group', { name: 'Record views' }).getByRole('button', { name: 'History', exact: true }).click();
   const cancellationDownload = staff.waitForEvent('download');
   await futureRow.getByRole('button', { name: 'Download Cancellation PDF', exact: true }).click();
   const cancellationFile = await cancellationDownload;

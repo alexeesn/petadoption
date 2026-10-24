@@ -8,6 +8,8 @@ import { adoptionService, applicationService } from '../services/apiService';
 import type { AdoptionRecord, Application, PaginatedResponse } from '../types';
 import { formatDate, formatDateTime, formatCurrency } from '../utils/format';
 import { DecisionDialog } from '../components/DecisionDialog';
+import { RecordScopeTabs } from '../components/RecordScopeTabs';
+import { useRecordFilters } from '../hooks/useRecordFilters';
 
 /** Matches AdoptionRecord.Status.choices in backend/apps/adoptions/models.py. */
 const STATUS_FILTERS = [
@@ -39,7 +41,7 @@ function reportFilename(): string {
  * Records are created server-side when staff confirm an onsite visit date; the
  * permanent transaction ID is generated and stored by the backend only when a
  * record is completed. Scheduled records can be completed from here via the
- * same canonical endpoint the Application Review page uses
+ * canonical adoption-completion endpoint
  * (POST /api/applications/{id}/complete-adoption/), which re-validates the
  * approved application, confirmed appointment, fully paid fee, and an explicit
  * physical-handover confirmation. Completed adoptions have individual PDF
@@ -47,16 +49,16 @@ function reportFilename(): string {
  */
 export default function AdoptionsPage() {
   const toast = useToast();
+  const { scope, page, statusFilter, setScope, setPage, setStatusFilter } = useRecordFilters();
+  const [refresh, setRefresh] = useState(0);
   const [returningRecord, setReturningRecord] = useState<AdoptionRecord | null>(null);
   const [returnSuccess, setReturnSuccess] = useState('');
   const [cancellingRecord, setCancellingRecord] = useState<AdoptionRecord | null>(null);
   const [cancellationSuccess, setCancellationSuccess] = useState('');
   const [records, setRecords] = useState<AdoptionRecord[]>([]);
   const [count, setCount] = useState(0);
-  const [page, setPage] = useState(1);
   const [hasPrevious, setHasPrevious] = useState(false);
   const [hasNext, setHasNext] = useState(false);
-  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -73,24 +75,30 @@ export default function AdoptionsPage() {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const load = () => {
+    setPage(1);
+    setRefresh(current => current + 1);
+  };
+
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError('');
-    const params: Record<string, unknown> = { page };
+    const params: Record<string, unknown> = { page, scope };
     if (statusFilter) params.status = statusFilter;
     adoptionService
       .list(params)
       .then((res) => {
+        if (!active) return;
         const data = res.data as PaginatedResponse<AdoptionRecord>;
         setRecords(data.results);
         setCount(data.count);
         setHasPrevious(Boolean(data.previous));
         setHasNext(Boolean(data.next));
       })
-      .catch(() => setError('Failed to load adoption records.'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, [page, statusFilter]);
+      .catch(() => { if (active) setError('Failed to load adoption records.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [page, scope, statusFilter, refresh]);
 
   /**
    * Open the completion confirmation dialog for a scheduled record and load
@@ -191,7 +199,6 @@ export default function AdoptionsPage() {
   const clearFilters = () => {
     setStatusFilter('');
     setExportError('');
-    setPage(1);
   };
 
   /** Download the current-filter adoption records as an aggregate PDF report */
@@ -199,7 +206,7 @@ export default function AdoptionsPage() {
     setExporting(true);
     setExportError('');
     setError('');
-    const params: Record<string, unknown> = {};
+    const params: Record<string, unknown> = { scope };
     if (statusFilter) params.status = statusFilter;
     adoptionService
       .exportPdf(params)
@@ -275,15 +282,17 @@ export default function AdoptionsPage() {
       {cancellationSuccess && <p role="status" className="mb-4 text-sm text-green-800">{cancellationSuccess}</p>}
       {returnSuccess && <p role="status" className="mb-4 text-sm text-green-800">{returnSuccess}</p>}
 
+      <RecordScopeTabs scope={scope} onChange={setScope} />
+      <p className="mb-4 text-sm text-stone-600">Scheduled adoptions are in Active. Completed, cancelled and returned records remain in History with their PDFs.</p>
+
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Select
           label="Status"
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
-            setPage(1);
           }}
-          options={STATUS_FILTERS}
+          options={STATUS_FILTERS.filter(option => !option.value || scope === 'all' || (option.value === 'scheduled') === (scope === 'active'))}
         />
         {statusFilter && (
           <Button variant="outline" onClick={clearFilters}>

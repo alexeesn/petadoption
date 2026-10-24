@@ -17,6 +17,11 @@ class Application(models.Model):
         CANCELLED = "cancelled", "Cancelled"
         ADOPTION_COMPLETED = "adoption_completed", "Adoption Completed"
 
+    ACTIVE_STATUSES = (
+        Status.DRAFT, Status.SUBMITTED, Status.UNDER_REVIEW,
+        Status.PENDING_DOCUMENTS, Status.ADDITIONAL_INFO_REQUESTED, Status.APPROVED,
+    )
+
     # Valid status transitions
     #
     # A submitted application can move straight to the staff review outcomes

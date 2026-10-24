@@ -337,6 +337,7 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
   - Application status updates to **Adoption Completed**.
   - A permanent transaction ID (e.g., `TXN-4A2F8B1C9D0E`) is generated and locked into the `AdoptionRecord`.
   - The `AdoptionRecord` status transitions from `scheduled` to `completed`.
+  - The completed record leaves **Active**. Open **History** in Adoption Records to find its certificate PDF. Its application is also in Applications > History.
 - **What to Verify**:
   - Network response shows `POST /api/applications/<id>/complete-adoption/` returns HTTP 200 with `status: "adoption_completed"`.
 - **Recovery Step**:
@@ -348,7 +349,7 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
 
 - **Actor**: Adopter (`http://localhost:5173`) and Staff (`http://localhost:5174`)
 - **Action**:
-  1. In Staff Portal, navigate to **Pets** (`/pets`): find the adopted pet. Status is now **Adopted** (blue pill).
+  1. In Staff Portal, navigate to **Pets** (`/pets`) and choose **History**: find the pet with status **Adopted**.
   2. In Adopter Portal, navigate to **Browse Pets** (`/pets`).
   3. Look for the pet or search for its name.
 - **Expected Result**:
@@ -394,8 +395,8 @@ python manage.py shell -c "from apps.accounts.models import User; u, _ = User.ob
      - Click **Export PDF** (without filters) → Browser downloads `pawconnect-payment-records-YYYY-MM-DD.pdf`.
      - Filter status by **Completed**, then click **Export PDF** → Downloads filtered PDF.
   2. Navigate to **Adoptions** (`/adoptions`):
-     - Click **Export PDF** (without filters) → Browser downloads `pawconnect-adoption-records-YYYY-MM-DD.pdf`.
-     - Filter status by **Completed**, then click **Export PDF** → Downloads filtered PDF containing only completed adoptions.
+     - Choose **All records** and click **Export All Filtered PDF** → Browser downloads `pawconnect-adoption-records-YYYY-MM-DD.pdf`.
+     - Choose **History**, filter status by **Completed**, then click **Export All Filtered PDF** → Downloads filtered PDF containing only completed adoptions.
   3. Open the downloaded PDF files in any PDF viewer.
 - **Expected Result**:
   - A4 cleanly styled reports rendered via ReportLab with PawConnect branding, header metadata, timestamp, and table rows matching the applied filters.

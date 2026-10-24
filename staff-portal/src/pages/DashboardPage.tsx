@@ -5,19 +5,7 @@ import { Icon } from '../components/Icons';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { getDashboardStats } from '../services/apiService';
 
-interface Stats {
-  totalApplications: number;
-  totalPets: number;
-  totalAdopters: number;
-  totalAdoptions: number;
-  recentApplications: Array<{
-    id: string;
-    pet_name: string;
-    adopter_email: string;
-    status: string;
-    created_at: string;
-  }>;
-}
+type Stats = Awaited<ReturnType<typeof getDashboardStats>>;
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -36,10 +24,10 @@ export default function DashboardPage() {
   if (!stats) return null;
 
   const cards = [
-    { label: 'Applications', value: stats.totalApplications, to: '/applications', icon: 'clipboard' },
-    { label: 'Pets', value: stats.totalPets, to: '/pets', icon: 'paw' },
-    { label: 'Adopters', value: stats.totalAdopters, to: '/adopters', icon: 'user' },
-    { label: 'Adoption Records', value: stats.totalAdoptions, to: '/adoptions', icon: 'home' },
+    { label: 'Available Pets', value: stats.available_pets, to: '/pets?scope=active&status=available', icon: 'paw' },
+    { label: 'Active Applications', value: stats.active_applications, to: '/applications?scope=active', icon: 'clipboard' },
+    { label: 'Scheduled Adoptions', value: stats.scheduled_adoptions, to: '/adoptions?scope=active', icon: 'calendar' },
+    { label: 'Completed Adoptions', value: stats.completed_adoptions, to: '/adoptions?scope=history&status=completed', icon: 'home' },
   ];
 
   return (
@@ -56,13 +44,13 @@ export default function DashboardPage() {
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_17rem]"><Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-5 py-5">
-          <div><h3 className="text-base font-bold text-stone-900">Recent Applications</h3><p className="mt-1 text-xs text-stone-500">Keep the next adoption moving.</p></div><Link to="/applications" className="btn btn-outline">View applications</Link>
+          <div><h3 className="text-base font-bold text-stone-900">Recent Active Applications</h3><p className="mt-1 text-xs text-stone-500">Keep the next adoption moving. Finished applications are in History.</p></div><Link to="/applications" className="btn btn-outline">View applications</Link>
         </div>
-        {stats.recentApplications.length === 0 ? (
-          <p className="p-6 text-sm text-stone-500">No applications yet.</p>
+        {stats.recent_applications.length === 0 ? (
+          <p className="p-6 text-sm text-stone-500">No active applications.</p>
         ) : (
           <Table headers={['Pet', 'Adopter', 'Status', 'Submitted']}>
-            {stats.recentApplications.map((app) => (
+            {stats.recent_applications.map((app) => (
               <tr key={app.id} className="transition-colors hover:bg-stone-50">
                 <td className="px-6 py-4 text-sm font-semibold text-primary-700">
                   <Link to={`/applications/${app.id}`} className="hover:underline">

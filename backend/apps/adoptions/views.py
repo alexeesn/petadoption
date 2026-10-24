@@ -1,4 +1,4 @@
-from rest_framework import generics, viewsets, permissions, status
+from rest_framework import generics, viewsets, permissions, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -14,6 +14,7 @@ from .services import (
 )
 from .pdf import build_adoption_records_pdf
 from apps.accounts.permissions import IsStaff
+from apps.filters import RecordScopeFilter
 from apps.notifications.models import create_notification
 from apps.reports.documents import philippine_now
 
@@ -24,6 +25,8 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
     ).all()
     serializer_class = AdoptionRecordSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, RecordScopeFilter]
+    active_statuses = (AdoptionRecord.Status.SCHEDULED,)
 
     def get_permissions(self):
         # Adopters may *read* only their own adoption records (the queryset is
@@ -90,6 +93,9 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
 
         records = list(self.filter_queryset(self.get_queryset()).order_by("created_at"))
         filters = [f"Status: {status_filter}"] if status_filter else []
+        scope = request.query_params.get("scope")
+        if scope in ("active", "history"):
+            filters.insert(0, f"View: {scope.title()}")
 
         pdf_bytes = build_adoption_records_pdf(records, filters=filters, downloaded_by=request.user)
 

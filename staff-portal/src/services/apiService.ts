@@ -1,5 +1,5 @@
 import api from './api';
-import type { User, Notification, PaginatedResponse, Pet, HealthRecord } from '../types';
+import type { User, Notification, PaginatedResponse, Pet, HealthRecord, Application } from '../types';
 
 export async function login(email: string, password: string) {
   const res = await api.post('/auth/login/', { email, password });
@@ -43,23 +43,14 @@ export function getStoredToken(): string | null {
 
 // ----- Dashboard statistics -----
 export async function getDashboardStats() {
-  const [apps, pets, adopters, adoptions] = await Promise.all([
-    api.get('/applications/'),
-    api.get('/pets/'),
-    api.get('/adopters/'),
-    api.get('/adoptions/'),
-  ]);
-  const appsRes = apps.data as PaginatedResponse<any>;
-  const petsRes = pets.data as PaginatedResponse<any>;
-  const adoptersRes = adopters.data as PaginatedResponse<any>;
-  const adoptionsRes = adoptions.data as PaginatedResponse<any>;
-  return {
-    totalApplications: appsRes.count,
-    totalPets: petsRes.count,
-    totalAdopters: adoptersRes.count,
-    totalAdoptions: adoptionsRes.count,
-    recentApplications: appsRes.results.slice(0, 5),
-  };
+  const { data } = await api.get<{
+    available_pets: number;
+    active_applications: number;
+    scheduled_adoptions: number;
+    completed_adoptions: number;
+    recent_applications: Pick<Application, 'id' | 'pet_name' | 'adopter_email' | 'status' | 'created_at'>[];
+  }>('/reports/dashboard/');
+  return data;
 }
 
 // ----- Applications -----

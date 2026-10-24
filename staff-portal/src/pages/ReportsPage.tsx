@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, Loading, ErrorMessage, Button, Select } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { reportService } from '../services/apiService';
@@ -42,6 +42,16 @@ export default function ReportsPage() {
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [inventory, setInventory] = useState<{ total: number; by_status: Record<string, number> } | null>(null);
+  const [inventoryError, setInventoryError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    reportService.petInventory()
+      .then(({ data }) => { if (active) setInventory(data.stats); })
+      .catch(() => { if (active) setInventoryError('Could not load pet inventory totals.'); });
+    return () => { active = false; };
+  }, []);
 
   const handleDownloadPdf = () => {
     setDownloading(true);
@@ -85,6 +95,18 @@ export default function ReportsPage() {
         title="Reports"
         subtitle="Generate and download monthly completed operational reports in PDF format."
       />
+
+      <Card className="mb-6 max-w-2xl p-6">
+        <h3 className="text-lg font-semibold text-slate-900">Pet Inventory · All-time</h3>
+        <p className="mt-1 text-sm text-slate-600">All pets recorded, including adopted and inactive pets retained in History.</p>
+        {inventoryError ? <ErrorMessage message={inventoryError} /> : !inventory ? <Loading label="Loading inventory totals..." /> : (
+          <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div><dt className="text-sm text-slate-500">Total Pets Recorded</dt><dd className="text-2xl font-bold">{inventory.total}</dd></div>
+            <div><dt className="text-sm text-slate-500">Available</dt><dd className="text-2xl font-bold">{inventory.by_status.available ?? 0}</dd></div>
+            <div><dt className="text-sm text-slate-500">Adopted</dt><dd className="text-2xl font-bold">{inventory.by_status.adopted ?? 0}</dd></div>
+          </dl>
+        )}
+      </Card>
 
       <Card className="max-w-2xl p-6">
         <h3 className="text-lg font-semibold text-slate-900 mb-2">Monthly Completed Report</h3>

@@ -7,6 +7,36 @@ from django.utils import timezone
 from apps.accounts.permissions import IsStaff
 
 
+class DashboardView(views.APIView):
+    permission_classes = [permissions.IsAuthenticated, IsStaff]
+
+    def get(self, request):
+        from django.db.models import Count, Q
+        from apps.pets.models import Pet
+        from apps.applications.models import Application
+        from apps.adoptions.models import AdoptionRecord
+
+        active_applications = Application.objects.filter(status__in=Application.ACTIVE_STATUSES)
+        adoption_counts = AdoptionRecord.objects.aggregate(
+            scheduled=Count("id", filter=Q(status="scheduled")),
+            completed=Count("id", filter=Q(status="completed")),
+        )
+        recent = active_applications.order_by("-created_at", "-id").values(
+            "id", "pet__name", "adopter__email", "status", "created_at",
+        )[:5]
+        return Response({
+            "available_pets": Pet.objects.filter(status=Pet.Status.AVAILABLE).count(),
+            "active_applications": active_applications.count(),
+            "scheduled_adoptions": adoption_counts["scheduled"],
+            "completed_adoptions": adoption_counts["completed"],
+            "recent_applications": [{
+                "id": item["id"], "pet_name": item["pet__name"],
+                "adopter_email": item["adopter__email"], "status": item["status"],
+                "created_at": item["created_at"],
+            } for item in recent],
+        })
+
+
 class AdoptionReportView(views.APIView):
     permission_classes = [permissions.IsAuthenticated, IsStaff]
 

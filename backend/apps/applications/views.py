@@ -1,4 +1,4 @@
-from rest_framework import viewsets, generics, permissions, status, serializers as drf_serializers
+from rest_framework import viewsets, generics, permissions, status, filters, serializers as drf_serializers
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -12,6 +12,7 @@ from .serializers import (
     ApplicationStatusUpdateSerializer,
 )
 from apps.accounts.permissions import IsAdopter, IsStaff
+from apps.filters import RecordScopeFilter
 from apps.documents.models import Document
 from apps.documents.serializers import (
     REQUIRED_DOCUMENT_LABELS, REQUIRED_DOCUMENT_TYPES, validate_uploaded_file,
@@ -24,6 +25,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         "adopter", "adopter__adopter_profile", "pet", "reviewed_by"
     ).prefetch_related("documents").all()
     permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, RecordScopeFilter]
+    active_statuses = Application.ACTIVE_STATUSES
     # Applications are submitted together with their required documents, so the
     # endpoint has to accept multipart in addition to JSON.
     parser_classes = [JSONParser, MultiPartParser, FormParser]

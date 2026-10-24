@@ -1,49 +1,60 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table } from '../components/UI';
+import { Card, Loading, ErrorMessage, Empty, StatusBadge, Table, Button } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { applicationService } from '../services/apiService';
 import type { Application } from '../types';
+import { RecordScopeTabs } from '../components/RecordScopeTabs';
+import { useRecordFilters } from '../hooks/useRecordFilters';
+
+const STATUSES = [
+  ['draft', 'Draft'], ['submitted', 'Submitted'], ['under_review', 'Under Review'],
+  ['pending_documents', 'Pending Documents'], ['additional_info_requested', 'Additional Info Requested'],
+  ['approved', 'Approved'], ['rejected', 'Rejected'], ['cancelled', 'Cancelled'],
+  ['adoption_completed', 'Adoption Completed'],
+];
+const HISTORY_STATUSES = ['rejected', 'cancelled', 'adoption_completed'];
 
 export default function ApplicationsPage() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const { scope, page, statusFilter, setScope, setPage, setStatusFilter } = useRecordFilters();
+  const [pagination, setPagination] = useState({ count: 0, next: false, previous: false });
 
-  const load = () => {
+  useEffect(() => {
+    let active = true;
     setLoading(true);
     setError('');
-    const params = statusFilter ? { status: statusFilter } : {};
+    const params = { scope, page, ...(statusFilter ? { status: statusFilter } : {}) };
     applicationService
       .list(params)
-      .then((res) => setApps(res.data.results))
-      .catch(() => setError('Failed to load applications.'))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(load, [statusFilter]);
+      .then(({ data }) => {
+        if (!active) return;
+        setApps(data.results);
+        setPagination({ count: data.count, next: !!data.next, previous: !!data.previous });
+      })
+      .catch(() => { if (active) setError('Failed to load applications.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [scope, page, statusFilter]);
 
   return (
     <div>
       <PageHeader title="Applications" subtitle="Review and manage adoption applications" />
+      <RecordScopeTabs scope={scope} onChange={setScope} />
+      <p className="mb-4 text-sm text-stone-600">Ongoing applications are in Active. Completed, rejected and cancelled applications remain in History.</p>
       <div className="mb-4">
-        <label className="field-label mb-1">Filter by status</label>
+        <label htmlFor="application-status" className="field-label mb-1">Filter by status</label>
         <select
+          id="application-status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="field-input w-auto"
         >
           <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="submitted">Submitted</option>
-          <option value="under_review">Under Review</option>
-          <option value="pending_documents">Pending Documents</option>
-          <option value="additional_info_requested">Additional Info Requested</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="adoption_completed">Adoption Completed</option>
+          {STATUSES.filter(([value]) => scope === 'all' || HISTORY_STATUSES.includes(value) === (scope === 'history'))
+            .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </div>
 
@@ -84,6 +95,11 @@ export default function ApplicationsPage() {
           </Table>
         </Card>
       )}
+      {!error && pagination.count > 0 && <nav aria-label="Application pages" className="mt-4 flex flex-wrap items-center gap-3">
+        <Button variant="outline" disabled={loading || !pagination.previous} onClick={() => setPage(page - 1)}>Previous</Button>
+        <span className="text-sm text-stone-600">Page {page} · {pagination.count} applications</span>
+        <Button variant="outline" disabled={loading || !pagination.next} onClick={() => setPage(page + 1)}>Next</Button>
+      </nav>}
     </div>
   );
 }

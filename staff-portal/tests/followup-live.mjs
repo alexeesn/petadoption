@@ -160,6 +160,7 @@ try {
   await dialog.getByRole('checkbox').check();
   await dialog.getByRole('button', { name: 'Cancel Adoption', exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  await staff.getByRole('group', { name: 'Record views' }).getByRole('button', { name: 'History', exact: true }).click();
   await expect(staff.getByRole('row').filter({ hasText: 'Reschedule Pet' })).toContainText('Adopter withdrew from adoption');
   const cancelled = await read(`/api/adoptions/${fixture.records[0]}/`);
   assert.equal(cancelled.status, 'cancelled');
@@ -173,6 +174,7 @@ try {
   await expect(adopter.getByRole('button', { name: 'Request Reschedule', exact: true })).toHaveCount(0);
   // Closing an adoption with old no-show history must not tell its adopter
   // that the adoption is still open or offer another request.
+  await staff.getByRole('group', { name: 'Record views' }).getByRole('button', { name: 'Active', exact: true }).click();
   await staff.getByRole('row').filter({ hasText: 'NoShow Pet' }).getByRole('button', { name: 'Cancel Adoption', exact: true }).click();
   dialog = staff.getByRole('dialog');
   await dialog.getByRole('textbox').fill('Adopter no longer proceeding');
