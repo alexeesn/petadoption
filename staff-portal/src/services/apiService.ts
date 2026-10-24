@@ -152,7 +152,7 @@ export const healthService = {
     const pets: Pet[] = [];
     let page = 1;
     while (true) {
-      const { data } = await api.get<PaginatedResponse<Pet>>('/pets/', { params: { page } });
+      const { data } = await api.get<PaginatedResponse<Pet>>('/pets/', { params: { page, scope: 'active' } });
       pets.push(...data.results);
       if (data.next === null) return pets;
       page += 1;

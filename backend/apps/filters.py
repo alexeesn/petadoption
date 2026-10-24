@@ -8,8 +8,9 @@ class RecordScopeFilter(filters.BaseFilterBackend):
         scope = request.query_params.get("scope", "all")
         if scope not in ("active", "history", "all"):
             raise serializers.ValidationError({"scope": ["Choose active, history, or all."]})
+        status_lookup = f"{getattr(view, 'scope_status_field', 'status')}__in"
         if scope == "active":
-            return queryset.filter(status__in=view.active_statuses)
+            return queryset.filter(**{status_lookup: view.active_statuses})
         if scope == "history":
-            return queryset.exclude(status__in=view.active_statuses)
+            return queryset.exclude(**{status_lookup: view.active_statuses})
         return queryset

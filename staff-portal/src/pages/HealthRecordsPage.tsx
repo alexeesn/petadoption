@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Card, Loading, ErrorMessage, Empty, Table, Button, Input, Textarea } from '../components/UI';
+import { Card, Loading, ErrorMessage, Empty, Table, Button, Input, Textarea, StatusBadge } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { healthService } from '../services/apiService';
 import type { HealthRecord, Pet } from '../types';
 import { formatPetLabel, philippineDate } from '../utils/format';
 import { useToast } from '../context/ToastContext';
+import { RecordScopeTabs } from '../components/RecordScopeTabs';
+import { useRecordFilters } from '../hooks/useRecordFilters';
 
 const emptyForm = {
   pet: '',
@@ -56,7 +58,7 @@ export default function HealthRecordsPage() {
   const [recordError, setRecordError] = useState('');
   const [loadingPets, setLoadingPets] = useState(false);
   const [petError, setPetError] = useState('');
-  const [page, setPage] = useState(1);
+  const { scope, page, setScope, setPage } = useRecordFilters();
   const [hasNext, setHasNext] = useState(false);
   const [total, setTotal] = useState(0);
   const [refresh, setRefresh] = useState(0);
@@ -71,7 +73,7 @@ export default function HealthRecordsPage() {
     let active = true;
     setLoading(true);
     setError('');
-    healthService.list({ page })
+    healthService.list({ page, scope })
       .then(({ data }) => {
         if (!active) return;
         setRecords(data.results);
@@ -81,7 +83,7 @@ export default function HealthRecordsPage() {
       .catch(() => { if (active) setError('Failed to load health records. Please retry.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [page, refresh]);
+  }, [page, scope, refresh]);
 
   useEffect(() => {
     if (!showForm || editing) return;
@@ -117,6 +119,7 @@ export default function HealthRecordsPage() {
   }, [showForm, editing, form.pet, refresh]);
 
   const openNew = () => {
+    setScope('active');
     setEditing(null);
     setSelectedRecord(null);
     setLoadingRecord(false);
@@ -193,6 +196,16 @@ export default function HealthRecordsPage() {
       <div className="mb-4">
         <Button onClick={openNew} disabled={submitting}>Add Health Record</Button>
       </div>
+      <RecordScopeTabs scope={scope} onChange={value => {
+        if (submitting) return;
+        setShowForm(false);
+        setEditing(null);
+        setSelectedRecord(null);
+        setForm({ ...emptyForm });
+        setSuccess('');
+        setScope(value);
+      }} />
+      <p className="mb-4 text-sm text-stone-600">Active shows medical records for pets in the center's current care. Adopted and inactive pets' records remain in History. Returned pets appear in Active again when available.</p>
 
       {showForm && (
         <Card className="mb-6 p-6">
@@ -227,7 +240,7 @@ export default function HealthRecordsPage() {
                     {pets.map(pet => <option key={pet.id} value={pet.id}>{formatPetLabel(pet.name)} ({pet.species})</option>)}
                   </select>
                 </label>
-                <p id="health-pet-help" className="mt-2 text-xs text-stone-500">Saved records open read-only. Choose Edit Health Record to make changes. Changing the pet clears unsaved entries.</p>
+                <p id="health-pet-help" className="mt-2 text-xs text-stone-500">Choose a pet in the center's current care. Adopted and inactive pets' records are in History. Saved records open read-only; choose Edit Health Record to make changes. Changing the pet clears unsaved entries.</p>
                 {!loadingPets && !petError && pets.length === 0 && <p role="status" className="mt-2 text-sm text-stone-600">No pets are available.</p>}
                 {petError && <div role="alert" className="mt-2 text-sm text-red-600">{petError} <button type="button" className="font-semibold underline" onClick={() => setRefresh(current => current + 1)}>Retry loading pets</button></div>}
               </div>
@@ -308,6 +321,7 @@ export default function HealthRecordsPage() {
             {records.map(rec => (
               <article key={rec.id} className="rounded-lg border border-stone-200 p-4">
                 <h3 className="font-semibold text-stone-900">{formatPetLabel(rec.pet_name)}</h3>
+                <div className="mt-2"><StatusBadge status={rec.pet_status} /></div>
                 <dl className="mt-3 space-y-2 text-sm text-stone-600">
                   <div><dt className="font-medium">Record Date</dt><dd>{rec.record_date}</dd></div>
                   <div><dt className="font-medium">Diagnosis</dt><dd className="break-words whitespace-pre-line">{rec.diagnosis || 'Not recorded'}</dd></div>
@@ -319,10 +333,11 @@ export default function HealthRecordsPage() {
             ))}
           </div>
           <div className="hidden md:block">
-          <Table headers={['Pet', 'Record Date', 'Diagnosis', 'Veterinarian', 'Notes', 'Created', 'Actions']}>
+          <Table headers={['Pet', 'Pet Status', 'Record Date', 'Diagnosis', 'Veterinarian', 'Notes', 'Created', 'Actions']}>
             {records.map((rec) => (
               <tr key={rec.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-sm font-medium text-slate-900">{formatPetLabel(rec.pet_name)}</td>
+                <td className="px-4 py-3 text-sm"><StatusBadge status={rec.pet_status} /></td>
                 <td className="px-4 py-3 text-sm text-slate-600">{rec.record_date}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{rec.diagnosis || '—'}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{rec.veterinarian_name || '—'}</td>
@@ -339,9 +354,9 @@ export default function HealthRecordsPage() {
       )}
       {!error && total > 0 && (
         <nav aria-label="Health record pages" className="mt-4 flex flex-wrap items-center justify-center gap-3">
-          <Button variant="outline" onClick={() => setPage(current => current - 1)} disabled={loading || page === 1}>Previous</Button>
+          <Button variant="outline" onClick={() => setPage(page - 1)} disabled={loading || page === 1}>Previous</Button>
           <span className="text-sm text-stone-500">Page {page} · {total} records</span>
-          <Button variant="outline" onClick={() => setPage(current => current + 1)} disabled={loading || !hasNext}>Next</Button>
+          <Button variant="outline" onClick={() => setPage(page + 1)} disabled={loading || !hasNext}>Next</Button>
         </nav>
       )}
     </div>

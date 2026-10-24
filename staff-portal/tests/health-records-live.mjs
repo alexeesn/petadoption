@@ -47,11 +47,23 @@ try {
   await expect(page.locator('tbody tr')).toHaveCount(20);
   await page.getByRole('navigation', { name: 'Health record pages' }).getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.locator('tbody tr')).toHaveCount(5);
+  const views = page.getByRole('group', { name: 'Record views' });
+  await views.getByRole('button', { name: 'History', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Health record pages' })).toContainText('Page 1 · 2 records');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await expect(page.locator('tbody')).toContainText('Historical Adopted');
+  await page.reload();
+  await expect(views.getByRole('button', { name: 'History', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('tbody tr')).toHaveCount(2);
+  await views.getByRole('button', { name: 'All records', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Health record pages' })).toContainText('27 records');
   await page.getByRole('button', { name: 'Add Health Record', exact: true }).click();
+  await expect(views.getByRole('button', { name: 'Active', exact: true })).toHaveAttribute('aria-pressed', 'true');
   const choice = page.getByRole('combobox', { name: 'Pet', exact: true });
   await expect(choice).toBeEnabled();
-  // All pets can be selected for viewing; an existing record is never an editable new form.
+  // Current-care pets remain selectable across all pages; adopted/inactive pets stay in History.
   await expect(choice.locator('option')).toHaveCount(51);
+  for (const id of fixture.historical_pets) await expect(choice.locator(`option[value="${id}"]`)).toHaveCount(0);
   const beforeSelection = await read(`/health-records/${fixture.recorded_record}/`);
   const writes = [];
   page.on('request', request => { if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) writes.push(request.url()); });
@@ -88,7 +100,7 @@ try {
   await recordDate.fill(fixture.tomorrow);
   assert.equal(await recordDate.evaluate(input => input.validity.rangeOverflow), true);
   await page.getByRole('button', { name: 'Save Record', exact: true }).click();
-  assert.equal((await read('/health-records/')).count, 25);
+  assert.equal((await read('/health-records/')).count, 27);
   // Even bypassing native date bounds must not submit invalid dates.
   await recordDate.evaluate(input => { input.form.noValidate = true; });
   await page.getByRole('button', { name: 'Save Record', exact: true }).click();
@@ -98,7 +110,7 @@ try {
   assert.equal(await nextCheckup.evaluate(input => input.validity.rangeUnderflow), true);
   await page.getByRole('button', { name: 'Save Record', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Next checkup date cannot be in the past.');
-  assert.equal((await read('/health-records/')).count, 25);
+  assert.equal((await read('/health-records/')).count, 27);
   await recordDate.evaluate(input => { input.form.noValidate = false; });
   // Even an older medical date must not hide a newly added record.
   await page.getByLabel('Record Date', { exact: true }).fill('2025-10-01');
@@ -154,7 +166,7 @@ try {
   await page.getByLabel('Notes', { exact: true }).fill('Cancelled edit must not save');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.deepEqual(errors, []);
-  console.log('PASS: read-only pet selection never writes or changes saved records; explicit Edit/Save, draft isolation, complete choices, dates, create/reload, nullable clearing, pagination and mobile Cancel.');
+  console.log('PASS: Active/History/All views, adopted/inactive records retained, current-care choices, read-only selection, explicit Edit/Save, draft isolation, dates, pagination, reload and mobile Cancel.');
 } catch (error) {
   if (page) console.error((await page.locator('body').innerText()).slice(0, 3500));
   throw error;

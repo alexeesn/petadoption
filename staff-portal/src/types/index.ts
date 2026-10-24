@@ -135,6 +135,7 @@ export interface HealthRecord {
   id: string;
   pet: string;
   pet_name: string;
+  pet_status: Pet['status'];
   record_date: string;
   diagnosis: string;
   treatment: string;

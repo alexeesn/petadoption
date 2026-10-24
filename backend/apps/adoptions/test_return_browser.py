@@ -17,6 +17,7 @@ from apps.adopters.models import AdopterProfile
 from apps.applications.models import Application
 from apps.appointments.models import Appointment
 from apps.audit.models import AuditLog
+from apps.health.models import HealthRecord
 from apps.notifications.models import Notification
 from apps.payments.models import Payment
 from apps.pets.models import Pet
@@ -38,6 +39,8 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
             setattr(profile, field, value)
         profile.save()
         pet = Pet.objects.create(name="Return Browser Buddy", species="dog", age_years=2, status="pending")
+        health_record = HealthRecord.objects.create(pet=pet, record_date="2025-01-01", diagnosis="Saved medical history", created_by=staff)
+        medical_before = HealthRecord.objects.values().get(pk=health_record.pk)
         app = Application.objects.create(adopter=adopter, pet=pet, status="approved")
         appointment = Appointment.objects.create(
             application=app, adopter=adopter, pet=pet, status="confirmed",
@@ -85,6 +88,7 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
         self.assertIsNotNone(record.returned_at)
         self.assertEqual(record.return_reason, "Adopter developed allergies")
         self.assertEqual(pet.status, "available")
+        self.assertEqual(HealthRecord.objects.values().get(pk=health_record.pk), medical_before)
         self.assertEqual(payment.status, "completed")
         self.assertEqual(payment.receipt_number, receipt)
         self.assertEqual(payment.adoption_id, record.pk)

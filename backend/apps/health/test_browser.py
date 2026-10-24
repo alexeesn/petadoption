@@ -25,12 +25,18 @@ class HealthRecordBrowserTests(LiveServerTestCase):
             pet = Pet.objects.create(name=f'Recorded {index:02d}', species='dog')
             HealthRecord.objects.create(pet=pet, record_date='2026-01-01', diagnosis='Existing history', created_by=staff)
             eligible = Pet.objects.create(name=f'Eligible {index:02d}', species='cat')
+        historical_pets = []
+        for status in ('adopted', 'inactive'):
+            historical_pet = Pet.objects.create(name=f'Historical {status}', species='dog', status=status)
+            HealthRecord.objects.create(pet=historical_pet, record_date='2026-01-01', diagnosis='Retained medical history', created_by=staff)
+            historical_pets.append(str(historical_pet.pk))
         before = list(HealthRecord.objects.order_by('pk').values())
         today = timezone.localtime(timezone.now(), ZoneInfo('Asia/Manila')).date()
         fixture = {
             'api': self.live_server_url, 'eligible_pet': str(eligible.pk),
             'recorded_pet': str(pet.pk),
             'recorded_record': str(HealthRecord.objects.get(pet=pet).pk),
+            'historical_pets': historical_pets,
             'today': today.isoformat(), 'yesterday': (today - timedelta(days=1)).isoformat(),
             'tomorrow': (today + timedelta(days=1)).isoformat(),
             'staff': {'token': Token.objects.create(user=staff).key, 'user': dict(UserSerializer(staff).data)},
@@ -48,5 +54,5 @@ class HealthRecordBrowserTests(LiveServerTestCase):
         self.assertEqual(record.notes, 'Updated care plan')
         self.assertIsNone(record.next_checkup_date)
         self.assertEqual(record.created_by_id, staff.pk)
-        self.assertEqual(HealthRecord.objects.count(), 26)
+        self.assertEqual(HealthRecord.objects.count(), 28)
         self.assertEqual(list(HealthRecord.objects.exclude(pk=record.pk).order_by('pk').values()), before)

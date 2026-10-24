@@ -6,6 +6,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import HealthRecord, Vaccination
 from .serializers import HealthRecordSerializer, VaccinationSerializer
 from apps.accounts.permissions import IsStaff
+from apps.filters import RecordScopeFilter
 from apps.pets.models import Pet
 from apps.pets.serializers import PetListSerializer
 
@@ -16,8 +17,10 @@ class HealthRecordViewSet(viewsets.ModelViewSet):
     )
     serializer_class = HealthRecordSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaff]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter, RecordScopeFilter]
     filterset_fields = ["pet"]
+    scope_status_field = "pet__status"
+    active_statuses = Pet.ACTIVE_STATUSES
 
     @transaction.atomic
     def perform_create(self, serializer):

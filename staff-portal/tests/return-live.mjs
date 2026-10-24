@@ -61,6 +61,8 @@ try {
     pages[role].on('pageerror', (error) => errors.push(error.message));
   }
   const { adopter, staff } = pages;
+  const healthBefore = await read(`/api/health-records/?scope=active&pet=${fixture.pet}`);
+  assert.equal(healthBefore.count, 1);
   await staff.goto(`${staffUrl}/adoptions`);
   const row = staff.getByRole('row').filter({ hasText: 'Return Browser Buddy' });
   await expect(row.getByRole('button', { name: 'Complete Adoption', exact: true })).toBeVisible();
@@ -76,6 +78,10 @@ try {
   const completed = await read(`/api/adoptions/${fixture.record}/`);
   const paymentBefore = await read('/api/payments/');
   assert.equal(completed.status, 'completed');
+  assert.equal((await read(`/api/health-records/?scope=active&pet=${fixture.pet}`)).count, 0);
+  const healthHistory = await read(`/api/health-records/?scope=history&pet=${fixture.pet}`);
+  assert.equal(healthHistory.count, 1);
+  assert.equal(healthHistory.results[0].id, healthBefore.results[0].id);
   assert.ok(completed.transaction_id);
   console.log('Scheduled adoption completed through the real staff UI; return action appears only after completion.');
 
@@ -116,6 +122,11 @@ try {
   assert.equal(returned.completed_at, completed.completed_at);
   assert.deepEqual(await read('/api/payments/'), paymentBefore);
   assert.equal((await read(`/api/pets/${fixture.pet}/`)).status, 'available');
+  const healthReturned = await read(`/api/health-records/?scope=active&pet=${fixture.pet}`);
+  assert.equal(healthReturned.count, 1);
+  assert.equal(healthReturned.results[0].id, healthBefore.results[0].id);
+  assert.equal(healthReturned.results[0].diagnosis, healthBefore.results[0].diagnosis);
+  assert.equal((await read(`/api/health-records/?scope=history&pet=${fixture.pet}`)).count, 0);
   const pdfDownload = staff.waitForEvent('download');
   await row.getByRole('button', { name: 'Download Return PDF', exact: true }).click();
   const downloaded = await pdfDownload;
