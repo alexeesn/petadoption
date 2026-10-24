@@ -43,6 +43,13 @@ try {
   await page.goto(`${origin}/applications/new?pet=${fixture.pet}`);
   await expect(page.getByRole('heading', { name: 'Complete Your Profile First', exact: true })).toBeVisible();
   await page.goto(`${origin}/profile`);
+  await expect(page.locator('dd').filter({ hasText: /^Alexis$/ })).toBeVisible();
+  await expect(page.locator('dd').filter({ hasText: /^Teodosio$/ })).toBeVisible();
+  await expect(page.locator('dd').filter({ hasText: '123 Taft Avenue' })).toBeVisible();
+  await page.getByRole('button', { name: 'Profile menu', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Account', exact: true }).getByText('Alexis', { exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Account', exact: true })).toContainText('identity-browser@example.test');
+  await page.getByRole('button', { name: 'Profile menu', exact: true }).click();
   await page.getByRole('button', { name: 'Edit Profile', exact: true }).click();
   const first = page.getByLabel('First Name', { exact: false });
   const last = page.getByLabel('Last Name', { exact: false });
@@ -59,8 +66,8 @@ try {
   await expect(page.getByText('First Name is required.', { exact: true })).toBeVisible();
   await expect(page.getByText('Last Name is required.', { exact: true })).toBeVisible();
   await expect(page.getByText('Date of Birth is required.', { exact: true })).toBeVisible();
-  await first.fill('Alexis Updated');
-  await last.fill('Teodosio');
+  await first.fill('alexis updated');
+  await last.fill('teodosio');
   await birthday.fill(fixture.underage);
   await page.getByRole('button', { name: 'Save Profile', exact: true }).click();
   await expect(page.getByText('You must be at least 18 years old.', { exact: true })).toBeVisible();

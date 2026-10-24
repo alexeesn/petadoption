@@ -4,6 +4,15 @@ export function philippineDate(): string {
   }).format(new Date());
 }
 
+/** Display names and address labels consistently, keeping intentional casing. */
+export function formatDisplayName(value?: string | null): string {
+  return (value || '').trim().split(/\s+/).map(part =>
+    part === part.toLocaleLowerCase()
+      ? part.replace(/(^|[^\p{L}])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toUpperCase())
+      : part
+  ).join(' ')
+}
+
 export function formatDate(value?: string): string {
   if (!value) return '—';
   try {

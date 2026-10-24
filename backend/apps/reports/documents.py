@@ -50,7 +50,7 @@ def name(user):
     full_name = user.full_name.strip()
     if not full_name:
         return user.email
-    return ' '.join(part.title() if part.islower() else part for part in full_name.split())
+    return full_name
 
 
 def person(user):

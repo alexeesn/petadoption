@@ -19,9 +19,9 @@ from .models import AdopterProfile
 @skipUnless(os.environ.get("PAWCONNECT_PROFILE_BROWSER_TESTS") == "1", "Opt-in profile identity browser test")
 class ProfileIdentityBrowserTests(LiveServerTestCase):
     def test_required_names_birthday_adult_boundary_and_persistence(self):
-        adopter = User.objects.create_user(email="identity-browser@example.test", first_name="Alexis", last_name="Teodosio", role="adopter", is_email_verified=True)
+        adopter = User.objects.create_user(email="identity-browser@example.test", first_name="alexis", last_name="teodosio", role="adopter", is_email_verified=True)
         staff = User.objects.create_user(email="identity-browser-staff@example.test", role="staff", is_email_verified=True)
-        profile = AdopterProfile.objects.create(user=adopter, phone_number="09171234567", address_line1="123 Taft Avenue",
+        profile = AdopterProfile.objects.create(user=adopter, phone_number="09171234567", address_line1="123 taft avenue",
             region="National Capital Region (NCR)", city="City of Manila", barangay="Barangay 1", zip_code="1000", housing_type="house", owns_or_rents="own")
         pet = Pet.objects.create(name="Profile Browser Buddy", species="dog")
         today = timezone.localtime(timezone.now(), ZoneInfo("Asia/Manila")).date()

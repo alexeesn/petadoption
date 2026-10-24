@@ -5,6 +5,15 @@ export function formatDate(dateStr?: string): string {
   })
 }
 
+/** Display names and address labels consistently, keeping intentional casing. */
+export function formatDisplayName(value?: string | null): string {
+  return (value || '').trim().split(/\s+/).map(part =>
+    part === part.toLocaleLowerCase()
+      ? part.replace(/(^|[^\p{L}])(\p{L})/gu, (_match, separator: string, letter: string) => separator + letter.toUpperCase())
+      : part
+  ).join(' ')
+}
+
 export function birthDateBounds() {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
   const value = (type: string) => Number(parts.find(part => part.type === type)?.value)

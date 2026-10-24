@@ -1,6 +1,7 @@
 import uuid
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from .names import display_name
 
 
 class UserManager(BaseUserManager):
@@ -67,7 +68,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def full_name(self):
-        return f"{self.first_name} {self.last_name}".strip()
+        return display_name(f"{self.first_name} {self.last_name}")
 
     @property
     def is_adopter(self):

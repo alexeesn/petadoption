@@ -5,6 +5,7 @@ import logging
 from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
+from .names import display_name
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +16,13 @@ def send_verification_email(user, otp: str, expiry_minutes: int = 10) -> None:
     """
     subject = "Verify your email - PawConnect"
     context = {
-        "first_name": user.first_name,
+        "first_name": display_name(user.first_name),
         "otp_code": otp,
         "expiry_minutes": expiry_minutes,
     }
 
     plain_message = (
-        f"Hi {user.first_name or 'there'},\n\n"
+        f"Hi {display_name(user.first_name) or 'there'},\n\n"
         f"Thank you for joining PawConnect!\n"
         f"Your verification code is: {otp}\n"
         f"It expires in {expiry_minutes} minutes.\n\n"
@@ -53,13 +54,13 @@ def send_password_reset_email(user, otp: str, expiry_minutes: int = 10) -> None:
     """
     subject = "Password Reset - PawConnect"
     context = {
-        "first_name": user.first_name,
+        "first_name": display_name(user.first_name),
         "otp_code": otp,
         "expiry_minutes": expiry_minutes,
     }
 
     plain_message = (
-        f"Hi {user.first_name or 'there'},\n\n"
+        f"Hi {display_name(user.first_name) or 'there'},\n\n"
         f"We received a request to reset your password for PawConnect.\n"
         f"Your password reset code is: {otp}\n"
         f"It expires in {expiry_minutes} minutes.\n\n"

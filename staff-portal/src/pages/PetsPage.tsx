@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, Loading, ErrorMessage, Empty, Button, Input, Select } from '../components/UI';
+import { Card, Loading, ErrorMessage, Empty, Button, Input, Select, StatusBadge } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { petService } from '../services/apiService';
-import { formatPetAge, formatPetLabel, philippineDate } from '../utils/format';
+import { formatPetAge, formatPetLabel, philippineDate, formatDisplayName } from '../utils/format';
 import { PawMark } from '../components/Icons';
 import type { Pet, PetImage } from '../types';
 import { useToast } from '../context/ToastContext';
@@ -291,7 +291,7 @@ export default function PetsPage() {
         <Select label="Status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)} options={[
           { value: '', label: 'All statuses' },
           ...PET_STATUSES.filter(status => scope === 'all' || ACTIVE_PET_STATUSES.includes(status) === (scope === 'active'))
-            .map(status => ({ value: status, label: status.replace(/_/g, ' ') })),
+            .map(status => ({ value: status, label: formatDisplayName(status.replace(/_/g, ' ')) })),
         ]} />
         {!loading && !error && <p className="text-sm text-stone-500">{pagination.count} pet{pagination.count === 1 ? '' : 's'} in this view</p>}
       </div>
@@ -548,7 +548,7 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm text-slate-600">{formatPetLabel(pet.breed)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{formatPetAge(pet.age_years, pet.age_months)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">{pet.weight_kg ?? 'Not recorded'}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{pet.status.replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3 text-sm text-slate-600"><StatusBadge status={pet.status} /></td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openEdit(pet)} className="text-primary-600 hover:underline text-sm font-medium">Edit</button>
                     </td>

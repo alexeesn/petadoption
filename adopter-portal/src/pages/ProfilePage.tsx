@@ -7,7 +7,7 @@ import PhilippineAddressSelector, {
   type PhilippineAddress,
   EMPTY_PH_ADDRESS,
 } from '../components/PhilippineAddressSelector'
-import { birthDateBounds, formatDate } from '../utils/format'
+import { birthDateBounds, formatDate, formatDisplayName } from '../utils/format'
 import { useAuth } from '../context/AuthContext'
 import type { AdopterProfile } from '../types'
 
@@ -81,8 +81,8 @@ const REQUIRED_FIELDS: Array<{ name: keyof ProfileForm; label: string }> = [
 /** Convert a saved AdopterProfile into the editable form shape. */
 function profileToForm(data: AdopterProfile): ProfileForm {
   return {
-    first_name: data.first_name ?? '',
-    last_name: data.last_name ?? '',
+    first_name: formatDisplayName(data.first_name),
+    last_name: formatDisplayName(data.last_name),
     phone_number: data.phone_number ?? '',
     address_line1: data.address_line1 ?? '',
     address_line2: data.address_line2 ?? '',
@@ -147,7 +147,7 @@ function formatPhAddress(profile: AdopterProfile): string {
   if (cityLine) parts.push(cityLine)
   if (profile.zip_code) parts.push(profile.zip_code)
   if (profile.region) parts.push(profile.region)
-  return parts.join('\n')
+  return parts.map(formatDisplayName).join('\n')
 }
 
 /** Parse comma-separated ages string into an array of child age strings of length `count`. */
@@ -399,6 +399,8 @@ export default function ProfilePage() {
         : ''
       const payload: Record<string, string | number | boolean | null> = {
         ...form,
+        first_name: formatDisplayName(form.first_name),
+        last_name: formatDisplayName(form.last_name),
         number_of_children: childCount,
         children_ages: agesStr,
         other_pets: form.has_other_pets ? form.other_pets : '',
@@ -510,8 +512,8 @@ export default function ProfilePage() {
           </div>
 
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-            <ProfileField label="First Name" value={saved.first_name} />
-            <ProfileField label="Last Name" value={saved.last_name} />
+            <ProfileField label="First Name" value={formatDisplayName(saved.first_name)} />
+            <ProfileField label="Last Name" value={formatDisplayName(saved.last_name)} />
             <ProfileField label="Phone Number" value={saved.phone_number} />
             <ProfileField
               label="Date of Birth"
@@ -567,7 +569,7 @@ export default function ProfilePage() {
             {(['first_name', 'last_name'] as const).map(name => (
               <div key={name}>
                 <label htmlFor={name} className="field-label mb-1">{name === 'first_name' ? 'First Name' : 'Last Name'} <span className="text-red-600" aria-hidden="true">*</span></label>
-                <input id={name} name={name} type="text" required maxLength={150} autoComplete={name === 'first_name' ? 'given-name' : 'family-name'} value={form[name]} onChange={handleChange} aria-invalid={fieldErrors[name] ? true : undefined} aria-describedby={`${name}-error`} className={inputCls} />
+                <input id={name} name={name} type="text" required maxLength={150} autoCapitalize="words" autoComplete={name === 'first_name' ? 'given-name' : 'family-name'} value={form[name]} onChange={handleChange} onBlur={() => setForm(current => ({ ...current, [name]: formatDisplayName(current[name]) }))} aria-invalid={fieldErrors[name] ? true : undefined} aria-describedby={`${name}-error`} className={inputCls} />
                 <div id={`${name}-error`}><FieldError message={fieldErrors[name]} /></div>
               </div>
             ))}

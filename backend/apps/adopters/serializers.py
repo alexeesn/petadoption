@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from .models import AdopterProfile
 from .validators import birthday_error
+from apps.accounts.names import display_name
 
 
 @lru_cache(maxsize=1)
@@ -53,6 +54,12 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="user.first_name", max_length=150, allow_blank=False)
     last_name = serializers.CharField(source="user.last_name", max_length=150, allow_blank=False)
     date_of_birth = serializers.DateField(required=True, allow_null=False)
+
+    def validate_first_name(self, value):
+        return display_name(value)
+
+    def validate_last_name(self, value):
+        return display_name(value)
 
     class Meta:
         model = AdopterProfile

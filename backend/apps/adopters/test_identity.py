@@ -18,7 +18,7 @@ class ProfileIdentityTests(BaseAPITestCase):
         self.url = "/api/adopters/profile/"
 
     def test_names_are_saved_to_account_and_returned_in_both_profile_endpoints(self):
-        response = self.client.patch(self.url, {"first_name": " Alexis ", "last_name": " Teodosio "}, format="json")
+        response = self.client.patch(self.url, {"first_name": " alexis ", "last_name": " teodosio "}, format="json")
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["first_name"], "Alexis")
         self.assertEqual(response.data["last_name"], "Teodosio")

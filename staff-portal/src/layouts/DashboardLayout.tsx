@@ -7,6 +7,7 @@ import { useSidebarCounts } from '../hooks/useSidebarCounts';
 import type { SidebarBadgeKey } from '../hooks/useSidebarCounts';
 import { BrandTile, Icon } from '../components/Icons';
 import type { IconName } from '../components/Icons';
+import { formatDisplayName } from '../utils/format';
 
 interface NavItem {
   to: string;
@@ -101,7 +102,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             return <li key={item.to}><NavLink to={item.to} end={item.to === '/'} onClick={() => { setSidebarOpen(false); if (item.badge && badgeCount > 0) void markModuleRead(item.badge); }} className={({ isActive }) => `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors staff-nav-link ${isActive ? 'is-active' : ''}`}><Icon name={item.icon} className="h-[18px] w-[18px] shrink-0"/><span className="min-w-0 flex-1 truncate">{item.label}</span>{item.badge && badgeCount > 0 && <span className="rounded-md bg-[#b42336] px-1.5 py-0.5 text-[10px] font-semibold text-white">{badgeCount > 99 ? '99+' : badgeCount}<span className="sr-only"> unread notifications</span></span>}</NavLink></li>;
           })}</ul></div>)}
         </nav>
-        <div className="shrink-0 border-t border-stone-200 p-4"><div className="mb-3 flex items-center gap-3 px-2"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-700"><Icon name="user" className="h-5 w-5"/></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-stone-900">{user?.full_name || 'PawConnect team'}</p><p className="truncate text-xs text-stone-500">{user?.role === 'admin' ? 'Administrator' : 'Staff member'}</p></div></div><button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"><Icon name="logout" className="h-4 w-4"/>Logout</button></div>
+        <div className="shrink-0 border-t border-stone-200 p-4"><div className="mb-3 flex items-center gap-3 px-2"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-50 text-primary-700"><Icon name="user" className="h-5 w-5"/></span><div className="min-w-0"><p className="truncate text-sm font-semibold text-stone-900">{formatDisplayName(user?.full_name) || 'PawConnect team'}</p><p className="truncate text-xs text-stone-500">{user?.role === 'admin' ? 'Administrator' : 'Staff member'}</p></div></div><button type="button" onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 hover:text-stone-900"><Icon name="logout" className="h-4 w-4"/>Logout</button></div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-[4.5rem] items-center justify-between gap-3 portal-header border-b px-4 sm:px-6 lg:px-9">
