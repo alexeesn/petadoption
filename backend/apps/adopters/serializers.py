@@ -1,11 +1,12 @@
 import json
 import os
-from datetime import date
 from functools import lru_cache
 
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import AdopterProfile
+from .validators import birthday_error
 
 
 @lru_cache(maxsize=1)
@@ -18,6 +19,8 @@ def get_philippine_addresses():
 
 
 class AdopterProfileSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
     user_email = serializers.EmailField(source="user.email", read_only=True)
     user_name = serializers.SerializerMethodField()
     # Single source of truth for "profile complete" (AdopterProfile.is_complete).
@@ -28,7 +31,7 @@ class AdopterProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = AdopterProfile
         fields = [
-            "id", "user_email", "user_name", "phone_number",
+            "id", "user_email", "user_name", "first_name", "last_name", "phone_number",
             "address_line1", "address_line2",
             "region", "city", "state", "barangay", "zip_code",
             "date_of_birth", "housing_type", "owns_or_rents", "has_yard",
@@ -47,10 +50,14 @@ class AdopterProfileSerializer(serializers.ModelSerializer):
 
 
 class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(source="user.first_name", max_length=150, allow_blank=False)
+    last_name = serializers.CharField(source="user.last_name", max_length=150, allow_blank=False)
+    date_of_birth = serializers.DateField(required=True, allow_null=False)
+
     class Meta:
         model = AdopterProfile
         fields = [
-            "phone_number", "address_line1", "address_line2",
+            "first_name", "last_name", "phone_number", "address_line1", "address_line2",
             "region", "city", "state", "barangay", "zip_code",
             "date_of_birth", "housing_type", "owns_or_rents",
             "has_yard", "other_pets", "household_members", "agree_to_terms",
@@ -59,23 +66,20 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_date_of_birth(self, value):
-        """
-        Date of birth is optional (null/blank is accepted).
-        When provided it must:
-        - Not be in the future.
-        - Not be more than 120 years in the past (sanity check).
-        """
-        if value is None:
-            return value
-        today = date.today()
-        if value > today:
-            raise serializers.ValidationError("Date of birth cannot be in the future.")
-        min_date = today.replace(year=today.year - 120)
-        if value < min_date:
-            raise serializers.ValidationError(
-                "Date of birth must be within the last 120 years."
-            )
+        error = birthday_error(value)
+        if error:
+            raise serializers.ValidationError(error)
         return value
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        names = validated_data.pop("user", {})
+        instance = super().update(instance, validated_data)
+        if names:
+            for field, value in names.items():
+                setattr(instance.user, field, value)
+            instance.user.save(update_fields=[*names, "updated_at"])
+        return instance
 
     def validate_household_members(self, value):
         if value is not None and value < 1:
@@ -91,6 +95,18 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+
+        errors = {}
+        names = attrs.get("user", {})
+        for field in ("first_name", "last_name"):
+            value = names.get(field, getattr(getattr(self.instance, "user", None), field, ""))
+            if not str(value or "").strip():
+                errors[field] = "This field is required."
+        error = birthday_error(attrs.get("date_of_birth", getattr(self.instance, "date_of_birth", None)))
+        if error:
+            errors["date_of_birth"] = error
+        if errors:
+            raise serializers.ValidationError(errors)
 
         # Retrieve effective address values (newly provided or existing instance)
         region = attrs.get("region") if "region" in attrs else getattr(self.instance, "region", "")

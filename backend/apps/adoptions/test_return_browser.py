@@ -29,12 +29,13 @@ from .models import AdoptionRecord
 class AdoptionReturnBrowserTests(LiveServerTestCase):
     def test_completion_and_return_in_both_portals(self):
         staff = User.objects.create_user(email="return-browser-staff@example.test", role="staff", is_email_verified=True)
-        adopter = User.objects.create_user(email="return-browser-adopter@example.test", role="adopter", is_email_verified=True)
+        adopter = User.objects.create_user(email="return-browser-adopter@example.test", first_name="Alexis", last_name="Teodosio", role="adopter", is_email_verified=True)
         profile, _ = AdopterProfile.objects.get_or_create(user=adopter)
         for field, value in {
             "phone_number": "+63 900 000 0000", "address_line1": "123 Test Street", "city": "Manila",
             "state": "Metro Manila", "zip_code": "1000", "housing_type": "house", "owns_or_rents": "own",
             "has_other_pets": True, "other_pets": "One older cat",
+            "date_of_birth": "1990-06-15",
         }.items():
             setattr(profile, field, value)
         profile.save()

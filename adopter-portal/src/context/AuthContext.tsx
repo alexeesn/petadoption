@@ -12,6 +12,7 @@ interface AuthContextType {
   register: (data: { email: string; password: string; password_confirm: string; first_name: string; last_name: string }) => Promise<void>
   verifyEmail: (email: string, otp: string) => Promise<{ token?: string; user?: User }>
   updateProfile: (data: Partial<User>) => Promise<void>
+  syncProfileName: (firstName: string, lastName: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -84,8 +85,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('pam_user', JSON.stringify(updatedUser))
   }
 
+  const syncProfileName = (firstName: string, lastName: string) => {
+    setUser(current => {
+      if (!current) return current
+      const updated = { ...current, first_name: firstName, last_name: lastName, full_name: `${firstName} ${lastName}`.trim() }
+      localStorage.setItem('pam_user', JSON.stringify(updated))
+      return updated
+    })
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, loginWithGoogle, logout, register, verifyEmail, updateProfile }}>
+    <AuthContext.Provider value={{ user, token, loading, login, loginWithGoogle, logout, register, verifyEmail, updateProfile, syncProfileName }}>
       {children}
     </AuthContext.Provider>
   )

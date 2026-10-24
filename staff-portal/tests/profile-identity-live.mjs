@@ -1,0 +1,95 @@
+// Runs only against the disposable backend supplied by ProfileIdentityBrowserTests.
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { chromium, expect as baseExpect } from '@playwright/test';
+
+const fixture = JSON.parse(process.env.PAWCONNECT_PROFILE_FIXTURE || 'null');
+if (!fixture || !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(fixture.api) || fixture.api.endsWith(':8000')) throw Error('An isolated backend is required.');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const origin = 'http://127.0.0.1:5199';
+const expect = baseExpect.configure({ timeout: 15000 });
+process.env.VITE_API_BASE_URL = '/api';
+const source = `import { createServer } from 'vite'; const server = await createServer({configFile:'vite.config.ts',envFile:false,logLevel:'error',server:{host:'127.0.0.1',port:5199,strictPort:true,proxy:{'/api':{target:${JSON.stringify(fixture.api)},changeOrigin:true}}}}); await server.listen(); console.log('PROFILE_READY');`;
+const server = spawn(process.execPath, ['--input-type=module', '-e', source], { cwd: path.join(root, 'adopter-portal'), env: process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+let browser;
+try {
+  await new Promise((resolve, reject) => {
+    let errors = '';
+    const timer = setTimeout(() => reject(Error(`Vite startup timed out: ${errors}`)), 30000);
+    server.stderr.on('data', data => { errors += data.toString(); });
+    server.stdout.on('data', data => { if (data.toString().includes('PROFILE_READY')) { clearTimeout(timer); resolve(); } });
+    server.on('error', error => { clearTimeout(timer); reject(error); });
+    server.on('exit', code => { clearTimeout(timer); if (code) reject(Error(errors)); });
+  });
+  browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'America/Los_Angeles' });
+  await context.addInitScript(auth => {
+    localStorage.setItem('pam_token', auth.token);
+    localStorage.setItem('pam_user', JSON.stringify(auth.user));
+  }, fixture.adopter);
+  const errors = [];
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.hostname.startsWith('fonts.')) return route.abort();
+    if (url.pathname.startsWith('/api/') && url.origin !== origin) { errors.push('Wrong API origin'); return route.abort(); }
+    return route.continue();
+  });
+  const page = await context.newPage();
+  page.on('pageerror', error => errors.push(error.message));
+  const writes = [];
+  page.on('request', request => { if (request.method() === 'PATCH' && request.url().includes('/adopters/profile/')) writes.push(request.url()); });
+  await page.goto(`${origin}/applications/new?pet=${fixture.pet}`);
+  await expect(page.getByRole('heading', { name: 'Complete Your Profile First', exact: true })).toBeVisible();
+  await page.goto(`${origin}/profile`);
+  await page.getByRole('button', { name: 'Edit Profile', exact: true }).click();
+  const first = page.getByLabel('First Name', { exact: false });
+  const last = page.getByLabel('Last Name', { exact: false });
+  const birthday = page.getByLabel('Date of Birth', { exact: false });
+  await expect(first).toHaveValue('Alexis');
+  await expect(last).toHaveValue('Teodosio');
+  await expect(first).toHaveAttribute('required', '');
+  await expect(last).toHaveAttribute('required', '');
+  await expect(birthday).toHaveAttribute('required', '');
+  await expect(birthday).toHaveAttribute('max', fixture.cutoff);
+  await first.fill('');
+  await last.fill('');
+  await page.getByRole('button', { name: 'Save Profile', exact: true }).click();
+  await expect(page.getByText('First Name is required.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Last Name is required.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Date of Birth is required.', { exact: true })).toBeVisible();
+  await first.fill('Alexis Updated');
+  await last.fill('Teodosio');
+  await birthday.fill(fixture.underage);
+  await page.getByRole('button', { name: 'Save Profile', exact: true }).click();
+  await expect(page.getByText('You must be at least 18 years old.', { exact: true })).toBeVisible();
+  assert.equal(writes.length, 0, 'Invalid identity must not be submitted');
+  await birthday.fill(fixture.cutoff);
+  await page.getByRole('button', { name: 'Save Profile', exact: true }).click();
+  await expect(page.getByText('Profile updated successfully. You can now start an adoption application.', { exact: true })).toBeVisible();
+  assert.equal(writes.length, 1);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pam_user')).first_name), 'Alexis Updated');
+  await page.reload();
+  await expect(page.locator('dd').filter({ hasText: /^Alexis Updated$/ })).toBeVisible();
+  const response = await fetch(`${fixture.api}/api/adopters/${fixture.profile}/`, { headers: { Authorization: `Token ${fixture.staff_token}` } });
+  assert.equal(response.status, 200);
+  const profile = await response.json();
+  assert.equal(profile.user_name, 'Alexis Updated Teodosio');
+  assert.equal(profile.profile_is_complete, true);
+  await page.goto(`${origin}/applications/new?pet=${fixture.pet}`);
+  await expect(page.getByLabel('Why do you want to adopt this pet?', { exact: false })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto(`${origin}/profile`);
+  await page.getByRole('button', { name: 'Edit Profile', exact: true }).click();
+  await first.fill('Unsaved change');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.locator('dd').filter({ hasText: /^Alexis Updated$/ })).toBeVisible();
+  assert.equal(writes.length, 1);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+  assert.deepEqual(errors, []);
+  console.log('PASS: required identity, underage rejection, exact 18th birthday in PHT, save/reload, cached account name, staff visibility, application gate and mobile Cancel.');
+} finally {
+  await browser?.close();
+  server.kill();
+}

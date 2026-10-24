@@ -68,6 +68,8 @@ class ProfileCompletenessTests(BaseAPITestCase):
         self.profile = self.adopter.adopter_profile
 
     def test_blank_profile_is_incomplete(self):
+        self.adopter.first_name = ""
+        self.adopter.last_name = ""
         profile = AdopterProfile(user=self.adopter)
         self.assertFalse(profile.is_complete())
         self.assertEqual(
@@ -76,9 +78,7 @@ class ProfileCompletenessTests(BaseAPITestCase):
         )
 
     def test_whitespace_only_field_counts_as_missing(self):
-        profile = AdopterProfile(user=self.adopter)
-        for field in AdopterProfile.REQUIRED_PROFILE_FIELDS:
-            setattr(profile, field, "x")
+        profile = self.profile
         profile.phone_number = "   "
         self.assertFalse(profile.is_complete())
         self.assertEqual(profile.missing_required_fields(), ["phone_number"])
@@ -89,7 +89,6 @@ class ProfileCompletenessTests(BaseAPITestCase):
 
     def test_optional_fields_do_not_affect_completeness(self):
         self.profile.address_line2 = ""
-        self.profile.date_of_birth = None
         self.profile.other_pets = ""
         self.profile.save()
         self.assertTrue(self.profile.is_complete())
@@ -135,7 +134,7 @@ class DateOfBirthTests(BaseAPITestCase):
     The field is already in the model and initial migration (blank=True,
     null=True).  These tests verify:
       - Saving and retrieving a valid DOB.
-      - Clearing the DOB (null value is acceptable — it is not a required field).
+      - Rejecting attempts to clear the required DOB.
       - Rejecting a future date.
       - Rejecting a date more than 120 years in the past.
       - Adopters cannot update another user's profile.
@@ -179,8 +178,8 @@ class DateOfBirthTests(BaseAPITestCase):
         self.assertIn("date_of_birth", resp.data)
         self.assertEqual(resp.data["date_of_birth"], "1990-06-15")
 
-    def test_adopter_can_clear_date_of_birth(self):
-        """Setting date_of_birth to null is accepted (it is optional)."""
+    def test_adopter_cannot_clear_required_date_of_birth(self):
+        """Birthday is required; a rejected edit preserves the existing date."""
         self.adopter.adopter_profile.date_of_birth = "1990-06-15"
         self.adopter.adopter_profile.save()
         self.authenticate(self.adopter)
@@ -189,9 +188,9 @@ class DateOfBirthTests(BaseAPITestCase):
             {"date_of_birth": None},
             format="json",
         )
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 400)
         self.adopter.adopter_profile.refresh_from_db()
-        self.assertIsNone(self.adopter.adopter_profile.date_of_birth)
+        self.assertEqual(self.adopter.adopter_profile.date_of_birth.isoformat(), "1990-06-15")
 
     # -- validation ----------------------------------------------------------
 
@@ -292,11 +291,7 @@ class DateOfBirthTests(BaseAPITestCase):
         resp = self.client.get("/api/adopters/profile/")
         self.assertEqual(resp.status_code, 403)
 
-    def test_clearing_dob_does_not_break_profile_completeness(self):
-        """
-        date_of_birth is not in REQUIRED_PROFILE_FIELDS, so clearing it must
-        not affect profile_is_complete.
-        """
+    def test_clearing_dob_is_rejected_and_keeps_complete_profile(self):
         self.adopter.adopter_profile.date_of_birth = "1990-06-15"
         self.adopter.adopter_profile.save()
         self.authenticate(self.adopter)
@@ -305,8 +300,8 @@ class DateOfBirthTests(BaseAPITestCase):
             {"date_of_birth": None},
             format="json",
         )
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(resp.data["profile_is_complete"])
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(self.client.get("/api/adopters/profile/").data["profile_is_complete"])
 
 
 class PhilippineAddressTests(BaseAPITestCase):

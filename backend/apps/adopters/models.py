@@ -94,7 +94,8 @@ class AdopterProfile(models.Model):
     # ------------------------------------------------------------------
     # Profile completeness (single source of truth).
     #
-    # An adopter must have these contact/address fields saved before they
+    # An adopter must have their first/last name, an adult birthday, and these
+    # contact/address fields saved before they
     # can start a new adoption application (ApplicationCreateSerializer
     # enforces this server-side; the adopter portal mirrors it with the
     # "Complete Your Profile First" gate).
@@ -118,10 +119,13 @@ class AdopterProfile(models.Model):
         "zip_code",
         "housing_type",
         "owns_or_rents",
+        "first_name",
+        "last_name",
+        "date_of_birth",
     ]
 
     def is_complete(self):
-        """True when every required profile field has a saved value."""
+        """True when identity, adult birthday and required contact details are valid."""
         return len(self.missing_required_fields()) == 0
 
     def missing_required_fields(self):
@@ -157,6 +161,12 @@ class AdopterProfile(models.Model):
             if not str(getattr(self, field, "") or "").strip():
                 missing.append(field)
 
+        for field in ("first_name", "last_name"):
+            if not str(getattr(self.user, field, "") or "").strip():
+                missing.append(field)
+        from .validators import birthday_error
+        if birthday_error(self.date_of_birth):
+            missing.append("date_of_birth")
         return missing
 
     def __str__(self):

@@ -47,6 +47,7 @@ class BaseAPITestCase(TestCase):
                     "zip_code": "1000",
                     "housing_type": "house",
                     "owns_or_rents": "own",
+                    "date_of_birth": "1990-06-15",
                 }.items():
                     setattr(profile, field, value)
                 profile.save()

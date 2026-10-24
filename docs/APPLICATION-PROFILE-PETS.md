@@ -1,5 +1,15 @@
 # Household pets and application entry
 
+## Required identity and minimum age
+
+My Profile displays and edits **First Name**, **Last Name** and **Date of Birth** as required fields. Names use the existing account fields and save atomically with the profile, so account displays, staff application reviews and emails use the same name. The adopter portal updates its cached account name immediately after a successful profile save.
+
+Birthday must establish an age of at least **18** using the current **Asia/Manila** date; the eighteenth birthday itself is accepted. The browser supplies date bounds and inline errors, while Django independently validates profile writes and the profile-completeness gate for new applications. The existing 120-year sanity limit is retained. Missing or underage legacy birthdays make a profile incomplete without changing its saved data or existing adoption history. No schema migration or birthday backfill is required.
+
+The real HTTP regressions cover required identity, failed-save rollback, ownership, Philippine midnight and leap-day boundaries. The opt-in browser test (`PAWCONNECT_PROFILE_BROWSER_TESTS=1`, `apps.adopters.test_browser`) checks required fields, underage rejection, an exact eighteenth birthday, save/reload, account-name synchronization, staff visibility, the application gate and mobile Cancel against an isolated database.
+
+## Household pets
+
 The adopter enters existing-pet information in **Profile** only. New Adoption
 Application no longer asks "I currently have other pets" or repeats the related
 description field and validation on its Application/Review steps.

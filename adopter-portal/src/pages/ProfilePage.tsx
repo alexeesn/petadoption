@@ -7,10 +7,13 @@ import PhilippineAddressSelector, {
   type PhilippineAddress,
   EMPTY_PH_ADDRESS,
 } from '../components/PhilippineAddressSelector'
-import { formatDate } from '../utils/format'
+import { birthDateBounds, formatDate } from '../utils/format'
+import { useAuth } from '../context/AuthContext'
 import type { AdopterProfile } from '../types'
 
 interface ProfileForm {
+  first_name: string
+  last_name: string
   phone_number: string
   address_line1: string
   address_line2: string
@@ -33,6 +36,8 @@ interface ProfileForm {
 }
 
 const EMPTY: ProfileForm = {
+  first_name: '',
+  last_name: '',
   phone_number: '',
   address_line1: '',
   address_line2: '',
@@ -60,6 +65,9 @@ const EMPTY: ProfileForm = {
  * Only used for inline frontend validation; the server stays authoritative.
  */
 const REQUIRED_FIELDS: Array<{ name: keyof ProfileForm; label: string }> = [
+  { name: 'first_name', label: 'First Name' },
+  { name: 'last_name', label: 'Last Name' },
+  { name: 'date_of_birth', label: 'Date of Birth' },
   { name: 'phone_number', label: 'Phone Number' },
   { name: 'address_line1', label: 'Street Address' },
   { name: 'region', label: 'Region' },
@@ -73,6 +81,8 @@ const REQUIRED_FIELDS: Array<{ name: keyof ProfileForm; label: string }> = [
 /** Convert a saved AdopterProfile into the editable form shape. */
 function profileToForm(data: AdopterProfile): ProfileForm {
   return {
+    first_name: data.first_name ?? '',
+    last_name: data.last_name ?? '',
     phone_number: data.phone_number ?? '',
     address_line1: data.address_line1 ?? '',
     address_line2: data.address_line2 ?? '',
@@ -156,6 +166,8 @@ function parseAges(agesStr?: string | null, count?: number | null): string[] {
 
 export default function ProfilePage() {
   const toast = useToast()
+  const { syncProfileName } = useAuth()
+  const birthdayBounds = birthDateBounds()
   const [saved, setSaved] = useState<AdopterProfile | null>(null)
   const [form, setForm] = useState<ProfileForm>(EMPTY)
   const [editing, setEditing] = useState(false)
@@ -309,6 +321,11 @@ export default function ProfilePage() {
         errors[name] = `${label} is required.`
       }
     }
+    if (form.date_of_birth && form.date_of_birth > birthdayBounds.latest) {
+      errors.date_of_birth = 'You must be at least 18 years old.'
+    } else if (form.date_of_birth && form.date_of_birth < birthdayBounds.earliest) {
+      errors.date_of_birth = 'Date of birth must be within the last 120 years.'
+    }
     if (form.has_children) {
       const count = parseInt(form.number_of_children, 10)
       if (!form.number_of_children || isNaN(count) || count < 1) {
@@ -388,6 +405,7 @@ export default function ProfilePage() {
       }
       const updated = await updateAdopterProfile(payload as Record<string, string | number | boolean | null>)
       const savedData = updated as AdopterProfile
+      syncProfileName(savedData.first_name, savedData.last_name)
       setSaved(savedData)
       setForm(profileToForm(savedData))
       setChildAges(parseAges(savedData.children_ages, savedData.number_of_children))
@@ -492,6 +510,8 @@ export default function ProfilePage() {
           </div>
 
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+            <ProfileField label="First Name" value={saved.first_name} />
+            <ProfileField label="Last Name" value={saved.last_name} />
             <ProfileField label="Phone Number" value={saved.phone_number} />
             <ProfileField
               label="Date of Birth"
@@ -544,6 +564,13 @@ export default function ProfilePage() {
 
           {/* ── Contact ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(['first_name', 'last_name'] as const).map(name => (
+              <div key={name}>
+                <label htmlFor={name} className="field-label mb-1">{name === 'first_name' ? 'First Name' : 'Last Name'} <span className="text-red-600" aria-hidden="true">*</span></label>
+                <input id={name} name={name} type="text" required maxLength={150} autoComplete={name === 'first_name' ? 'given-name' : 'family-name'} value={form[name]} onChange={handleChange} aria-invalid={fieldErrors[name] ? true : undefined} aria-describedby={`${name}-error`} className={inputCls} />
+                <div id={`${name}-error`}><FieldError message={fieldErrors[name]} /></div>
+              </div>
+            ))}
             <div>
               <label htmlFor="phone_number" className="field-label mb-1">
                 Phone Number <span className="text-red-600" aria-hidden="true">*</span>
@@ -552,18 +579,22 @@ export default function ProfilePage() {
               <FieldError message={fieldErrors.phone_number} />
             </div>
             <div>
-              <label htmlFor="date_of_birth" className="field-label mb-1">Date of Birth</label>
+              <label htmlFor="date_of_birth" className="field-label mb-1">Date of Birth <span className="text-red-600" aria-hidden="true">*</span></label>
               <input
                 id="date_of_birth"
                 name="date_of_birth"
                 type="date"
+                required
                 value={form.date_of_birth}
                 onChange={handleChange}
                 aria-invalid={fieldErrors.date_of_birth ? true : undefined}
                 className={inputCls}
-                max={new Date().toISOString().slice(0, 10)}
+                min={birthdayBounds.earliest}
+                max={birthdayBounds.latest}
+                aria-describedby="birthday-help birthday-error"
               />
-              <FieldError message={fieldErrors.date_of_birth} />
+              <p id="birthday-help" className="mt-1 text-xs text-stone-500">You must be at least 18 years old to adopt.</p>
+              <div id="birthday-error"><FieldError message={fieldErrors.date_of_birth} /></div>
             </div>
           </div>
 

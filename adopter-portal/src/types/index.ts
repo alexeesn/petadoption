@@ -173,6 +173,8 @@ export interface AdopterProfile {
   id: string
   user_email: string
   user_name: string
+  first_name: string
+  last_name: string
   phone_number: string
   address_line1: string
   address_line2: string

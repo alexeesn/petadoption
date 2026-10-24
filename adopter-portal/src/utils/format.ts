@@ -5,6 +5,17 @@ export function formatDate(dateStr?: string): string {
   })
 }
 
+export function birthDateBounds() {
+  const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+  const value = (type: string) => Number(parts.find(part => part.type === type)?.value)
+  const year = value('year'), month = value('month'), day = value('day')
+  const yearsAgo = (years: number) => {
+    const lastDay = new Date(Date.UTC(year - years, month, 0)).getUTCDate()
+    return `${year - years}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`
+  }
+  return { earliest: yearsAgo(120), latest: yearsAgo(18) }
+}
+
 export function formatCurrency(amount: number | string): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount
   return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
