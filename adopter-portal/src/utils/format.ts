@@ -31,6 +31,7 @@ export function getStatusColor(status: string): string {
     reserved: PILL.blue,
     adopted: PILL.emerald,
     under_medical_care: PILL.red,
+    for_assessment: PILL.amber,
     inactive: PILL.gray,
     draft: PILL.gray,
     submitted: PILL.blue,

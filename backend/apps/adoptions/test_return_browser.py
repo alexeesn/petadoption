@@ -87,7 +87,7 @@ class AdoptionReturnBrowserTests(LiveServerTestCase):
         self.assertEqual(record.status, "returned")
         self.assertIsNotNone(record.returned_at)
         self.assertEqual(record.return_reason, "Adopter developed allergies")
-        self.assertEqual(pet.status, "available")
+        self.assertEqual(pet.status, "available")  # Staff explicitly clears the pet after medical care.
         self.assertEqual(HealthRecord.objects.values().get(pk=health_record.pk), medical_before)
         self.assertEqual(payment.status, "completed")
         self.assertEqual(payment.receipt_number, receipt)

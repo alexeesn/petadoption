@@ -266,6 +266,9 @@ export default function NewApplicationPage() {
 
   if (loading) return <Spinner label="Loading pet..." />
   if (error && !pet && !submitted) return <ErrorState message={error} />
+  if (pet && ['for_assessment', 'under_medical_care'].includes(pet.status) && !submitted) {
+    return <ErrorState message="This pet is awaiting assessment or medical clearance and is not available for adoption." />
+  }
 
   // ------------------------------------------------------------------
   // Profile gate — the adopter cannot enter/fill out the application

@@ -9,11 +9,17 @@ import { useToast } from '../context/ToastContext';
 import { RecordScopeTabs } from '../components/RecordScopeTabs';
 import { useRecordFilters } from '../hooks/useRecordFilters';
 
-const PET_STATUSES = ['available', 'pending', 'reserved', 'under_medical_care', 'adopted', 'inactive'];
-const ACTIVE_PET_STATUSES = ['available', 'pending', 'reserved', 'under_medical_care'];
+const PET_STATUSES = ['available', 'pending', 'reserved', 'for_assessment', 'under_medical_care', 'adopted', 'inactive'];
+const ACTIVE_PET_STATUSES = ['available', 'pending', 'reserved', 'for_assessment', 'under_medical_care'];
+const CARE_STATUSES = [
+  { value: 'for_assessment', label: 'For Assessment' },
+  { value: 'under_medical_care', label: 'Under Medical Care' },
+  { value: 'available', label: 'Available' },
+];
 
 const emptyForm = {
   name: '',
+  status: 'available',
   species: 'dog',
   breed: '',
   age_years: '',
@@ -34,6 +40,7 @@ const MAX_AGE_MONTHS = 11;
 function petToForm(pet: Pet) {
   return {
     name: pet.name,
+    status: pet.status,
     species: pet.species,
     breed: pet.breed,
     age_years: pet.age_years !== undefined && pet.age_years !== null ? String(pet.age_years) : '',
@@ -143,6 +150,7 @@ export default function PetsPage() {
       .retrieve(pet.id)
       .then((res) => {
         const detail = res.data as Pet;
+        setEditing(detail);
         setForm(petToForm(detail));
         setExistingPhotos(detail.images ?? []);
       })
@@ -221,6 +229,7 @@ export default function PetsPage() {
         //    this request can never remove a photo.
         await petService.update(editing.id, {
           ...form,
+          status: form.status !== editing.status ? form.status : undefined,
           weight_kg: weight || null,
           age_years: ageYears,
           age_months: ageMonths,
@@ -259,6 +268,7 @@ export default function PetsPage() {
       setRemovedPhotos([]);
       setShowForm(false);
       if (!editing) setScope('active');
+      else setPage(1);
       setRefresh(current => current + 1);
     } catch (err) {
       setSubmitError(describeSaveError(err));
@@ -292,6 +302,12 @@ export default function PetsPage() {
           {submitError && <p role="alert" className="text-red-600 text-sm mb-4">{submitError}</p>}
           <div className="pet-editor-layout"><form onSubmit={handleSubmit} className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
             <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            {editing && CARE_STATUSES.some(option => option.value === editing.status) && (
+              <div>
+                <Select label="Care status" value={form.status} onChange={event => setForm({ ...form, status: event.target.value })} options={CARE_STATUSES} />
+                <p className="mt-2 text-xs text-stone-500">After assessment, choose Under Medical Care if treatment is needed. Choose Available only when the pet is cleared for adoption. Update medical findings in Health Records.</p>
+              </div>
+            )}
             <Select
               label="Species"
               value={form.species}

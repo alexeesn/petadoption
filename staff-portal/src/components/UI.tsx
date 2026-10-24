@@ -34,6 +34,7 @@ const statusStyles: Record<string, keyof typeof PILL> = {
   reserved: 'blue',
   adopted: 'emerald',
   under_medical_care: 'red',
+  for_assessment: 'amber',
   inactive: 'gray',
   unpaid: 'amber',
   paid: 'green',

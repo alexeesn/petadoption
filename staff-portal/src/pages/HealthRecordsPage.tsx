@@ -205,7 +205,7 @@ export default function HealthRecordsPage() {
         setSuccess('');
         setScope(value);
       }} />
-      <p className="mb-4 text-sm text-stone-600">Active shows medical records for pets in the center's current care. Adopted and inactive pets' records remain in History. Returned pets appear in Active again when available.</p>
+      <p className="mb-4 text-sm text-stone-600">Active shows medical records for pets in the center's current care, including returned pets awaiting assessment. Adopted and inactive pets' records remain in History.</p>
 
       {showForm && (
         <Card className="mb-6 p-6">

@@ -270,7 +270,9 @@ export default function PetDetailPage() {
           <PetHealthInfo pet={pet} />
 
           <div className="mt-9">
-            {user ? (
+            {pet.status !== 'available' ? (
+              <p role="status" className="text-sm text-stone-600">This pet is currently not available for adoption.</p>
+            ) : user ? (
               <Link
                 to={`/applications/new?pet=${pet.id}`}
                 className="btn btn-accent btn-lg"

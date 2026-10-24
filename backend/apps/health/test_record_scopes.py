@@ -33,7 +33,7 @@ class HealthRecordScopeTests(BaseAPITestCase):
                 self.assertEqual({row["pet_status"] for row in response.data["results"]}, set(statuses))
                 self.assertEqual({row["id"] for row in response.data["results"]},
                                  {str(self.records[status].pk) for status in statuses})
-        self.assertEqual(self.client.get("/api/health-records/").data["count"], 6)
+        self.assertEqual(self.client.get("/api/health-records/").data["count"], len(Pet.Status.values))
         self.assertEqual(list(HealthRecord.objects.order_by("pk").values()), before)
         self.assertEqual(list(Vaccination.objects.order_by("pk").values()), vaccinations)
 

@@ -201,7 +201,7 @@ Rules:
 `full_name, contact_number, address, profile_photo, created_at, updated_at`
 
 **Pet**
-`id, name, species, breed, sex, age, size, color, description, personality, location, health_summary, status [available|pending|reserved|adopted|under_medical_care|inactive], created_by → User, created_at, updated_at`
+`id, name, species, breed, sex, age, size, color, description, personality, location, health_summary, status [available|pending|reserved|adopted|for_assessment|under_medical_care|inactive], created_by → User, created_at, updated_at`
 
 **PetImage**
 `id, pet → Pet (FK), image, is_primary, uploaded_at`
@@ -315,7 +315,7 @@ Standards across all endpoints:
 ## 16. Adoption Records
 
 - Created only from an `approved` application.
-- Status flow: `approved → scheduled → completed`, with `cancelled` / `returned` as terminal or re-entry states depending on org policy (default: terminal, pet status reverts to `available` on `returned`).
+- Status flow: `approved → scheduled → completed`, with `cancelled` / `returned` as terminal or re-entry states depending on org policy. Returned adoption records remain historical; the pet becomes `for_assessment` and stays unavailable for adoption until staff choose `available` after clearance or `under_medical_care` for treatment (user-approved policy, 2026-10-24).
 - When an `AdoptionRecord` reaches `completed`, the linked `Pet.status` must be synchronized to `adopted`.
 
 ---

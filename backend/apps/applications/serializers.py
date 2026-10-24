@@ -186,6 +186,8 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
 
         pet = attrs.get("pet")
         if pet is not None:
+            if pet.status in ("for_assessment", "under_medical_care"):
+                raise serializers.ValidationError({"pet": "This pet is awaiting assessment or medical clearance and is not available for adoption."})
             # A pet cannot be assigned to two conflicting active applications
             # from the same adopter. Active statuses are everything except
             # terminal/cancelled states (mirrors the DB constraint).

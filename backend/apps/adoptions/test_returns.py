@@ -52,7 +52,7 @@ class AdoptionReturnTests(BaseAPITestCase):
         self.record.refresh_from_db()
         self.pet.refresh_from_db()
         self.app.refresh_from_db()
-        self.assertEqual(self.pet.status, "available")
+        self.assertEqual(self.pet.status, "for_assessment")
         self.assertEqual(self.app.status, "adoption_completed")
         for field in ("transaction_id", "completed_date", "completed_at", "staff_member_id", "notes"):
             self.assertEqual(getattr(self.record, field), old_record[field])
@@ -64,7 +64,7 @@ class AdoptionReturnTests(BaseAPITestCase):
         self.assertEqual(log.previous_value, "completed")
         self.assertIn("allergies", log.new_value)
         self.assertTrue(AuditLog.objects.filter(
-            model_name="Pet", object_id=str(self.pet.pk), previous_value="adopted", new_value="available",
+            model_name="Pet", object_id=str(self.pet.pk), previous_value="adopted", new_value="for_assessment",
         ).exists())
         notification = Notification.objects.get(user=self.adopter, title="Adoption Returned")
         self.assertIn("no automatic refund", notification.message)
@@ -191,3 +191,81 @@ class AdoptionReturnTests(BaseAPITestCase):
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(str(response.data["results"][0]["id"]), str(self.record.pk))
         self.assertEqual(self.client.get("/api/adoptions/?status=completed").data["count"], 0)
+
+    def test_return_is_held_off_available_list_and_reapplication_until_cleared(self):
+        from apps.health.models import HealthRecord
+        health = HealthRecord.objects.create(pet=self.pet, record_date="2025-01-01", diagnosis="Limping")
+        before = HealthRecord.objects.values().get(pk=health.pk)
+        self.assertEqual(self.mark_returned().status_code, 200)
+        self.assertEqual(self.client.get("/api/pets/", {"status": "available", "search": self.pet.name}).data["count"], 0)
+        active_health = self.client.get("/api/health-records/", {"scope": "active", "pet": self.pet.pk})
+        self.assertEqual(active_health.data["count"], 1)
+        self.assertEqual(active_health.data["results"][0]["pet_status"], "for_assessment")
+        self.authenticate(self.other)
+        for pet_status in ("for_assessment", "under_medical_care"):
+            Pet.objects.filter(pk=self.pet.pk).update(status=pet_status)
+            response = self.client.post("/api/applications/", {
+                "pet": str(self.pet.pk), "privacy_consent": True, "require_home_visit": True,
+            }, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+            self.assertIn("pet", response.data)
+        self.assertEqual(HealthRecord.objects.values().get(pk=health.pk), before)
+        self.assertFalse(Application.objects.filter(adopter=self.other, pet=self.pet).exists())
+
+    def test_staff_assesses_medical_care_and_clears_without_changing_return_or_payment(self):
+        self.assertEqual(self.mark_returned().status_code, 200)
+        returned = AdoptionRecord.objects.values().get(pk=self.record.pk)
+        payment = Payment.objects.values().get(pk=self.payment.pk)
+        url = f"/api/pets/{self.pet.pk}/"
+        for blocked_status in ("pending", "reserved", "adopted"):
+            self.assertEqual(self.client.patch(url, {"status": blocked_status}, format="json").status_code, 400)
+        for pet_status, available_count in (("under_medical_care", 0), ("available", 1)):
+            response = self.client.patch(url, {"status": pet_status}, format="json")
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertEqual(response.data["status"], pet_status)
+            self.assertEqual(self.client.get("/api/pets/", {"status": "available", "search": self.pet.name}).data["count"], available_count)
+            self.assertTrue(AuditLog.objects.filter(action="pet_status_change", object_id=str(self.pet.pk), new_value=pet_status).exists())
+        self.assertEqual(AdoptionRecord.objects.values().get(pk=self.record.pk), returned)
+        self.assertEqual(Payment.objects.values().get(pk=self.payment.pk), payment)
+
+    def test_adopter_cannot_clear_the_returned_pet(self):
+        self.assertEqual(self.mark_returned().status_code, 200)
+        self.authenticate(self.adopter)
+        self.assertEqual(self.client.patch(f"/api/pets/{self.pet.pk}/", {"status": "available"}, format="json").status_code, 403)
+        self.pet.refresh_from_db()
+        self.assertEqual(self.pet.status, "for_assessment")
+
+    def test_stale_applications_cannot_bypass_assessment_through_approval(self):
+        self.assertEqual(self.mark_returned().status_code, 200)
+        application = Application.objects.create(pet=self.pet, adopter=self.other, status="submitted")
+        for pet_status in ("for_assessment", "under_medical_care"):
+            Pet.objects.filter(pk=self.pet.pk).update(status=pet_status)
+            for url, data in (
+                (f"/api/applications/{application.pk}/update-status/", {"status": "approved"}),
+                ("/api/reviews/", {"application": str(application.pk), "decision": "approve"}),
+            ):
+                response = self.client.post(url, data, format="json")
+                self.assertEqual(response.status_code, 400, response.data)
+            response = self.client.patch(f"/api/applications/{application.pk}/", {"status": "approved"}, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+            application.refresh_from_db()
+            self.pet.refresh_from_db()
+            self.assertEqual(application.status, "submitted")
+            self.assertEqual(self.pet.status, pet_status)
+
+    def test_stale_approved_application_cannot_complete_a_pet_in_care(self):
+        from apps.appointments.models import Appointment
+        self.assertEqual(self.mark_returned().status_code, 200)
+        application = Application.objects.create(pet=self.pet, adopter=self.other, status="approved")
+        appointment = Appointment.objects.create(application=application, pet=self.pet, adopter=self.other,
+                                                 status="confirmed", requested_date=timezone.localdate())
+        record = AdoptionRecord.objects.create(application=application, pet=self.pet, adopter=self.other,
+                                               appointment=appointment, status="scheduled")
+        Payment.objects.create(application=application, amount="500.00", status="completed", method="cash")
+        for pet_status in ("for_assessment", "under_medical_care"):
+            Pet.objects.filter(pk=self.pet.pk).update(status=pet_status)
+            response = self.client.post(f"/api/applications/{application.pk}/complete-adoption/", {"confirmed": True}, format="json")
+            self.assertEqual(response.status_code, 400, response.data)
+            record.refresh_from_db()
+            self.assertEqual(record.status, "scheduled")
+            self.assertIsNone(record.transaction_id)

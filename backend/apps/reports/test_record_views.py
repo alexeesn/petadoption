@@ -36,7 +36,7 @@ class RecordViewTests(BaseAPITestCase):
         self.authenticate(self.staff)
 
     def test_active_history_and_all_counts_are_partitioned_before_pagination(self):
-        for resource, active, history, total in (("pets", 16, 3, 19), ("applications", 7, 6, 13), ("adoptions", 1, 3, 4)):
+        for resource, active, history, total in (("pets", 17, 3, 20), ("applications", 7, 6, 13), ("adoptions", 1, 3, 4)):
             with self.subTest(resource=resource):
                 active_data = self.client.get(f"/api/{resource}/", {"scope": "active"}).data
                 history_data = self.client.get(f"/api/{resource}/", {"scope": "history"}).data
@@ -52,10 +52,10 @@ class RecordViewTests(BaseAPITestCase):
             Pet.objects.create(name=f"Available {number}", species="dog")
         first = self.client.get("/api/pets/", {"scope": "active"})
         second = self.client.get("/api/pets/", {"scope": "active", "page": 2})
-        self.assertEqual(first.data["count"], 41)
+        self.assertEqual(first.data["count"], 42)
         self.assertEqual(len(first.data["results"]), 20)
         self.assertIsNotNone(first.data["next"])
-        self.assertEqual(second.data["count"], 41)
+        self.assertEqual(second.data["count"], 42)
         self.assertFalse({row["id"] for row in first.data["results"]} & {row["id"] for row in second.data["results"]})
 
     def test_status_and_scope_filters_are_applied_together(self):
@@ -85,7 +85,7 @@ class RecordViewTests(BaseAPITestCase):
         self.assertEqual(response.data["completed_adoptions"], 1)
         self.assertEqual(len(response.data["recent_applications"]), 5)
         self.assertTrue(all(row["status"] not in ("rejected", "cancelled", "adoption_completed") for row in response.data["recent_applications"]))
-        self.assertEqual(self.client.get("/api/reports/pets/").data["stats"]["total"], 19)
+        self.assertEqual(self.client.get("/api/reports/pets/").data["stats"]["total"], 20)
 
     def test_dashboard_is_staff_only(self):
         self.authenticate(self.adopter)

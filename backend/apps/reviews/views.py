@@ -31,6 +31,9 @@ class ReviewListCreateView(generics.ListCreateAPIView):
         from apps.applications.models import Application
         app = Application.objects.get(id=serializer.validated_data["application"])
 
+        if serializer.validated_data["decision"] == "approve" and app.pet.status in ("for_assessment", "under_medical_care"):
+            return Response({"error": "The pet needs assessment or medical clearance before approval."}, status=status.HTTP_400_BAD_REQUEST)
+
         review = Review.objects.create(
             application=app,
             reviewer=request.user,

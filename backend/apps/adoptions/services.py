@@ -249,6 +249,9 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
     # Lock the Pet row as well under the transaction to ensure pet state remains atomic
     pet = Pet.objects.select_for_update().get(id=app.pet_id)
 
+    if pet.status in (Pet.Status.FOR_ASSESSMENT, Pet.Status.UNDER_MEDICAL_CARE):
+        raise ValidationError("The pet needs assessment or medical clearance before adoption completion.")
+
     # ── Create or fetch the AdoptionRecord under a savepoint ─────────────────
     try:
         with transaction.atomic():
@@ -435,13 +438,14 @@ def return_completed_adoption(record, staff, reason, confirmed):
     record.returned_at = now
     record.save(update_fields=["status", "return_reason", "return_date", "returned_at", "updated_at"])
     previous_pet_status = pet.status
-    if pet.status != Pet.Status.AVAILABLE:
-        pet.status = Pet.Status.AVAILABLE
+    if pet.status != Pet.Status.FOR_ASSESSMENT:
+        pet.status = Pet.Status.FOR_ASSESSMENT
         pet.save(update_fields=["status", "updated_at"])
-        audit(staff, "status_change", pet, previous_pet_status, "available")
+        audit(staff, "status_change", pet, previous_pet_status, Pet.Status.FOR_ASSESSMENT)
     audit(staff, "adoption_returned", record, "completed", f"returned: {reason}")
     notify_adopter(application, "Adoption Returned", (
         f"The shelter has received {pet.name} back and recorded your adoption as Returned. "
-        f"Reason: {reason}. Existing payment records and receipts are retained; no automatic refund is issued."
+        f"Reason: {reason}. The pet is For Assessment before being offered for adoption again. "
+        "Existing payment records and receipts are retained; no automatic refund is issued."
     ), notification_type="adoption")
     return record

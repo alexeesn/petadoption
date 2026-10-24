@@ -103,8 +103,7 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         Payment.objects.create(
             application=self.app, amount="500.00", status="completed",
         )
-        # scheduled -> completed (pet adopted) -> returned (pet available),
-        # then a NEW adopter can apply for the returned pet.
+        # Return holds the pet for assessment; staff must clear it before reapplication.
         self.pet.status = "pending"
         self.pet.save(update_fields=["status"])
         self.authenticate_staff()
@@ -120,7 +119,9 @@ class AdoptionBusinessRuleTests(BaseAPITestCase):
         }, format="json")
         self.assertEqual(resp.status_code, 200)
         self.pet.refresh_from_db()
-        self.assertEqual(self.pet.status, "available")
+        self.assertEqual(self.pet.status, "for_assessment")
+        cleared = self.client.patch(f"/api/pets/{self.pet.pk}/", {"status": "available"}, format="json")
+        self.assertEqual(cleared.status_code, 200, cleared.data)
         # New adopter can submit an application for the returned pet.
         new_adopter = self.create_user(email="newadopter@example.com")
         self.authenticate(new_adopter)

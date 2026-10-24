@@ -29,6 +29,12 @@ class PetSerializer(serializers.ModelSerializer):
     # Pet Details page.
     health_summary = serializers.SerializerMethodField()
 
+    def validate_status(self, value):
+        if self.instance and self.instance.status == Pet.Status.FOR_ASSESSMENT:
+            if value not in (Pet.Status.FOR_ASSESSMENT, Pet.Status.AVAILABLE, Pet.Status.UNDER_MEDICAL_CARE, Pet.Status.INACTIVE):
+                raise serializers.ValidationError("Assess the pet and choose Available or Under Medical Care before proceeding with an adoption.")
+        return value
+
     def validate_arrival_date(self, value):
         today = timezone.localtime(timezone.now(), ZoneInfo("Asia/Manila")).date()
         if value is not None and value > today:

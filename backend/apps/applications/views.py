@@ -176,6 +176,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer = ApplicationStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data["status"]
+        if new_status == "approved" and app.pet.status in ("for_assessment", "under_medical_care"):
+            return Response({"error": "The pet needs assessment or medical clearance before approval."}, status=status.HTTP_400_BAD_REQUEST)
         if app.status == Application.Status.APPROVED and new_status == Application.Status.CANCELLED:
             return Response(
                 {"error": "Cancel the scheduled adoption from Adoption Records, with a reason and confirmation."},

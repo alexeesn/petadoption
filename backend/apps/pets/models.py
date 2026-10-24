@@ -19,6 +19,7 @@ class Pet(models.Model):
         RESERVED = "reserved", "Reserved"
         ADOPTED = "adopted", "Adopted"
         UNDER_MEDICAL_CARE = "under_medical_care", "Under Medical Care"
+        FOR_ASSESSMENT = "for_assessment", "For Assessment"
         INACTIVE = "inactive", "Inactive"
 
     class Species(models.TextChoices):
@@ -26,7 +27,7 @@ class Pet(models.Model):
         CAT = "cat", "Cat"
         OTHER = "other", "Other"
 
-    ACTIVE_STATUSES = (Status.AVAILABLE, Status.PENDING, Status.RESERVED, Status.UNDER_MEDICAL_CARE)
+    ACTIVE_STATUSES = (Status.AVAILABLE, Status.PENDING, Status.RESERVED, Status.UNDER_MEDICAL_CARE, Status.FOR_ASSESSMENT)
 
     class Size(models.TextChoices):
         SMALL = "small", "Small"

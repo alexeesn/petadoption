@@ -9,7 +9,7 @@ The backend records the return atomically:
 
 - Adoption status becomes `returned`; reason, Philippine return date and
   recording timestamp are persisted.
-- Pet status becomes `available`, allowing another adopter to apply. A
+- Pet status becomes `for_assessment`, keeping the pet off the adopter homepage and available-pet catalog until staff clear it. A
   conflicting active adoption blocks the return rather than releasing its pet.
 - Original completion dates, staff attribution and transaction ID are retained.
   The original application stays `adoption_completed` as historical evidence.
@@ -24,6 +24,14 @@ audits or release a pet that has since been adopted again. Return fields are
 read-only through ordinary record edits. Existing historical return rows are
 not backfilled. This feature uses existing model fields; no new migration is
 needed.
+
+## Assessment after return
+
+Returned pets appear in **Pets > Active > Status: For Assessment**, and their existing medical records return to **Health Records > Active**. Record assessment findings through the normal explicit health-record Edit/Save flow. In **Pets > Edit > Care status**, choose **Under Medical Care** when treatment is needed, or **Available** after the pet is cleared. Medical care can later be changed to Available through the same control. Saving a care-status change creates a pet-status audit entry.
+
+For Assessment and Under Medical Care pets cannot receive new adoption applications or approvals, and cannot complete a stale approved adoption. Direct adopter links show an unavailable message. Clearing the pet does not reopen the original application or alter the returned adoption, payment, receipt or medical history. A retry of the original return preserves any later care decision.
+
+Migration `pets/0006_add_for_assessment_status` adds the status choice without rewriting existing pet or return records. Existing returned pets can be placed For Assessment manually through Pets > Edit > Care status when review is needed.
 
 ## PDF downloads
 

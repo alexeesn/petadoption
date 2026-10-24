@@ -445,11 +445,11 @@ export default function AdoptionsPage() {
         </>
       )}
       {returningRecord && <DecisionDialog title="Mark as Returned"
-        description={`Record that ${returningRecord.pet_name} has been returned by ${returningRecord.adopter_email}. The pet will become Available for adoption again. The original adoption and payment history are retained; no automatic refund is issued.`}
+        description={`Record that ${returningRecord.pet_name} has been returned by ${returningRecord.adopter_email}. The pet will be For Assessment and will stay off the available-pets list until staff clear it. The original adoption and payment history are retained; no automatic refund is issued.`}
         confirmationLabel="I confirm the pet has been physically returned to the shelter."
         onClose={() => setReturningRecord(null)} onConfirm={async (reason) => {
           await adoptionService.markReturned(returningRecord.id, reason);
-          toast.success('Adoption returned', `${returningRecord.pet_name} is now available for adoption again.`);
+          toast.success('Adoption returned', `${returningRecord.pet_name} is now For Assessment. Review its condition in Pets and Health Records.`);
           setReturnSuccess('Return recorded. The pet is Available again; payment records and receipts are retained without an automatic refund.');
           load();
         }} />}
