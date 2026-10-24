@@ -13,7 +13,7 @@ def send_verification_email(user, otp: str, expiry_minutes: int = 10) -> None:
     """
     Send a branded verification OTP email with responsive HTML and plain-text fallback.
     """
-    subject = "Verify your email - Pet Adoption"
+    subject = "Verify your email - PawConnect"
     context = {
         "first_name": user.first_name,
         "otp_code": otp,
@@ -22,7 +22,7 @@ def send_verification_email(user, otp: str, expiry_minutes: int = 10) -> None:
 
     plain_message = (
         f"Hi {user.first_name or 'there'},\n\n"
-        f"Thank you for joining Pet Adoption!\n"
+        f"Thank you for joining PawConnect!\n"
         f"Your verification code is: {otp}\n"
         f"It expires in {expiry_minutes} minutes.\n\n"
         f"If you did not register for an account, please ignore this email."
@@ -51,7 +51,7 @@ def send_password_reset_email(user, otp: str, expiry_minutes: int = 10) -> None:
     """
     Send a branded password reset OTP email with responsive HTML and plain-text fallback.
     """
-    subject = "Password Reset - Pet Adoption"
+    subject = "Password Reset - PawConnect"
     context = {
         "first_name": user.first_name,
         "otp_code": otp,
@@ -60,7 +60,7 @@ def send_password_reset_email(user, otp: str, expiry_minutes: int = 10) -> None:
 
     plain_message = (
         f"Hi {user.first_name or 'there'},\n\n"
-        f"We received a request to reset your password for Pet Adoption.\n"
+        f"We received a request to reset your password for PawConnect.\n"
         f"Your password reset code is: {otp}\n"
         f"It expires in {expiry_minutes} minutes.\n\n"
         f"If you did not request this, please ignore this email."

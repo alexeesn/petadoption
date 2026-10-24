@@ -1,8 +1,17 @@
-<!doctype html>
-<html lang="en"><body style="font-family:Arial,sans-serif;color:#292524;line-height:1.6">
-<h1>PawConnect</h1>
-<h2>{{ title }}</h2>
-<p>{{ message }}</p>
-<p><a href="{{ application_url }}">View your application</a></p>
-<p>The PawConnect team</p>
-</body></html>
+{% extends "emails/base.html" %}
+{% block email_title %}{{ title }} - PawConnect{% endblock %}
+{% block preheader %}An update about your adoption of {{ pet_name }} is ready to view.{% endblock %}
+{% block eyebrow %}Adoption update{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+{% block content %}
+<p style="margin:0 0 12px; color:#314334;">Hello <strong>{{ adopter_name|default:"there" }}</strong>,</p>
+<p style="margin:0; color:#495949;">Here's the latest update about <strong>{{ pet_name }}</strong>.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0;">
+  <tr><td bgcolor="#e4ecdd" style="padding:20px; background-color:#e4ecdd; border:1px solid #c4dabb; border-radius:8px; overflow-wrap:anywhere; word-wrap:break-word;">
+    <p style="margin:0; color:#314334;">{{ message|linebreaksbr }}</p>
+  </td></tr>
+</table>
+<p style="margin:0; color:#495949;">Open your application to view the recorded details and any next steps.</p>
+{% endblock %}
+{% block action %}{% include "emails/includes/action.html" with button_label="View your application" %}{% endblock %}
+{% block reference %}{% include "emails/includes/reference.html" %}{% endblock %}

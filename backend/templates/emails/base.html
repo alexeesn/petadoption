@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>{% block email_title %}PawConnect{% endblock %}</title>
+  <style>
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table { border-collapse: collapse; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    a { color: #2a5b40; }
+    @media only screen and (max-width: 600px) {
+      .email-outer { padding: 20px 12px !important; }
+      .email-padding { padding-left: 24px !important; padding-right: 24px !important; }
+      .email-heading { font-size: 26px !important; line-height: 34px !important; }
+      .email-button { display: block !important; text-align: center !important; }
+      .email-code { font-size: 30px !important; letter-spacing: 6px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0; padding:0; width:100%; background-color:#e5e7de; color:#19291e; font-family:Figtree,'Segoe UI',Arial,sans-serif;">
+  <div style="display:none; font-size:1px; line-height:1px; color:#e5e7de; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">{% block preheader %}An update from your PawConnect team.{% endblock %}</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#e5e7de" style="table-layout:fixed;">
+    <tr><td class="email-outer" align="center" style="padding:40px 16px;">
+      <!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f0f1e8" style="width:100%; max-width:600px; table-layout:fixed; background-color:#f0f1e8; border:1px solid #cdd6c6; border-radius:12px;">
+        <tr><td height="5" bgcolor="#2a5b40" style="height:5px; line-height:5px; font-size:0; background-color:#2a5b40;">&nbsp;</td></tr>
+        <tr><td class="email-padding" style="padding:28px 40px; border-bottom:1px solid #cdd6c6;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+              <td width="44" height="44" align="center" bgcolor="#2a5b40" style="width:44px; height:44px; background-color:#2a5b40; border-radius:10px; color:#f0f1e8; font-size:22px; font-weight:700; line-height:44px;">P</td>
+              <td style="padding-left:12px;">
+                <p style="margin:0; color:#193726; font-size:23px; font-weight:800; letter-spacing:-0.7px; line-height:28px;">PawConnect<span style="color:#b58c59;">.</span></p>
+                <p style="margin:3px 0 0; color:#5a6957; font-size:11px; font-weight:600; line-height:16px; letter-spacing:1.1px; text-transform:uppercase;">Pet Adoption Portal</p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+        <tr><td class="email-padding" style="padding:36px 40px 32px; font-size:15px; line-height:25px; overflow-wrap:anywhere; word-wrap:break-word;">
+          <p style="margin:0 0 12px; color:#765831; font-size:11px; font-weight:700; line-height:18px; letter-spacing:1.5px; text-transform:uppercase;">{% block eyebrow %}Your adoption journey{% endblock %}</p>
+          <h1 class="email-heading" style="margin:0 0 20px; color:#193726; font-size:30px; font-weight:700; letter-spacing:-0.7px; line-height:38px;">{% block heading %}An update for you{% endblock %}</h1>
+          {% block content %}{% endblock %}
+          {% block action %}{% endblock %}
+          {% block reference %}{% endblock %}
+          <p style="margin:28px 0 0; padding-top:20px; border-top:1px solid #cdd6c6; color:#5a6957; font-size:12px; line-height:20px;">{% block notice %}For questions about your application, please contact the adoption center.{% endblock %}</p>
+        </td></tr>
+        <tr><td class="email-padding" bgcolor="#e4ecdd" style="padding:22px 40px; background-color:#e4ecdd; border-top:1px solid #cdd6c6;">
+          <p style="margin:0 0 4px; color:#193726; font-size:13px; font-weight:700; line-height:20px;">The PawConnect team</p>
+          <p style="margin:0; color:#5a6957; font-size:12px; line-height:19px;">Helping pets find a place to call home.</p>
+        </td></tr>
+      </table>
+      <!--[if mso]></td></tr></table><![endif]-->
+      <p style="margin:20px 12px 0; color:#495949; font-size:11px; line-height:18px;">PawConnect &middot; Pet Adoption Management System<br>This is an automated message. Please do not reply directly to this email.</p>
+    </td></tr>
+  </table>
+</body>
+</html>
