@@ -471,7 +471,7 @@ class PetAgeMigrationTests(TransactionTestCase):
     """
 
     AGE_FIELD_MIGRATION = ("pets", "0002_pet_age_years_and_arrival_date")
-    LATEST_MIGRATION = ("pets", "0004_alter_pet_weight_kg")
+    LATEST_MIGRATION = ("pets", "0005_remove_bird_rabbit_species")
     OLD_SCHEMA = ("pets", "0001_initial")
 
     def tearDown(self):

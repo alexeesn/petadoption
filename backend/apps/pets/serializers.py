@@ -1,3 +1,6 @@
+from zoneinfo import ZoneInfo
+
+from django.utils import timezone
 from rest_framework import serializers
 from apps.health.services import build_adopter_health_summary
 from .models import MAX_PET_AGE_MONTHS, MAX_PET_AGE_YEARS, Pet, PetImage
@@ -25,6 +28,12 @@ class PetSerializer(serializers.ModelSerializer):
     # /api/health-records/ endpoints; this field only feeds the adopter-facing
     # Pet Details page.
     health_summary = serializers.SerializerMethodField()
+
+    def validate_arrival_date(self, value):
+        today = timezone.localtime(timezone.now(), ZoneInfo("Asia/Manila")).date()
+        if value is not None and value > today:
+            raise serializers.ValidationError("Arrival date cannot be in the future.")
+        return value
 
     class Meta:
         model = Pet

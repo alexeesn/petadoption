@@ -24,8 +24,6 @@ class Pet(models.Model):
     class Species(models.TextChoices):
         DOG = "dog", "Dog"
         CAT = "cat", "Cat"
-        BIRD = "bird", "Bird"
-        RABBIT = "rabbit", "Rabbit"
         OTHER = "other", "Other"
 
     class Size(models.TextChoices):

@@ -7,7 +7,7 @@ import { Spinner, ErrorState } from '../components/UI'
 import { Icon } from '../components/Icons'
 import PetCard from '../components/PetCard'
 
-const speciesOptions = ['dog', 'cat', 'bird', 'rabbit', 'other']
+const speciesOptions = ['dog', 'cat', 'other']
 
 export default function PetsPage() {
   const [searchParams, setSearchParams] = useSearchParams()

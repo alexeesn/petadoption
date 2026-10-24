@@ -27,8 +27,6 @@ def create_pet_placeholder_image(name: str, species: str, color_hex: str, text_c
     species_icon = {
         "dog": "🐶 DOG",
         "cat": "🐱 CAT",
-        "rabbit": "🐰 RABBIT",
-        "bird": "🦜 BIRD",
     }.get(species, "🐾 PET")
 
     draw.rounded_rectangle([(100, 120), (700, 480)], radius=24, fill=(255, 255, 255))
@@ -186,38 +184,6 @@ SAMPLE_PETS_2 = [
         "bg_color": "#0D9488",
     },
     {
-        "name": "Barnaby",
-        "species": Pet.Species.RABBIT,
-        "breed": "Holland Lop",
-        "age_years": 0,
-        "gender": Pet.Gender.MALE,
-        "size": Pet.Size.SMALL,
-        "weight_kg": 1.8,
-        "color": "Smoky Ash Grey",
-        "description": "Barnaby has adorable floppy ears and loves fresh timothy hay. Quiet and gentle.",
-        "status": Pet.Status.AVAILABLE,
-        "is_vaccinated": True,
-        "is_neutered": True,
-        "adoption_fee": 0,
-        "bg_color": "#16A34A",
-    },
-    {
-        "name": "Pip",
-        "species": Pet.Species.BIRD,
-        "breed": "Cockatiel",
-        "age_years": 1,
-        "gender": Pet.Gender.MALE,
-        "size": Pet.Size.SMALL,
-        "weight_kg": 0.1,
-        "color": "Lutino Yellow & Orange",
-        "description": "Pip whistles cheerful tunes and loves stepping up onto fingers for head scratches.",
-        "status": Pet.Status.AVAILABLE,
-        "is_vaccinated": False,
-        "is_neutered": False,
-        "adoption_fee": 0,
-        "bg_color": "#CA8A04",
-    },
-    {
         "name": "Rocky",
         "species": Pet.Species.DOG,
         "breed": "German Shepherd",
@@ -372,15 +338,6 @@ class Command(BaseCommand):
                         veterinarian="Dr. Elena Santos",
                         batch_number="COR-2025-4102",
                         notes="Booster scheduled soon",
-                    )
-                elif pet.species == Pet.Species.RABBIT:
-                    Vaccination.objects.create(
-                        pet=pet,
-                        vaccine_name="RHDV2 (Rabbit Disease)",
-                        date_administered=today - timedelta(days=90),
-                        next_due_date=today + timedelta(days=275),
-                        veterinarian="Dr. Elena Santos",
-                        batch_number="RHD-2025-102",
                     )
 
         self.stdout.write(self.style.SUCCESS(f"Successfully seeded {Pet.objects.count()} pets and {AdoptionPackage.objects.count()} packages!"))

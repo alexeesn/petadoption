@@ -575,7 +575,7 @@ class StaffAccessTests(RBACTestCaseBase):
 
     def test_pet_create(self):
         resp = self.client.post("/api/pets/", {
-            "name": "StaffPet", "species": "bird", "age_years": 0,
+            "name": "StaffPet", "species": "other", "age_years": 0,
         }, format="json")
         self.assertEqual(resp.status_code, 201)
 

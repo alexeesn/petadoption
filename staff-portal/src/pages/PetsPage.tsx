@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Card, Loading, ErrorMessage, Empty, Button, Input, Select } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { petService } from '../services/apiService';
-import { formatPetAge, formatPetLabel } from '../utils/format';
+import { formatPetAge, formatPetLabel, philippineDate } from '../utils/format';
 import { PawMark } from '../components/Icons';
 import type { Pet, PetImage } from '../types';
 import { useToast } from '../context/ToastContext';
@@ -198,6 +198,10 @@ export default function PetsPage() {
       setSubmitError('Weight must be between 0.01 and 9999.99 kg, with up to 2 decimal places.');
       return;
     }
+    if (form.arrival_date && form.arrival_date > philippineDate()) {
+      setSubmitError('Arrival date cannot be in the future.');
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
@@ -262,7 +266,7 @@ export default function PetsPage() {
       {showForm && (
         <Card className="mb-6 overflow-hidden p-5 sm:p-7">
           <div className="mb-6 border-b border-stone-200 pb-5"><p className="section-label mb-2">Pet profile</p><h3 className="text-xl font-bold text-stone-900">{editing ? 'Edit Pet' : 'New Pet'}</h3><p className="mt-2 text-sm text-stone-500">Keep details clear and accurate. The preview shows how adopters will see this profile.</p></div>
-          {submitError && <p className="text-red-600 text-sm mb-4">{submitError}</p>}
+          {submitError && <p role="alert" className="text-red-600 text-sm mb-4">{submitError}</p>}
           <div className="pet-editor-layout"><form onSubmit={handleSubmit} className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-5 sm:grid-cols-2">
             <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             <Select
@@ -272,8 +276,6 @@ export default function PetsPage() {
               options={[
                 { value: 'dog', label: 'Dog' },
                 { value: 'cat', label: 'Cat' },
-                { value: 'bird', label: 'Bird' },
-                { value: 'rabbit', label: 'Rabbit' },
                 { value: 'other', label: 'Other' },
               ]}
             />
@@ -320,6 +322,7 @@ export default function PetsPage() {
             <Input
               label="Date arrived at the adoption center"
               type="date"
+              max={philippineDate()}
               value={form.arrival_date}
               onChange={(e) => setForm({ ...form, arrival_date: e.target.value })}
             />
