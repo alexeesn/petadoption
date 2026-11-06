@@ -46,12 +46,7 @@ const DOCUMENT_SLOTS = [
     required: true,
     hint: 'Photo of the cage, kennel, or home area where this pet will stay',
   },
-  {
-    type: 'vet_reference',
-    label: 'Supporting Document',
-    required: false,
-    hint: 'Optional — veterinary reference, landlord approval, or similar document',
-  },
+
 ]
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.txt']
