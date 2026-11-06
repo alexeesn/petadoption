@@ -45,7 +45,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/applications', label: 'Applications', icon: 'clipboard', badge: 'applications' },
       { to: '/appointments', label: 'Appointments', icon: 'calendar', badge: 'appointments' },
-      { to: '/verification-requests', label: 'Adopter Verification', icon: 'shield' },
+      { to: '/verification-requests', label: 'Adopter Verification', icon: 'shield', badge: 'verification' },
       { to: '/adopters', label: 'Adopters', icon: 'user' },
     ],
   },
@@ -53,7 +53,7 @@ const navSections: NavSection[] = [
     title: 'Pet Management',
     items: [
       { to: '/pets', label: 'Pets', icon: 'paw' },
-      { to: '/surrenders', label: 'Surrender Requests', icon: 'clipboard' },
+      { to: '/surrenders', label: 'Surrender Requests', icon: 'clipboard', badge: 'surrenders' },
       { to: '/health', label: 'Health Records', icon: 'pulse' },
     ],
   },

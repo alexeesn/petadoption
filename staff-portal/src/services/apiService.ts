@@ -277,8 +277,9 @@ export const notificationService = {
   // silently capped at the first page.
   listUnread: async (): Promise<Notification[]> => {
     const collected: Notification[] = [];
-    // Bounded loop: a guard against a malformed `next` link, never hit in practice.
-    for (let page = 1; page <= 10; page += 1) {
+    // Follow every page so badge counts and module read actions include
+    // notifications beyond the first 200 unread items.
+    for (let page = 1; ; page += 1) {
       const res = await api.get('/notifications/', { params: { unread: true, page } });
       const data = res.data as PaginatedResponse<Notification> | Notification[];
       if (Array.isArray(data)) {

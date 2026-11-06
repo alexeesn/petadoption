@@ -2,20 +2,24 @@ import { useCallback, useEffect, useState } from 'react';
 import { notificationService } from '../services/apiService';
 
 /** Sidebar modules that surface unread staff notifications. */
-export type SidebarBadgeKey = 'applications' | 'appointments';
+export type SidebarBadgeKey = 'applications' | 'appointments' | 'verification' | 'surrenders';
 
 export interface SidebarCounts {
   applications: number;
   appointments: number;
+  verification: number;
+  surrenders: number;
 }
 
 /**
  * The notification categories the backend already creates for staff
- * (`notification_type` values set by apps.applications / apps.appointments).
+ * (`notification_type` values created by each workflow).
  */
 const NOTIFICATION_TYPES: Record<SidebarBadgeKey, string> = {
   applications: 'application',
   appointments: 'appointment',
+  verification: 'verification',
+  surrenders: 'surrender',
 };
 
 const REFRESH_INTERVAL_MS = 10_000;
@@ -24,22 +28,26 @@ const REFRESH_INTERVAL_MS = 10_000;
  * Unread notification counts for the staff sidebar.
  *
  * Counts are derived from the existing unread notifications of the
- * authenticated staff user (never from application/appointment records), and
+ * authenticated staff user (never from workflow records), and
  * are re-read from the existing notification API on a short interval so new
  * notifications show up without a full page reload.
  */
 export function useSidebarCounts() {
-  const [counts, setCounts] = useState<SidebarCounts>({ applications: 0, appointments: 0 });
+  const [counts, setCounts] = useState<SidebarCounts>({ applications: 0, appointments: 0, verification: 0, surrenders: 0 });
 
   const refreshCounts = useCallback(async () => {
     try {
       const unread = await notificationService.listUnread();
-      const next: SidebarCounts = { applications: 0, appointments: 0 };
+      const next: SidebarCounts = { applications: 0, appointments: 0, verification: 0, surrenders: 0 };
       for (const notification of unread) {
         if (notification.notification_type === NOTIFICATION_TYPES.applications) {
           next.applications += 1;
         } else if (notification.notification_type === NOTIFICATION_TYPES.appointments) {
           next.appointments += 1;
+        } else if (notification.notification_type === NOTIFICATION_TYPES.verification) {
+          next.verification += 1;
+        } else if (notification.notification_type === NOTIFICATION_TYPES.surrenders) {
+          next.surrenders += 1;
         }
       }
       setCounts(next);
