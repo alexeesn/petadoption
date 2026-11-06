@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.adopters",
     "apps.pets",
+    "apps.surrenders",
     "apps.applications",
     "apps.documents",
     "apps.reviews",
@@ -115,6 +116,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Media files
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+PRIVATE_SURRENDER_ROOT = Path(os.environ.get("PRIVATE_SURRENDER_ROOT", str(BASE_DIR / "private" / "surrenders")))
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

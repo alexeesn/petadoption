@@ -20,6 +20,8 @@ import PaymentsPage from '../pages/PaymentsPage';
 import ReportsPage from '../pages/ReportsPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import AuditLogsPage from '../pages/AuditLogsPage';
+import SurrendersPage from '../pages/SurrendersPage';
+import SurrenderDetailPage from '../pages/SurrenderDetailPage';
 
 export default function AppRoutes() {
   return (
@@ -48,6 +50,8 @@ export default function AppRoutes() {
           <Route path="/applications" element={<ApplicationsPage />} />
           <Route path="/applications/:id" element={<ApplicationDetailPage />} />
           <Route path="/pets" element={<PetsPage />} />
+          <Route path="/surrenders" element={<SurrendersPage />} />
+          <Route path="/surrenders/:id" element={<SurrenderDetailPage />} />
           <Route path="/verification-requests" element={<AdopterVerificationPage />} />
           <Route path="/adopters" element={<AdoptersPage />} />
           <Route path="/documents" element={<DocumentsPage />} />

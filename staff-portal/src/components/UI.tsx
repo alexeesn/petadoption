@@ -22,6 +22,11 @@ const PILL = {
 const statusStyles: Record<string, keyof typeof PILL> = {
   draft: 'gray',
   submitted: 'blue',
+  needs_information: 'purple',
+  waitlisted: 'amber',
+  intake_scheduled: 'blue',
+  received: 'emerald',
+  declined: 'red',
   under_review: 'amber',
   pending_documents: 'purple',
   additional_info_requested: 'orange',
@@ -179,17 +184,18 @@ export function Select({
   onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   options: { value: string; label: string }[];
 }) {
+  const id = useId();
   return (
-    <label className="block">
-      <span className="field-label mb-1.5">{label}</span>
-      <select value={value} onChange={onChange} className="field-input">
+    <div className="block">
+      <label htmlFor={id} className="field-label mb-1.5">{label}</label>
+      <select id={id} value={value} onChange={onChange} className="field-input">
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
-    </label>
+    </div>
   );
 }
 

@@ -2,6 +2,8 @@ from rest_framework import viewsets, permissions, filters, status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from django.db import transaction
+from django.db.models.deletion import ProtectedError
+from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Pet, PetImage
@@ -71,6 +73,12 @@ class PetViewSet(viewsets.ModelViewSet):
                 previous_value=old_status,
                 new_value=new_status,
             )
+
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ValidationError({"detail": "This pet is linked to retained records. Mark it inactive instead of deleting it."})
 
 
 class PetImageViewSet(viewsets.ModelViewSet):

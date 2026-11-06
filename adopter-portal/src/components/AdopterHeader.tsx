@@ -6,7 +6,7 @@ import NotificationBell from './NotificationBell'
 import ThemeToggle from './ThemeToggle'
 import { formatDisplayName } from '../utils/format'
 
-const links = [{ to: '/', label: 'Home' }, { to: '/pets', label: 'Find a Pet' }]
+const links = [{ to: '/', label: 'Home' }, { to: '/pets', label: 'Find a Pet' }, { to: '/surrenders', label: 'Surrender a Pet' }]
 export default function AdopterHeader() {
   const { user, logout } = useAuth()
   const [panel, setPanel] = useState<'account' | 'notifications' | null>(null)
@@ -35,7 +35,7 @@ export default function AdopterHeader() {
             {panel === 'account' && <div className="absolute right-0 top-full z-50 w-64 pt-3">
               <nav className="popover-panel overflow-hidden p-2" aria-label="Account">
                 <div className="mb-1 border-b border-stone-200 px-3 py-3"><p className="truncate text-sm font-bold text-stone-900">{formatDisplayName(user.first_name || user.full_name) || 'Your account'}</p><p className="mt-1 truncate text-xs text-stone-500">{user.email}</p></div>
-                {[['/applications', 'My Applications', 'clipboard'], ['/profile', 'My Profile', 'user'], ['/notifications', 'Notifications', 'bell']].map(([to, label, icon]) => <Link key={to} to={to} onClick={() => setPanel(null)} className="flex items-center gap-3 rounded-md px-3 py-3 text-sm text-stone-700 hover:bg-primary-50"><Icon name={icon} className="h-4 w-4"/>{label}</Link>)}
+                {[['/applications', 'My Applications', 'clipboard'], ['/surrenders', 'My Surrender Requests', 'paw'], ['/profile', 'My Profile', 'user'], ['/notifications', 'Notifications', 'bell']].map(([to, label, icon]) => <Link key={to} to={to} onClick={() => setPanel(null)} className="flex items-center gap-3 rounded-md px-3 py-3 text-sm text-stone-700 hover:bg-primary-50"><Icon name={icon} className="h-4 w-4"/>{label}</Link>)}
                 <button type="button" className="mt-1 flex w-full items-center gap-3 border-t border-stone-200 px-3 py-3 text-left text-sm font-semibold text-red-700" onClick={async () => { setPanel(null); await logout(); navigate('/') }}><Icon name="logout" className="h-4 w-4"/>Logout</button>
               </nav>
             </div>}

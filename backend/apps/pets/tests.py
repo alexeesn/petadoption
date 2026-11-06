@@ -282,12 +282,12 @@ class PetImageUploadTests(BaseAPITestCase):
 
     def test_create_pet_with_two_images(self):
         resp = self.assert_image_count(2)
-        names = {img["image"].split("/")[-1].split("_")[0] for img in resp.data["images"]}
+        names = {img["image"].split("/")[-1].rsplit(".", 1)[0].split("_")[0] for img in resp.data["images"]}
         self.assertEqual(names, {"pet1", "pet2"})
 
     def test_create_pet_with_three_images(self):
         resp = self.assert_image_count(3)
-        names = {img["image"].split("/")[-1].split("_")[0] for img in resp.data["images"]}
+        names = {img["image"].split("/")[-1].rsplit(".", 1)[0].split("_")[0] for img in resp.data["images"]}
         self.assertEqual(names, {"pet1", "pet2", "pet3"})
 
     def test_public_pet_detail_returns_all_images(self):
@@ -475,7 +475,10 @@ class PetAgeMigrationTests(TransactionTestCase):
     OLD_SCHEMA = ("pets", "0001_initial")
 
     def tearDown(self):
-        self.migrate(self.LATEST_MIGRATION)
+        # Rolling pets back also unapplies dependent apps (including intake).
+        # Restore every app's latest migration before subsequent tests run.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
         super().tearDown()
 
     def migrate(self, target):

@@ -20,6 +20,9 @@ import NewApplicationPage from './pages/NewApplicationPage'
 import NotificationsPage from './pages/NotificationsPage'
 import ProfilePage from './pages/ProfilePage'
 import AdoptionRecordPage from './pages/AdoptionRecordPage'
+import SurrendersPage from './pages/SurrendersPage'
+import NewSurrenderPage from './pages/NewSurrenderPage'
+import SurrenderDetailPage from './pages/SurrenderDetailPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 import PublicOnlyRoute from './routes/PublicOnlyRoute'
 
@@ -58,6 +61,9 @@ function AppRoutes() {
           {/* The adopter dashboard was removed: My Applications is the landing page. */}
           <Route path="/dashboard" element={<Navigate to="/applications" replace />} />
           <Route path="/applications" element={<ApplicationsPage />} />
+          <Route path="/surrenders" element={<SurrendersPage />} />
+          <Route path="/surrenders/new" element={<NewSurrenderPage />} />
+          <Route path="/surrenders/:id" element={<SurrenderDetailPage />} />
           <Route path="/applications/new" element={<NewApplicationPage />} />
           <Route path="/applications/:id" element={<ApplicationDetailPage />} />
           {/* Documents are uploaded inside the application flow, so there is no separate documents page. */}

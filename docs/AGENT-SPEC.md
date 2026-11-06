@@ -506,4 +506,14 @@ Applied on both frontend (immediate UX feedback) and backend (source of truth):
 
 ---
 
-*End of specification. Next natural step, if useful: a short `AGENTS.md`/`CLAUDE.md` at the repo root that points a coding agent at this document plus the concrete build/test commands once the codebase audit (Phase 1) is complete.*
+## 33. Pet surrender / center intake (user-approved extension, 2026-11-06)
+
+Verified adopter accounts may submit private surrender requests. Staff/admin
+assess them, request information, waitlist, decline, schedule/reschedule intake,
+and confirm physical handover. A request becomes an official pet record only
+after confirmed receipt. Default initial pet status is `for_assessment`;
+staff may choose `available` after clearance, `under_medical_care`, or `inactive`.
+Scheduling is not final acceptance. Owner cancellation is allowed only before
+closure; internal notes and private request photos remain protected. Intake does
+not require payment or enable owner-to-owner adoption. See `PET-SURRENDER.md`
+for transitions, API, storage, and verification details.

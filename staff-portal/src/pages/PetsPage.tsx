@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, Loading, ErrorMessage, Empty, Button, Input, Select, StatusBadge } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { petService } from '../services/apiService';
@@ -69,6 +70,8 @@ function describeSaveError(err: unknown): string {
 }
 
 export default function PetsPage() {
+  const [searchParams] = useSearchParams();
+  const linkedPet = searchParams.get('pet');
   const toast = useToast();
   const { scope, page, statusFilter, setScope, setPage, setStatusFilter } = useRecordFilters();
   const [pagination, setPagination] = useState({ count: 0, next: false, previous: false });
@@ -159,6 +162,24 @@ export default function PetsPage() {
       )
       .finally(() => setLoadingPhotos(false));
   };
+
+  // Intake links open the exact pet, even if it is outside the current page.
+  useEffect(() => {
+    let active = true;
+    if (linkedPet) petService.retrieve(linkedPet).then(({ data }) => {
+      if (!active) return;
+      const detail = data as Pet;
+      setEditing(detail);
+      setForm(petToForm(detail));
+      setExistingPhotos(detail.images ?? []);
+      setRemovedPhotos([]);
+      setSubmitError('');
+      setPhotoError('');
+      clearPhotos();
+      setShowForm(true);
+    }).catch(() => { if (active) setError('The linked pet record could not be loaded.'); });
+    return () => { active = false; };
+  }, [linkedPet]);
 
   // Appends the newly picked files to the existing selection instead of
   // replacing it, so several file-picker actions add up: dog1 + dog2, then

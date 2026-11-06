@@ -53,6 +53,7 @@ const navSections: NavSection[] = [
     title: 'Pet Management',
     items: [
       { to: '/pets', label: 'Pets', icon: 'paw' },
+      { to: '/surrenders', label: 'Surrender Requests', icon: 'clipboard' },
       { to: '/health', label: 'Health Records', icon: 'pulse' },
     ],
   },
