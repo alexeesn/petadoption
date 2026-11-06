@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdir, readFile } from 'node:fs/promises';
+import { chromium, expect as baseExpect } from '@playwright/test';
+
+const fixture = JSON.parse(process.env.PAWCONNECT_REPORT_FIXTURE || 'null');
+if (!fixture || !/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(fixture.api) || fixture.api.endsWith(':8000')) throw Error('Isolated live-server fixture required.');
+const expect = baseExpect.configure({ timeout: 15000 });
+const origin = 'http://127.0.0.1:5200';
+const source = `import { createServer } from 'vite'; const server = await createServer({configFile:'vite.config.ts',envFile:false,logLevel:'error',server:{host:'127.0.0.1',port:5200,strictPort:true,proxy:{'/api':{target:${JSON.stringify(fixture.api)},changeOrigin:true}}}}); await server.listen(); console.log('REPORTS_UI_READY');`;
+const server = spawn(process.execPath, ['--input-type=module', '-e', source], { env: { ...process.env, VITE_API_BASE_URL: '/api' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+let browser;
+try {
+  await new Promise((resolve, reject) => {
+    let stderr = '';
+    const timer = setTimeout(() => reject(Error(`Vite timed out: ${stderr}`)), 40000);
+    server.stderr.on('data', value => { stderr += value.toString(); });
+    server.stdout.on('data', value => { if (value.toString().includes('REPORTS_UI_READY')) { clearTimeout(timer); resolve(); } });
+    server.on('error', error => { clearTimeout(timer); reject(error); });
+    server.on('exit', code => { clearTimeout(timer); reject(Error(`Vite exited ${code}: ${stderr}`)); });
+  });
+  browser = await chromium.launch({ headless: true, channel: process.env.PLAYWRIGHT_CHANNEL || 'msedge' });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, timezoneId: 'America/Los_Angeles', acceptDownloads: true });
+  await context.addInitScript(auth => { localStorage.setItem('staff_auth_token', auth.token); localStorage.setItem('staff_auth_user', JSON.stringify(auth.user)); }, fixture.staff);
+  await context.route('**/*', route => ['localhost', '127.0.0.1', ''].includes(new URL(route.request().url()).hostname) ? route.continue() : route.abort());
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto(`${origin}/reports`);
+  const reports = page.getByRole('region', { name: 'Operational reports', exact: true });
+  await expect(reports.getByRole('heading', { name: 'Surrender and Intake results', exact: true })).toBeVisible();
+  await reports.getByLabel('Report status', { exact: true }).selectOption('waitlisted');
+  await reports.getByLabel('Pet species', { exact: true }).selectOption('dog');
+  await reports.getByLabel('Search records', { exact: true }).fill('Waiting dog');
+  await expect(reports.getByRole('button', { name: 'Export CSV', exact: true })).toBeDisabled();
+  await reports.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  const pages = reports.getByRole('navigation', { name: 'Operational report pages', exact: true });
+  await expect(pages).toContainText('25 records');
+  await expect(reports.locator('tbody tr')).toHaveCount(20);
+  await pages.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(reports.locator('tbody tr')).toHaveCount(5);
+  const csvWait = page.waitForEvent('download');
+  await reports.getByRole('button', { name: 'Export CSV', exact: true }).click();
+  const csvDownload = await csvWait;
+  const csv = (await readFile(await csvDownload.path(), 'utf8')).trim().split(/\r?\n/);
+  assert.equal(csv.length, 26, 'CSV must contain all 25 matching rows, not only the second page.');
+  const pdfWait = page.waitForEvent('download');
+  await reports.getByRole('button', { name: 'Export PDF', exact: true }).click();
+  const pdfDownload = await pdfWait;
+  assert.equal((await readFile(await pdfDownload.path())).subarray(0, 4).toString(), '%PDF');
+  await reports.getByRole('button', { name: 'Reset filters', exact: true }).click();
+  await reports.getByLabel('Filter dates by', { exact: true }).selectOption('received');
+  await reports.getByLabel('From date', { exact: true }).fill('2026-10-01');
+  await reports.getByLabel('To date', { exact: true }).fill('2026-10-01');
+  await reports.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(pages).toContainText('1 record');
+  await expect(reports.locator('tbody')).toContainText('Received cat');
+  await reports.getByLabel('Operational report', { exact: true }).selectOption('pet-deaths');
+  await expect(reports.getByRole('heading', { name: 'Pet Deaths and Corrections results', exact: true })).toBeVisible();
+  await expect(pages).toContainText('1 record');
+  await reports.getByLabel('Report status', { exact: true }).selectOption('');
+  await reports.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(pages).toContainText('2 records');
+  await expect(reports.getByText('Uncorrected deaths', { exact: true }).locator('..')).toContainText('1');
+  await expect(reports.locator('dt').filter({ hasText: /^Corrected entries$/ }).locator('..')).toContainText('1');
+  await mkdir('../test-results', { recursive: true });
+  await page.screenshot({ path: '../test-results/operational-reports-desktop.png', fullPage: true });
+  await reports.getByLabel('Operational report', { exact: true }).selectOption('payments');
+  await reports.getByLabel('Death-related payment review', { exact: true }).selectOption('required');
+  await reports.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(pages).toContainText('1 record');
+  await expect(reports.locator('tbody')).toContainText(/required/i);
+  for (const [key, title] of [['verifications', 'Adopter Verification'], ['appointments', 'Visit Appointments'], ['reschedules', 'Reschedule Requests'], ['adoptions', 'Adoption Lifecycle'], ['pets', 'Pet Inventory'], ['applications', 'Applications']]) {
+    await reports.getByLabel('Operational report', { exact: true }).selectOption(key);
+    await expect(reports.getByRole('heading', { name: `${title} results`, exact: true })).toBeVisible();
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await reports.getByLabel('Operational report', { exact: true }).selectOption('pet-deaths');
+  await expect(reports.getByRole('heading', { name: 'Pet Deaths and Corrections results', exact: true })).toBeVisible();
+  await expect(reports.getByRole('article')).toHaveCount(1);
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.screenshot({ path: '../test-results/operational-reports-mobile.png', fullPage: true });
+  assert.deepEqual(errors, []);
+  console.log('PASS: operational report filters, PHT date basis, 25-row pagination and full CSV/PDF downloads, corrected death counts, payment review filter, all report options, mobile cards and unchanged business records.');
+} finally {
+  if (browser) await browser.close();
+  server.kill();
+}

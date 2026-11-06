@@ -529,3 +529,15 @@ an erroneous entry with a reason; its original details stay in history and the
 pet returns to For Assessment without reopening applications or visits. Deaths
 after a completed adoption are outside this center-custody action. See
 `PET-DEATHS.md` for API, correction, financial review and verification details.
+
+## 35. Expanded operational reporting (user-approved extension, 2026-11-07)
+
+Reports must cover surrender/intake, pet deaths/corrections, adopter
+verification, appointments/reschedules, adoption returns/cancellations,
+death-related payment reviews, current pet inventory and application outcomes.
+Provide relevant filters, explicit Philippine date bases, database-derived
+counts, paginated tables/mobile cards, complete CSV and PDF exports. Corrected
+death entries are separate from mortality totals; a payment-review resolution
+must not be reported as an automatic refund. All reports remain staff/admin
+only and read-only. Preserve existing monthly completed PDF reports. See
+`OPERATIONAL-REPORTS.md` for scope, endpoints and verification.

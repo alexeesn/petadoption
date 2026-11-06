@@ -3,6 +3,7 @@ import { Card, Loading, ErrorMessage, Button, Select } from '../components/UI';
 import { PageHeader } from '../layouts/DashboardLayout';
 import { reportService } from '../services/apiService';
 import { useToast } from '../context/ToastContext';
+import OperationalReports from '../features/reports/OperationalReports';
 
 const REPORT_TYPES = [
   { value: 'payment', label: 'Payment Report' },
@@ -93,17 +94,20 @@ export default function ReportsPage() {
     <div>
       <PageHeader
         title="Reports"
-        subtitle="Generate and download monthly completed operational reports in PDF format."
+        subtitle="Track center operations and adoption outcomes, with filtered tables and downloadable reports."
       />
 
       <Card className="mb-6 max-w-2xl p-6">
         <h3 className="text-lg font-semibold text-slate-900">Pet Inventory · All-time</h3>
-        <p className="mt-1 text-sm text-slate-600">All pets recorded, including adopted and inactive pets retained in History.</p>
+        <p className="mt-1 text-sm text-slate-600">All pets recorded, including adopted, inactive and deceased pets retained in History.</p>
         {inventoryError ? <ErrorMessage message={inventoryError} /> : !inventory ? <Loading label="Loading inventory totals..." /> : (
           <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div><dt className="text-sm text-slate-500">Total Pets Recorded</dt><dd className="text-2xl font-bold">{inventory.total}</dd></div>
             <div><dt className="text-sm text-slate-500">Available</dt><dd className="text-2xl font-bold">{inventory.by_status.available ?? 0}</dd></div>
             <div><dt className="text-sm text-slate-500">Adopted</dt><dd className="text-2xl font-bold">{inventory.by_status.adopted ?? 0}</dd></div>
+            <div><dt className="text-sm text-slate-500">For Assessment</dt><dd className="text-2xl font-bold">{inventory.by_status.for_assessment ?? 0}</dd></div>
+            <div><dt className="text-sm text-slate-500">Under Medical Care</dt><dd className="text-2xl font-bold">{inventory.by_status.under_medical_care ?? 0}</dd></div>
+            <div><dt className="text-sm text-slate-500">Deceased</dt><dd className="text-2xl font-bold">{inventory.by_status.deceased ?? 0}</dd></div>
           </dl>
         )}
       </Card>
@@ -192,6 +196,7 @@ export default function ReportsPage() {
           {downloading && <Loading label="Preparing monthly PDF report..." />}
         </div>
       </Card>
+      <OperationalReports />
     </div>
   );
 }

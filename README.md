@@ -52,6 +52,9 @@ npm run dev
 - Optional adoption packages and payment tracking
 - In-app notifications
 - Report generation with CSV export
+- [Operational reports](docs/OPERATIONAL-REPORTS.md) covering intake, verification,
+  pet deaths, visit changes, adoption outcomes and payment reviews, with filters,
+  mobile records, complete CSV and PDF downloads
 - Audit logging for all important actions
 - [Pet death reporting](docs/PET-DEATHS.md), with coordinated cancellation,
   preserved history, payment review and administrator corrections

@@ -1,7 +1,10 @@
 from django.urls import path
 from . import views
+from .operational import OperationalReportsView
 
 urlpatterns = [
+    path("operations/", OperationalReportsView.as_view(), name="operational-report-catalog"),
+    path("operations/<slug:report_type>/", OperationalReportsView.as_view(), name="operational-report"),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
     path("adoptions/", views.AdoptionReportView.as_view(), name="adoption-report"),
     path("pets/", views.PetInventoryReportView.as_view(), name="pet-inventory-report"),
