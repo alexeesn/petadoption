@@ -17,11 +17,15 @@ ALLOWED_MIME_TYPES = {
 # *before* it can be submitted.  Keep this list as the single source of truth —
 # the applications API validates against it and the adopter portal renders one
 # upload slot per entry.
-REQUIRED_DOCUMENT_TYPES = ("identification", "proof_of_address", "barangay_certification", "cage_photo")
+#
+# NOTE: identification, proof_of_address, and barangay_certification have been
+# moved to the Adopter Profile as reusable identity-verification documents
+# (IdentityVerification model in apps/adopters/models.py).  Adopters submit
+# those once and they are reused across all future applications.  Only
+# cage_photo remains as an application-specific document because it is specific
+# to the current pet/home environment.
+REQUIRED_DOCUMENT_TYPES = ("cage_photo",)
 REQUIRED_DOCUMENT_LABELS = {
-    "identification": "Valid ID",
-    "proof_of_address": "Proof of Address",
-    "barangay_certification": "Barangay Certification",
     "cage_photo": "Cage/Kennel Photo",
 }
 

@@ -48,6 +48,9 @@ const statusStyles: Record<string, keyof typeof PILL> = {
   confirmed: 'green',
   no_show: 'amber',
   rescheduled: 'gray',
+  not_submitted: 'gray',
+  pending_review: 'amber',
+  verified: 'emerald',
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {

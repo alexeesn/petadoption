@@ -3,11 +3,52 @@ import os
 from functools import lru_cache
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
-from .models import AdopterProfile
+from .models import AdopterProfile, IdentityVerification
 from .validators import birthday_error
 from apps.accounts.names import display_name
+
+# ---------------------------------------------------------------------------
+# File validation constants for identity verification uploads
+# ---------------------------------------------------------------------------
+_MAX_COMBINED_PDF_SIZE = 20 * 1024 * 1024   # 20 MB
+_MAX_SELFIE_SIZE = 10 * 1024 * 1024          # 10 MB
+_ALLOWED_PDF_EXTENSIONS = {".pdf"}
+_ALLOWED_PDF_MIMES = {"application/pdf"}
+_ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+_ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _validate_pdf(value):
+    """Validate a combined-PDF upload: extension, MIME type, and size."""
+    if value.size > _MAX_COMBINED_PDF_SIZE:
+        raise serializers.ValidationError("Combined PDF must be 20 MB or smaller.")
+    ext = os.path.splitext(value.name)[1].lower()
+    if ext not in _ALLOWED_PDF_EXTENSIONS:
+        raise serializers.ValidationError(
+            f"Only PDF files are accepted for the combined document (got '{ext}').")
+    content_type = getattr(value, "content_type", None)
+    if content_type and content_type not in _ALLOWED_PDF_MIMES:
+        raise serializers.ValidationError(
+            f"File MIME type '{content_type}' does not match a PDF.")
+    return value
+
+
+def _validate_image(value):
+    """Validate a selfie-with-ID image upload: extension, MIME type, and size."""
+    if value.size > _MAX_SELFIE_SIZE:
+        raise serializers.ValidationError("Selfie image must be 10 MB or smaller.")
+    ext = os.path.splitext(value.name)[1].lower()
+    if ext not in _ALLOWED_IMAGE_EXTENSIONS:
+        raise serializers.ValidationError(
+            f"Only JPEG, PNG, or WebP images are accepted for the selfie (got '{ext}').")
+    content_type = getattr(value, "content_type", None)
+    if content_type and content_type not in _ALLOWED_IMAGE_MIMES:
+        raise serializers.ValidationError(
+            f"File MIME type '{content_type}' does not match a supported image format.")
+    return value
 
 
 @lru_cache(maxsize=1)
@@ -28,6 +69,9 @@ class AdopterProfileSerializer(serializers.ModelSerializer):
     # Both portals read this flag to decide whether an adopter may start a new
     # adoption application.
     profile_is_complete = serializers.SerializerMethodField()
+    # Quick status indicator for the adopter portal and staff portal to surface
+    # whether identity verification has been submitted/approved.
+    identity_verification_status = serializers.SerializerMethodField()
 
     class Meta:
         model = AdopterProfile
@@ -39,7 +83,7 @@ class AdopterProfileSerializer(serializers.ModelSerializer):
             "other_pets", "household_members", "agree_to_terms",
             "has_children", "number_of_children", "children_ages",
             "has_other_pets",
-            "profile_is_complete", "created_at", "updated_at",
+            "profile_is_complete", "identity_verification_status", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "user_email", "user_name", "created_at", "updated_at"]
 
@@ -48,6 +92,13 @@ class AdopterProfileSerializer(serializers.ModelSerializer):
 
     def get_profile_is_complete(self, obj):
         return obj.is_complete()
+
+    def get_identity_verification_status(self, obj):
+        """Return the adopter's identity verification status or 'not_submitted'."""
+        iv = getattr(obj, "identity_verification", None)
+        if iv is None:
+            return "not_submitted"
+        return iv.status
 
 
 class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
@@ -226,4 +277,169 @@ class AdopterProfileUpdateSerializer(serializers.ModelSerializer):
         if not has_other_pets:
             attrs["other_pets"] = ""
 
+        return attrs
+
+
+# ---------------------------------------------------------------------------
+# IdentityVerification serializers
+# ---------------------------------------------------------------------------
+
+class IdentityVerificationSerializer(serializers.ModelSerializer):
+    """Read-only adopter-facing view of their own verification record.
+
+    Fields excluded from adopter view:
+    - reviewed_by  (staff identity)
+    - reviewed_at  (staff decision timing, only rejection_reason matters to adopter)
+    Rejection reason IS shown so the adopter knows what to fix.
+    """
+    can_resubmit = serializers.SerializerMethodField()
+    has_combined_pdf = serializers.SerializerMethodField()
+    has_selfie_with_id = serializers.SerializerMethodField()
+    # Download URLs are authenticated server-side; we return them as relative API paths.
+    combined_pdf_url = serializers.SerializerMethodField()
+    selfie_with_id_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IdentityVerification
+        fields = [
+            "id", "status", "rejection_reason",
+            "privacy_consent", "consent_given_at",
+            "submitted_at", "created_at", "updated_at",
+            "can_resubmit", "has_combined_pdf", "has_selfie_with_id",
+            "combined_pdf_url", "selfie_with_id_url",
+        ]
+        read_only_fields = fields
+
+    def get_can_resubmit(self, obj):
+        return obj.can_resubmit()
+
+    def get_has_combined_pdf(self, obj):
+        return bool(obj.combined_pdf)
+
+    def get_has_selfie_with_id(self, obj):
+        return bool(obj.selfie_with_id)
+
+    def get_combined_pdf_url(self, obj):
+        if not obj.combined_pdf:
+            return None
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(f"/api/adopters/verification/download/combined_pdf/")
+        return f"/api/adopters/verification/download/combined_pdf/"
+
+    def get_selfie_with_id_url(self, obj):
+        if not obj.selfie_with_id:
+            return None
+        request = self.context.get("request")
+        if request:
+            return request.build_absolute_uri(f"/api/adopters/verification/download/selfie_with_id/")
+        return f"/api/adopters/verification/download/selfie_with_id/"
+
+
+class IdentityVerificationStaffSerializer(serializers.ModelSerializer):
+    """Full staff-facing view, includes reviewer identity and all timestamps."""
+    adopter_email = serializers.EmailField(source="profile.user.email", read_only=True)
+    adopter_name = serializers.CharField(source="profile.user.full_name", read_only=True)
+    reviewed_by_email = serializers.EmailField(
+        source="reviewed_by.email", read_only=True, default=None
+    )
+    can_resubmit = serializers.SerializerMethodField()
+    has_combined_pdf = serializers.SerializerMethodField()
+    has_selfie_with_id = serializers.SerializerMethodField()
+    combined_pdf_url = serializers.SerializerMethodField()
+    selfie_with_id_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IdentityVerification
+        fields = [
+            "id", "adopter_email", "adopter_name",
+            "status", "rejection_reason",
+            "privacy_consent", "consent_given_at",
+            "reviewed_by", "reviewed_by_email", "reviewed_at",
+            "submitted_at", "created_at", "updated_at",
+            "can_resubmit", "has_combined_pdf", "has_selfie_with_id",
+            "combined_pdf_url", "selfie_with_id_url",
+        ]
+        read_only_fields = fields
+
+    def get_can_resubmit(self, obj):
+        return obj.can_resubmit()
+
+    def get_has_combined_pdf(self, obj):
+        return bool(obj.combined_pdf)
+
+    def get_has_selfie_with_id(self, obj):
+        return bool(obj.selfie_with_id)
+
+    def _staff_download_url(self, obj, field):
+        request = self.context.get("request")
+        path = f"/api/adopters/verification-requests/{obj.id}/download/{field}/"
+        if request:
+            return request.build_absolute_uri(path)
+        return path
+
+    def get_combined_pdf_url(self, obj):
+        if not obj.combined_pdf:
+            return None
+        return self._staff_download_url(obj, "combined_pdf")
+
+    def get_selfie_with_id_url(self, obj):
+        if not obj.selfie_with_id:
+            return None
+        return self._staff_download_url(obj, "selfie_with_id")
+
+
+class IdentityVerificationSubmitSerializer(serializers.Serializer):
+    """Write serializer for adopter-initiated (re)submission.
+
+    Validates both files, consent, and business rules (can_resubmit).
+    """
+    combined_pdf = serializers.FileField(required=True)
+    selfie_with_id = serializers.FileField(required=True)
+    privacy_consent = serializers.BooleanField(required=True)
+
+    def validate_combined_pdf(self, value):
+        return _validate_pdf(value)
+
+    def validate_selfie_with_id(self, value):
+        return _validate_image(value)
+
+    def validate_privacy_consent(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "You must acknowledge the privacy notice before submitting."
+            )
+        return value
+
+    def validate(self, attrs):
+        # Fetch the existing verification record for this adopter (if any)
+        request = self.context.get("request")
+        if request and hasattr(request, "user"):
+            profile = getattr(request.user, "adopter_profile", None)
+            if profile:
+                iv = getattr(profile, "identity_verification", None)
+                if iv and not iv.can_resubmit():
+                    raise serializers.ValidationError(
+                        {
+                            "non_field_errors": (
+                                f"You cannot submit while your verification is in '{iv.status}' status. "
+                                "Resubmission is only allowed when status is 'not_submitted' or 'rejected'."
+                            )
+                        }
+                    )
+        return attrs
+
+
+class IdentityVerificationReviewSerializer(serializers.Serializer):
+    """Write serializer for staff review decisions (approve / reject)."""
+    decision = serializers.ChoiceField(choices=["approve", "reject"])
+    rejection_reason = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+    def validate(self, attrs):
+        if attrs["decision"] == "reject" and not attrs.get("rejection_reason", "").strip():
+            raise serializers.ValidationError(
+                {"rejection_reason": "A rejection reason is required when rejecting a verification request."}
+            )
         return attrs

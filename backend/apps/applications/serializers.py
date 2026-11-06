@@ -37,6 +37,9 @@ class ApplicationSerializer(serializers.ModelSerializer):
     is_fee_paid = serializers.SerializerMethodField()
     turnover_eligible = serializers.SerializerMethodField()
     onsite_visit = serializers.SerializerMethodField()
+    # Surfaces the adopter's identity verification status so staff can see it
+    # in the application review panel without navigating to the adopter profile.
+    adopter_verification_status = serializers.SerializerMethodField()
 
     def get_onsite_visit(self, obj):
         return onsite_visit_state(obj)
@@ -52,7 +55,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "staff_notes", "reviewed_by", "reviewed_by_email",
             "reviewed_at", "rejection_reason", "documents",
             "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible", "onsite_visit",
-            "created_at", "updated_at",
+            "adopter_verification_status", "created_at", "updated_at",
         ]
         read_only_fields = [
             "id", "adopter", "adopter_email", "adopter_name", "adopter_profile",
@@ -107,6 +110,21 @@ class ApplicationSerializer(serializers.ModelSerializer):
         )
         return total >= PROTOTYPE_ADOPTION_FEE
 
+    def get_adopter_verification_status(self, obj):
+        """Return the adopter's identity verification status for staff view.
+
+        Returns the status string from IdentityVerification or 'not_submitted'
+        when no record exists. This field is excluded from adopter-facing responses
+        in to_representation() so internal staff indicators remain staff-only.
+        """
+        profile = getattr(obj.adopter, "adopter_profile", None)
+        if profile is None:
+            return "not_submitted"
+        iv = getattr(profile, "identity_verification", None)
+        if iv is None:
+            return "not_submitted"
+        return iv.status
+
     def validate(self, attrs):
         status_val = attrs.get("status", self.instance.status if self.instance else None)
         if self.instance:
@@ -131,6 +149,9 @@ class ApplicationSerializer(serializers.ModelSerializer):
         )
         if not is_staff:
             data.pop("staff_notes", None)
+            # adopter_verification_status is staff-internal; adopters don't need
+            # to see it in their application response (they see it on their profile).
+            data.pop("adopter_verification_status", None)
         return data
 
 
@@ -180,6 +201,30 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
                             "Your profile information is incomplete. Please update and save "
                             "your profile before starting an adoption application. "
                             f"Missing: {', '.join(missing)}."
+                        )
+                    }
+                )
+
+            # ------------------------------------------------------------------
+            # Identity verification gate.
+            #
+            # An adopter's identity (combined PDF of valid ID, proof of address,
+            # barangay certification, plus selfie-with-ID) must be verified by
+            # staff before a new adoption application can be submitted.
+            # This is enforced here (server-side) so it cannot be bypassed by
+            # direct API calls or React route manipulation (AGENTS.md #14).
+            # ------------------------------------------------------------------
+            from apps.adopters.models import IdentityVerification
+            iv = getattr(profile, "identity_verification", None)
+            if iv is None or iv.status != IdentityVerification.Status.VERIFIED:
+                iv_status = iv.status if iv else "not_submitted"
+                raise serializers.ValidationError(
+                    {
+                        "identity_verification": (
+                            "Your identity must be verified before you can submit an adoption "
+                            "application. Please upload your identity documents in the "
+                            f"'Identity & Document Verification' section of your profile "
+                            f"(current status: {iv_status})."
                         )
                     }
                 )

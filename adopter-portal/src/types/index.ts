@@ -195,6 +195,24 @@ export interface AdopterProfile {
   has_other_pets: boolean
   agree_to_terms: boolean
   profile_is_complete: boolean
+  identity_verification_status?: 'not_submitted' | 'pending_review' | 'verified' | 'rejected'
   created_at: string
   updated_at: string
+}
+
+
+export interface IdentityVerification {
+  id: string
+  status: 'not_submitted' | 'pending_review' | 'verified' | 'rejected'
+  rejection_reason: string
+  privacy_consent: boolean
+  consent_given_at: string | null
+  submitted_at: string | null
+  created_at: string
+  updated_at: string
+  can_resubmit: boolean
+  has_combined_pdf: boolean
+  has_selfie_with_id: boolean
+  combined_pdf_url: string | null
+  selfie_with_id_url: string | null
 }

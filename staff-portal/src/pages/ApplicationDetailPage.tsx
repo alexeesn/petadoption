@@ -38,10 +38,12 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
  * Used here only to show the reviewer whether each one arrived with the
  * application; the validation itself stays on the server.
  */
+/**
+ * Application-specific required documents (cage_photo).
+ * Note: General identity & eligibility documents (Valid ID, Proof of Address,
+ * Barangay Certification) are verified at the profile level via Identity Verification.
+ */
 const REQUIRED_DOCUMENTS = [
-  { type: 'identification', label: 'Valid ID' },
-  { type: 'proof_of_address', label: 'Proof of Address' },
-  { type: 'barangay_certification', label: 'Barangay Certification' },
   { type: 'cage_photo', label: 'Cage/Kennel Photo' },
 ];
 
@@ -268,6 +270,24 @@ export default function ApplicationDetailPage() {
           <Detail label="Name" value={app.adopter_name} />
           <Detail label="Email" value={app.adopter_email} />
           <Detail label="Phone" value={profile?.phone_number} />
+          <Detail
+            label="Identity verification"
+            value={
+              app.adopter_verification_status ? (
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={app.adopter_verification_status} />
+                  <Link
+                    to="/verification-requests"
+                    className="text-xs text-primary-600 hover:underline"
+                  >
+                    View &rarr;
+                  </Link>
+                </div>
+              ) : (
+                '—'
+              )
+            }
+          />
           <Detail label="Date of birth" value={profile?.date_of_birth ? formatDate(profile.date_of_birth) : ''} />
           <Detail label="Address" value={address} />
           <Detail

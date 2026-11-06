@@ -1,5 +1,5 @@
 import api from './api';
-import type { User, Notification, PaginatedResponse, Pet, HealthRecord, Application } from '../types';
+import type { User, Notification, PaginatedResponse, Pet, HealthRecord, Application, IdentityVerificationRequest } from '../types';
 
 export async function login(email: string, password: string) {
   const res = await api.post('/auth/login/', { email, password });
@@ -296,4 +296,22 @@ export const notificationService = {
 // ----- Audit Logs (Admin only) -----
 export const auditService = {
   list: (params?: Record<string, unknown>) => api.get('/audit/', { params }),
+};
+
+
+// ----- Identity Verification Requests -----
+export const verificationService = {
+  list: (params?: Record<string, unknown>) =>
+    api.get<PaginatedResponse<IdentityVerificationRequest>>('/adopters/verification-requests/', { params }),
+  retrieve: (id: string) =>
+    api.get<IdentityVerificationRequest>(`/adopters/verification-requests/${id}/`),
+  review: (id: string, decision: 'approve' | 'reject', rejection_reason = '') =>
+    api.post<IdentityVerificationRequest>(`/adopters/verification-requests/${id}/review/`, {
+      decision,
+      rejection_reason,
+    }),
+  downloadFile: (id: string, field: 'combined_pdf' | 'selfie_with_id') =>
+    api.get(`/adopters/verification-requests/${id}/download/${field}/`, {
+      responseType: 'blob',
+    }),
 };

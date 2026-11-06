@@ -330,8 +330,6 @@ class ApplicationTests(BaseAPITestCase):
             "document_types": ["identification"],
         }, format="multipart")
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("proof_of_address", resp.data["documents"])
-        self.assertIn("barangay_certification", resp.data["documents"])
         self.assertIn("cage_photo", resp.data["documents"])
         self.assertEqual(Application.objects.filter(adopter=self.adopter).count(), 0)
 

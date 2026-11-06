@@ -31,6 +31,7 @@ export interface AdopterProfile {
   number_of_children: number | null;
   children_ages: string;
   has_other_pets: boolean;
+  identity_verification_status?: 'not_submitted' | 'pending_review' | 'verified' | 'rejected';
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +104,7 @@ export interface Application {
   is_fee_paid?: boolean;
   turnover_eligible?: boolean;
   onsite_visit?: OnsiteVisitState;
+  adopter_verification_status?: string;
 }
 
 export interface Document {
@@ -306,4 +308,26 @@ export interface PaginatedResponse<T> {
   next: string | null;
   previous: string | null;
   results: T[];
+}
+
+
+export interface IdentityVerificationRequest {
+  id: string;
+  adopter_email: string;
+  adopter_name: string;
+  status: 'not_submitted' | 'pending_review' | 'verified' | 'rejected';
+  rejection_reason: string;
+  privacy_consent: boolean;
+  consent_given_at: string | null;
+  reviewed_by: string | null;
+  reviewed_by_email: string | null;
+  reviewed_at: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  updated_at: string;
+  can_resubmit: boolean;
+  has_combined_pdf: boolean;
+  has_selfie_with_id: boolean;
+  combined_pdf_url: string | null;
+  selfie_with_id_url: string | null;
 }

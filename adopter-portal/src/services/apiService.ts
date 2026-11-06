@@ -151,3 +151,23 @@ export async function updateAdopterProfile(profile: Record<string, string | numb
   const { data } = await api.patch('/adopters/profile/', profile)
   return data
 }
+
+
+export async function fetchIdentityVerification(): Promise<import('../types').IdentityVerification> {
+  const { data } = await api.get('/adopters/verification/')
+  return data
+}
+
+export async function submitIdentityVerification(formData: FormData): Promise<import('../types').IdentityVerification> {
+  const { data } = await api.post('/adopters/verification/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function downloadVerificationFile(field: 'combined_pdf' | 'selfie_with_id'): Promise<Blob> {
+  const response = await api.get(`/adopters/verification/download/${field}/`, {
+    responseType: 'blob',
+  })
+  return response.data
+}

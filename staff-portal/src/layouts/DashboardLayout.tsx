@@ -45,6 +45,7 @@ const navSections: NavSection[] = [
     items: [
       { to: '/applications', label: 'Applications', icon: 'clipboard', badge: 'applications' },
       { to: '/appointments', label: 'Appointments', icon: 'calendar', badge: 'appointments' },
+      { to: '/verification-requests', label: 'Adopter Verification', icon: 'shield' },
       { to: '/adopters', label: 'Adopters', icon: 'user' },
     ],
   },

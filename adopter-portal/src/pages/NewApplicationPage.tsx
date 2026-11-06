@@ -33,36 +33,24 @@ const EMPTY: ApplicationForm = {
  * Document slots shown inside the application. The two required slots mirror
  * REQUIRED_DOCUMENT_TYPES in backend/apps/documents/serializers.py.
  */
+/**
+ * Document slots for application submission.
+ * Note: General identity and eligibility documents (Valid ID, Proof of Address,
+ * Barangay Certification) are now centralized in the Adopter Profile. Only
+ * pet/application-specific cage/kennel photos are required here.
+ */
 const DOCUMENT_SLOTS = [
-  {
-    type: 'identification',
-    label: 'Valid ID',
-    required: true,
-    hint: "Government-issued ID (passport, driver's licence, national ID)",
-  },
-  {
-    type: 'proof_of_address',
-    label: 'Proof of Address',
-    required: true,
-    hint: 'Recent utility bill, lease, or bank statement',
-  },
-  {
-    type: 'barangay_certification',
-    label: 'Barangay Certification',
-    required: true,
-    hint: 'Certification from your local barangay confirming residence',
-  },
   {
     type: 'cage_photo',
     label: 'Cage/Kennel Photo',
     required: true,
-    hint: 'Photo of the cage or kennel where the pet will stay',
+    hint: 'Photo of the cage, kennel, or home area where this pet will stay',
   },
   {
     type: 'vet_reference',
     label: 'Supporting Document',
     required: false,
-    hint: 'Optional — veterinary reference or similar supporting document',
+    hint: 'Optional — veterinary reference, landlord approval, or similar document',
   },
 ]
 
@@ -236,6 +224,13 @@ export default function NewApplicationPage() {
           setDocumentErrors(flattened)
           setError('Please fix the problems with your documents and submit again.')
           setStep(1)
+        } else if (data.identity_verification) {
+          setError(
+            Array.isArray(data.identity_verification)
+              ? String(data.identity_verification[0])
+              : String(data.identity_verification)
+          )
+          setStep(0)
         } else if (data.profile) {
           // The server is authoritative: it rejected the submission because
           // the adopter's profile is incomplete. Say so plainly.
@@ -304,6 +299,58 @@ export default function NewApplicationPage() {
               className="btn btn-primary"
             >
               Update Profile
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ------------------------------------------------------------------
+  // Identity verification gate — the adopter must have their profile
+  // verified before submitting an application.
+  // ------------------------------------------------------------------
+  if (
+    !profileLoading &&
+    profile &&
+    profile.profile_is_complete &&
+    profile.identity_verification_status !== 'verified' &&
+    !submitted
+  ) {
+    const isPending = profile.identity_verification_status === 'pending_review'
+    const isRejected = profile.identity_verification_status === 'rejected'
+    return (
+      <div className="mx-auto max-w-3xl">
+        <button
+          onClick={() => navigate(-1)}
+          className="mb-4 text-sm font-medium text-stone-600 hover:text-stone-900"
+        >
+          &larr; Back
+        </button>
+        <div className="panel p-6 sm:p-8">
+          <div
+            className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary-100 text-primary-900"
+            aria-hidden="true"
+          >
+            <Icon name="check-circle" className="h-7 w-7 text-primary-600" />
+          </div>
+          <h1 className="text-3xl font-extrabold text-primary-900 mt-4 text-center">
+            {isPending
+              ? 'Identity Verification Under Review'
+              : isRejected
+              ? 'Identity Verification Requires Correction'
+              : 'Identity Verification Required'}
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-stone-600">
+            {isPending
+              ? 'Your identity documents have been submitted and are currently awaiting review by shelter staff. Once verified, you will be able to apply for pets without re-uploading documents.'
+              : isRejected
+              ? 'Your identity verification documents were not approved by staff. Please review the feedback in your profile and resubmit your documents to proceed.'
+              : 'To protect pet welfare and ensure adopter safety, your identity and required eligibility documents must be verified in your Adopter Profile before you can submit an adoption application.'}
+          </p>
+          <div className="mt-6 flex justify-center">
+            <Link to="/profile" state={backToApplication} className="btn btn-primary">
+              {isPending ? 'View Verification Status' : 'Go to Identity Verification'}
             </Link>
           </div>
         </div>
@@ -581,11 +628,18 @@ export default function NewApplicationPage() {
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <h2 className="text-lg font-semibold text-primary-900">Required Documents</h2>
+              <h2 className="text-lg font-semibold text-primary-900">Application Documents</h2>
               <p className="mt-1 text-sm text-stone-500">
-                Accepted: PDF, images, DOC/DOCX, TXT. Max 10MB each. These are submitted together with your
-                application.
+                Accepted: PDF, images, DOC/DOCX, TXT. Max 10MB each.
               </p>
+            </div>
+
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-900 flex items-start gap-2">
+              <Icon name="check-circle" className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold block">Profile Verification Reused</span>
+                Your general identity and eligibility documents (Valid ID, Proof of Address, Barangay Certification) are verified from your Adopter Profile. Only the pet-specific cage/kennel photo is required for this application.
+              </div>
             </div>
 
             {DOCUMENT_SLOTS.map((slot) => (

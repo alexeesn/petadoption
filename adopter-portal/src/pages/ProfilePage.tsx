@@ -10,6 +10,7 @@ import PhilippineAddressSelector, {
 import { birthDateBounds, formatDate, formatDisplayName } from '../utils/format'
 import { useAuth } from '../context/AuthContext'
 import type { AdopterProfile } from '../types'
+import IdentityVerificationSection from '../features/verification/IdentityVerificationSection'
 
 interface ProfileForm {
   first_name: string
@@ -858,6 +859,9 @@ export default function ProfilePage() {
           </div>
         </form>
       )}
+
+      {/* Centralized Adopter Identity & Document Verification */}
+      <IdentityVerificationSection />
     </div>
   )
 }

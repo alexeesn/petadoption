@@ -22,7 +22,7 @@ class BaseAPITestCase(TestCase):
         self.client = APIClient()
 
     def create_user(self, email="adopter@example.com", password="TestPass123!",
-                    role="adopter", verified=True, **kwargs):
+                    role="adopter", verified=True, verified_identity=True, **kwargs):
         user = User.objects.create_user(
             email=email,
             password=password,
@@ -51,6 +51,13 @@ class BaseAPITestCase(TestCase):
                 }.items():
                     setattr(profile, field, value)
                 profile.save()
+            if verified_identity:
+                from apps.adopters.models import IdentityVerification
+                iv, _ = IdentityVerification.objects.get_or_create(profile=profile)
+                if iv.status != IdentityVerification.Status.VERIFIED:
+                    iv.status = IdentityVerification.Status.VERIFIED
+                    iv.privacy_consent = True
+                    iv.save()
         return user
 
     def create_staff(self, **kwargs):

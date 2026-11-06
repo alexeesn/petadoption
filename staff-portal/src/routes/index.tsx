@@ -9,6 +9,7 @@ import ApplicationsPage from '../pages/ApplicationsPage';
 import ApplicationDetailPage from '../pages/ApplicationDetailPage';
 import PetsPage from '../pages/PetsPage';
 import AdoptersPage from '../pages/AdoptersPage';
+import AdopterVerificationPage from '../pages/AdopterVerificationPage';
 import DocumentsPage from '../pages/DocumentsPage';
 import ReviewsPage from '../pages/ReviewsPage';
 import HealthRecordsPage from '../pages/HealthRecordsPage';
@@ -47,6 +48,7 @@ export default function AppRoutes() {
           <Route path="/applications" element={<ApplicationsPage />} />
           <Route path="/applications/:id" element={<ApplicationDetailPage />} />
           <Route path="/pets" element={<PetsPage />} />
+          <Route path="/verification-requests" element={<AdopterVerificationPage />} />
           <Route path="/adopters" element={<AdoptersPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/reviews" element={<ReviewsPage />} />
