@@ -517,3 +517,15 @@ Scheduling is not final acceptance. Owner cancellation is allowed only before
 closure; internal notes and private request photos remain protected. Intake does
 not require payment or enable owner-to-owner adoption. See `PET-SURRENDER.md`
 for transitions, API, storage, and verification details.
+
+## 34. Death of a pet in center custody (user-approved extension, 2026-11-06)
+
+Staff/admin can record a pet death with date, cause or Unknown, optional
+veterinarian/internal notes, and explicit confirmation. The backend atomically
+marks the pet deceased, removes it from public listings, cancels active adoption
+activities, retains health/financial history, and flags applicable payments for
+staff review. Private death details stay staff-only. Administrators can correct
+an erroneous entry with a reason; its original details stay in history and the
+pet returns to For Assessment without reopening applications or visits. Deaths
+after a completed adoption are outside this center-custody action. See
+`PET-DEATHS.md` for API, correction, financial review and verification details.

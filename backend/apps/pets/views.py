@@ -1,14 +1,15 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from .models import Pet, PetImage
-from .serializers import PetSerializer, PetListSerializer, PetImageSerializer
-from apps.accounts.permissions import IsStaff
+from .serializers import PetSerializer, PetListSerializer, PetImageSerializer, RecordPetDeathSerializer, CorrectPetDeathSerializer
+from apps.accounts.permissions import IsStaff, IsAdmin
 from apps.filters import RecordScopeFilter
 
 
@@ -31,7 +32,16 @@ class PetViewSet(viewsets.ModelViewSet):
     ordering_fields = ["name", "age_years", "age_months", "created_at"]
     ordering = ["-created_at"]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        if self.action == "list" and not (user.is_authenticated and (user.is_staff_role or user.is_admin_role)):
+            qs = qs.exclude(status=Pet.Status.DECEASED)
+        return qs
+
     def get_permissions(self):
+        if self.action == "correct_death":
+            return [permissions.IsAuthenticated(), IsAdmin()]
         if self.action in ["list", "retrieve"]:
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated(), IsStaff()]
@@ -73,6 +83,36 @@ class PetViewSet(viewsets.ModelViewSet):
                 previous_value=old_status,
                 new_value=new_status,
             )
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        obj = self.get_object()
+        Pet.objects.select_for_update().get(pk=obj.pk)
+        return super().update(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"], url_path="record-death")
+    def record_death(self, request, pk=None):
+        obj = self.get_object()
+        serializer = RecordPetDeathSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if request.data.get("confirmed") is not True:
+            raise ValidationError({"confirmed": "Confirm that the pet died while in center custody."})
+        from .lifecycle import record_pet_death
+        data = dict(serializer.validated_data)
+        data.pop("confirmed")
+        obj = record_pet_death(obj.pk, request.user, data)
+        return Response(PetSerializer(obj, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["post"], url_path="correct-death")
+    def correct_death(self, request, pk=None):
+        obj = self.get_object()
+        serializer = CorrectPetDeathSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        if request.data.get("confirmed") is not True:
+            raise ValidationError({"confirmed": "Explicit confirmation of this correction is required."})
+        from .lifecycle import correct_pet_death
+        obj = correct_pet_death(obj.pk, request.user, serializer.validated_data["reason"])
+        return Response(PetSerializer(obj, context=self.get_serializer_context()).data)
 
     def perform_destroy(self, instance):
         try:

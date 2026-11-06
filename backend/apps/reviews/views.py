@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from django.utils import timezone
+from django.db import transaction
 from .models import Review
 from .serializers import ReviewSerializer, ReviewCreateSerializer
 from apps.accounts.permissions import IsStaff
@@ -24,12 +25,19 @@ class ReviewListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(application_id=application_id)
         return qs
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         serializer = ReviewCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         from apps.applications.models import Application
         app = Application.objects.get(id=serializer.validated_data["application"])
+        from apps.pets.lifecycle import lock_application_pet
+        pet = lock_application_pet(app)
+        app = Application.objects.select_for_update().get(pk=app.pk)
+        app.pet = pet
+        if pet.status == "deceased" or app.death_record_id:
+            return Response({"error": "This application is closed because the pet is no longer available."}, status=status.HTTP_400_BAD_REQUEST)
 
         if serializer.validated_data["decision"] == "approve" and app.pet.status in ("for_assessment", "under_medical_care"):
             return Response({"error": "The pet needs assessment or medical clearance before approval."}, status=status.HTTP_400_BAD_REQUEST)

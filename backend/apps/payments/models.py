@@ -61,6 +61,8 @@ class Payment(models.Model):
     )
     reference_number = models.CharField(max_length=200, blank=True)
     notes = models.TextField(blank=True)
+    death_review_required = models.BooleanField(default=False, db_index=True)
+    death_review_note = models.TextField(blank=True)
     processed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="payments_processed"

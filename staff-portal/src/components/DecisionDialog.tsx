@@ -7,11 +7,13 @@ interface Props {
   description: string;
   requireReason?: boolean;
   confirmationLabel?: string;
+  reasonLabel?: string;
   onConfirm: (reason: string) => Promise<void>;
   onClose: () => void;
 }
 
 export function DecisionDialog({ title, description, requireReason = true,
+  reasonLabel = 'Reason (required; visible to the adopter)',
   confirmationLabel = 'I confirm this decision and understand its effect.', onConfirm, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -38,7 +40,7 @@ export function DecisionDialog({ title, description, requireReason = true,
         <h2 id={titleId} className="text-xl font-bold text-slate-900">{title}</h2>
         <p className="text-sm text-slate-600">{description}</p>
         {requireReason && <label className="block">
-          <span className="field-label mb-1">Reason (required; visible to the adopter)</span>
+          <span className="field-label mb-1">{reasonLabel}</span>
           <textarea className="field-input" rows={3} required maxLength={2000} disabled={busy}
             value={reason} onChange={(e) => setReason(e.target.value)} />
         </label>}

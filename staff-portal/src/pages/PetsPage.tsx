@@ -9,8 +9,9 @@ import type { Pet, PetImage } from '../types';
 import { useToast } from '../context/ToastContext';
 import { RecordScopeTabs } from '../components/RecordScopeTabs';
 import { useRecordFilters } from '../hooks/useRecordFilters';
+import PetDeathDialog from '../features/pets/PetDeathDialog';
 
-const PET_STATUSES = ['available', 'pending', 'reserved', 'for_assessment', 'under_medical_care', 'adopted', 'inactive'];
+const PET_STATUSES = ['available', 'pending', 'reserved', 'for_assessment', 'under_medical_care', 'adopted', 'inactive', 'deceased'];
 const ACTIVE_PET_STATUSES = ['available', 'pending', 'reserved', 'for_assessment', 'under_medical_care'];
 const CARE_STATUSES = [
   { value: 'for_assessment', label: 'For Assessment' },
@@ -81,6 +82,7 @@ export default function PetsPage() {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Pet | null>(null);
+  const [deathPetId, setDeathPetId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
 
   // Every selected image is kept, so 2, 3, 4+ files can be uploaded at once.
@@ -307,7 +309,7 @@ export default function PetsPage() {
         <Button onClick={openNew}>Add New Pet</Button>
       </div>
       <RecordScopeTabs scope={scope} onChange={setScope} />
-      <p className="mb-4 text-sm text-stone-600">Active shows pets in the center's current care. Adopted and inactive pets remain in History.</p>
+      <p className="mb-4 text-sm text-stone-600">Active shows pets in the center's current care. Adopted, inactive, and deceased pets remain in History.</p>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Select label="Status" value={statusFilter} onChange={event => setStatusFilter(event.target.value)} options={[
           { value: '', label: 'All statuses' },
@@ -552,7 +554,8 @@ export default function PetsPage() {
         <Card><Empty message="No pets found." /></Card>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
+          <div className="space-y-3 p-4 md:hidden">{pets.map(pet => <article key={pet.id} className="rounded-lg border border-stone-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-stone-900">{formatPetLabel(pet.name)}</h3><StatusBadge status={pet.status} /></div><p className="mt-2 text-sm text-stone-600">{formatPetLabel(pet.breed) || pet.species} · {formatPetAge(pet.age_years, pet.age_months)}</p><div className="mt-4 flex flex-wrap gap-3"><Button variant="outline" onClick={() => openEdit(pet)}>Edit</Button>{pet.status !== 'adopted' && <Button variant="outline" onClick={() => setDeathPetId(pet.id)}>{pet.status === 'deceased' ? 'Death record' : 'Record pet death'}</Button>}</div></article>)}</div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
@@ -572,6 +575,7 @@ export default function PetsPage() {
                     <td className="px-4 py-3 text-sm text-slate-600"><StatusBadge status={pet.status} /></td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => openEdit(pet)} className="text-primary-600 hover:underline text-sm font-medium">Edit</button>
+                      {pet.status !== 'adopted' && <button onClick={() => setDeathPetId(pet.id)} className="ml-4 py-2 text-sm font-medium text-stone-700 underline">{pet.status === 'deceased' ? 'Death record' : 'Record pet death'}</button>}
                     </td>
                   </tr>
                 ))}
@@ -585,6 +589,12 @@ export default function PetsPage() {
         <span className="text-sm text-stone-600">Page {page} · {pagination.count} pets</span>
         <Button variant="outline" disabled={loading || !pagination.next} onClick={() => setPage(page + 1)}>Next</Button>
       </nav>}
+      {deathPetId && <PetDeathDialog petId={deathPetId} onClose={() => setDeathPetId(null)} onSaved={pet => {
+        setShowForm(false);
+        setRefresh(value => value + 1);
+        toast.success(pet.status === 'deceased' ? 'Pet death recorded' : 'Death entry corrected', pet.status === 'deceased' ? 'Adoption activities closed; payment history retained.' : 'Pet returned to For Assessment. Closed applications remain in history.');
+        if (pet.status === 'deceased') setScope('history'); else setScope('active');
+      }} />}
     </div>
   );
 }

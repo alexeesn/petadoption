@@ -190,8 +190,8 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
 
     Concurrency & idempotency
     -------------------------
-    The Application row is locked with ``select_for_update()`` immediately after
-    entering the atomic block.  The locked, reloaded instance is used for all
+    The pet is locked first, then the Application row, matching pet death
+    reporting. The locked, reloaded instance is used for all
     subsequent checks so that two simultaneous requests cannot both pass the
     guard and create duplicate records or conflicting state.
 
@@ -212,8 +212,10 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
     from apps.pets.models import Pet
 
     # ── Acquire row-level lock and reload under the lock ─────────────────────
+    from apps.pets.lifecycle import lock_application_pet
+    lock_application_pet(application)
     app = (
-        ApplicationModel.objects.select_for_update()
+        ApplicationModel.objects.select_for_update(of=("self",))
         .select_related("pet", "adopter")
         .get(id=application.id)
     )
@@ -251,6 +253,8 @@ def complete_application_adoption(application, staff_user, notes="", handover_co
 
     if pet.status in (Pet.Status.FOR_ASSESSMENT, Pet.Status.UNDER_MEDICAL_CARE):
         raise ValidationError("The pet needs assessment or medical clearance before adoption completion.")
+    if pet.status == Pet.Status.DECEASED:
+        raise ValidationError("This pet is deceased and cannot be adopted.")
 
     # ── Create or fetch the AdoptionRecord under a savepoint ─────────────────
     try:
@@ -360,8 +364,9 @@ def cancel_scheduled_adoption(record, staff, reason, confirmed):
     require_staff(staff)
     require_confirmation(confirmed)
     reason = required_reason(reason)
+    from apps.pets.lifecycle import lock_application_pet
+    pet = lock_application_pet(record.application)
     application = Application.objects.select_for_update().get(pk=record.application_id)
-    pet = Pet.objects.select_for_update().get(pk=application.pet_id)
     record = AdoptionRecord.objects.select_for_update().get(pk=record.pk)
     if record.status == AdoptionRecord.Status.CANCELLED:
         return record  # Retry preserves the original reason, timestamp and audit.
@@ -417,14 +422,17 @@ def return_completed_adoption(record, staff, reason, confirmed):
         raise ValidationError("Confirm that the pet has been physically returned to the shelter (confirmed: true).")
     reason = required_reason(reason)
     # Match completion/cancellation lock order; all side effects commit together.
+    from apps.pets.lifecycle import lock_application_pet
+    pet = lock_application_pet(record.application)
     application = Application.objects.select_for_update().get(pk=record.application_id)
-    pet = Pet.objects.select_for_update().get(pk=application.pet_id)
     record = AdoptionRecord.objects.select_for_update().get(pk=record.pk)
     if record.status == AdoptionRecord.Status.RETURNED:
         # A retry must never release a pet that has since been adopted again.
         return record
     if not record.can_transition_to(AdoptionRecord.Status.RETURNED):
         raise ValidationError("Only a Completed adoption may be marked as Returned.")
+    if pet.status == Pet.Status.DECEASED:
+        raise ValidationError("A deceased pet cannot be returned to active inventory.")
     if (
         Application.objects.filter(pet=pet, status=Application.Status.APPROVED).exclude(pk=application.pk).exists()
         or AdoptionRecord.objects.filter(pet=pet, status__in=["scheduled", "completed"]).exclude(pk=record.pk).exists()

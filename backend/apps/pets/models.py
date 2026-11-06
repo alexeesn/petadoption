@@ -21,6 +21,7 @@ class Pet(models.Model):
         UNDER_MEDICAL_CARE = "under_medical_care", "Under Medical Care"
         FOR_ASSESSMENT = "for_assessment", "For Assessment"
         INACTIVE = "inactive", "Inactive"
+        DECEASED = "deceased", "Deceased"
 
     class Species(models.TextChoices):
         DOG = "dog", "Dog"
@@ -91,6 +92,31 @@ class Pet(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.species})"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        active_death = not self._state.adding and self.death_records.filter(corrected_at__isnull=True).exists()
+        if (self.status == self.Status.DECEASED) != bool(active_death):
+            raise ValidationError({"status": "Use Record pet death or the administrator correction action in the staff portal."})
+
+
+class PetDeathRecord(models.Model):
+    """Private center-custody death record. Corrections retain the original entry."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    pet = models.ForeignKey(Pet, on_delete=models.PROTECT, related_name="death_records")
+    death_date = models.DateField()
+    cause = models.CharField(max_length=1000, default="Unknown")
+    veterinarian = models.CharField(max_length=200, blank=True)
+    internal_notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, related_name="recorded_pet_deaths")
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    corrected_by = models.ForeignKey("accounts.User", on_delete=models.PROTECT, null=True, blank=True, related_name="corrected_pet_deaths")
+    corrected_at = models.DateTimeField(null=True, blank=True)
+    correction_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-recorded_at", "-id"]
+        constraints = [models.UniqueConstraint(fields=["pet"], condition=models.Q(corrected_at__isnull=True), name="one_active_death_record_per_pet")]
 
 
 class PetImage(models.Model):

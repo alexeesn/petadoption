@@ -65,6 +65,9 @@ export interface Application {
   pet: string
   pet_name: string
   status: string
+  cancellation_reason?: string
+  death_notice_corrected?: boolean
+  cancelled_at?: string | null
   why_adopt: string
   experience_with_pets: string
   living_situation: string

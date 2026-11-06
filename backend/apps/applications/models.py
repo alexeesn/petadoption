@@ -33,7 +33,7 @@ class Application(models.Model):
     VALID_TRANSITIONS = {
         "draft": ["submitted", "cancelled"],
         "submitted": ["under_review", "pending_documents", "approved", "rejected", "cancelled"],
-        "under_review": ["pending_documents", "additional_info_requested", "approved", "rejected"],
+        "under_review": ["pending_documents", "additional_info_requested", "approved", "rejected", "cancelled"],
         "pending_documents": ["under_review", "cancelled"],
         "additional_info_requested": ["under_review", "cancelled"],
         "approved": ["adoption_completed", "cancelled"],
@@ -67,6 +67,9 @@ class Application(models.Model):
     )
     reviewed_at = models.DateTimeField(blank=True, null=True)
     rejection_reason = models.TextField(blank=True)
+    cancellation_reason = models.TextField(blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    death_record = models.ForeignKey("pets.PetDeathRecord", on_delete=models.PROTECT, null=True, blank=True, related_name="affected_applications")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

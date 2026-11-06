@@ -53,5 +53,7 @@ npm run dev
 - In-app notifications
 - Report generation with CSV export
 - Audit logging for all important actions
+- [Pet death reporting](docs/PET-DEATHS.md), with coordinated cancellation,
+  preserved history, payment review and administrator corrections
 - [Pet surrender requests and center intake](docs/PET-SURRENDER.md), including
   staff assessment, scheduling, private photos, and confirmed physical handover

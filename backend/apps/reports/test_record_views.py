@@ -36,7 +36,7 @@ class RecordViewTests(BaseAPITestCase):
         self.authenticate(self.staff)
 
     def test_active_history_and_all_counts_are_partitioned_before_pagination(self):
-        for resource, active, history, total in (("pets", 17, 3, 20), ("applications", 7, 6, 13), ("adoptions", 1, 3, 4)):
+        for resource, active, history, total in (("pets", 17, 4, 21), ("applications", 7, 6, 13), ("adoptions", 1, 3, 4)):
             with self.subTest(resource=resource):
                 active_data = self.client.get(f"/api/{resource}/", {"scope": "active"}).data
                 history_data = self.client.get(f"/api/{resource}/", {"scope": "history"}).data
@@ -85,7 +85,7 @@ class RecordViewTests(BaseAPITestCase):
         self.assertEqual(response.data["completed_adoptions"], 1)
         self.assertEqual(len(response.data["recent_applications"]), 5)
         self.assertTrue(all(row["status"] not in ("rejected", "cancelled", "adoption_completed") for row in response.data["recent_applications"]))
-        self.assertEqual(self.client.get("/api/reports/pets/").data["stats"]["total"], 20)
+        self.assertEqual(self.client.get("/api/reports/pets/").data["stats"]["total"], 21)
 
     def test_dashboard_is_staff_only(self):
         self.authenticate(self.adopter)

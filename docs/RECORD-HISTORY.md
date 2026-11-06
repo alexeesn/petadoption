@@ -4,10 +4,10 @@ The staff Pets, Applications, Adoption Records and Health Records pages open in 
 
 | Page | Active | History |
 | --- | --- | --- |
-| Pets | Available, pending, reserved, for assessment, under medical care | Adopted, inactive |
+| Pets | Available, pending, reserved, for assessment, under medical care | Adopted, inactive, deceased |
 | Applications | Draft, submitted, under review, pending documents, additional information requested, approved | Adoption completed, rejected, cancelled |
 | Adoption Records | Scheduled | Completed, cancelled, returned |
-| Health Records | Records of available, pending, reserved, for-assessment and under-medical-care pets | Records of adopted and inactive pets |
+| Health Records | Records of available, pending, reserved, for-assessment and under-medical-care pets | Records of adopted, inactive and deceased pets |
 
 Completing an adoption moves its application, pet and adoption record into their respective History views. Cancelling or returning an adoption retains its record in History. A returned pet becomes For Assessment and appears in Active Pets while hidden from the adopter's available-pet catalog. Staff assess it before choosing Available or Under Medical Care in Pets > Edit > Care status. Existing payment receipts, certificates, return/cancellation PDFs and application details remain accessible.
 

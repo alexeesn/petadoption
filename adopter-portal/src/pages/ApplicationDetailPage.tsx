@@ -216,7 +216,7 @@ export default function ApplicationDetailPage() {
   )
   const lastRejectedAppointment = appointments.find((a) => a.status === 'rejected')
   const canChooseVisitDate = app.status === 'approved' && !activeAppointment && !appointments.some((a) => a.status === 'no_show')
-  const nextStep = app.status === 'approved' && activeAppointment?.status === 'confirmed'
+  const nextStep = app.death_notice_corrected ? 'A previous death notice was corrected by an administrator. This application remains closed. Please contact the center for assistance.' : app.status === 'cancelled' && app.cancellation_reason ? app.cancellation_reason : app.status === 'approved' && activeAppointment?.status === 'confirmed'
     ? `Your visit is confirmed for ${formatDate(activeAppointment.requested_date)}. Follow the onsite instructions below and staff guidance for physical handover.`
     : app.status === 'approved' && activeAppointment?.status === 'pending_confirmation'
       ? 'Your visit request is waiting for staff review. You will be notified when the date is confirmed or rejected.'

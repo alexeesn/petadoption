@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db.models import Sum
+from django.db import transaction
 from rest_framework import serializers
 
 from apps.adopters.serializers import AdopterProfileSerializer
@@ -40,6 +41,10 @@ class ApplicationSerializer(serializers.ModelSerializer):
     # Surfaces the adopter's identity verification status so staff can see it
     # in the application review panel without navigating to the adopter profile.
     adopter_verification_status = serializers.SerializerMethodField()
+    death_notice_corrected = serializers.SerializerMethodField()
+
+    def get_death_notice_corrected(self, obj):
+        return bool(obj.death_record_id and obj.death_record.corrected_at)
 
     def get_onsite_visit(self, obj):
         return onsite_visit_state(obj)
@@ -54,6 +59,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "additional_notes", "privacy_consent", "require_home_visit", "no_home_visit_reason",
             "staff_notes", "reviewed_by", "reviewed_by_email",
             "reviewed_at", "rejection_reason", "documents",
+            "cancellation_reason", "cancelled_at", "death_notice_corrected",
             "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible", "onsite_visit",
             "adopter_verification_status", "created_at", "updated_at",
         ]
@@ -64,6 +70,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "adoption_fee", "total_paid", "is_fee_paid", "turnover_eligible", "onsite_visit",
             "created_at", "updated_at",
             "has_other_pets", "other_pets_description",
+            "cancellation_reason", "cancelled_at",
         ]
 
     def get_adopter_profile(self, obj):
@@ -126,6 +133,9 @@ class ApplicationSerializer(serializers.ModelSerializer):
         return iv.status
 
     def validate(self, attrs):
+        if self.instance and self.instance.death_record_id:
+            if attrs.get("pet", self.instance.pet) != self.instance.pet or attrs.get("status", self.instance.status) != self.instance.status:
+                raise serializers.ValidationError("An application closed following a pet death cannot be reopened or reassigned.")
         status_val = attrs.get("status", self.instance.status if self.instance else None)
         if self.instance:
             pet = self.instance.pet
@@ -231,6 +241,8 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
 
         pet = attrs.get("pet")
         if pet is not None:
+            if pet.status == "deceased":
+                raise serializers.ValidationError({"pet": "This pet is no longer available for adoption."})
             if pet.status in ("for_assessment", "under_medical_care"):
                 raise serializers.ValidationError({"pet": "This pet is awaiting assessment or medical clearance and is not available for adoption."})
             # A pet cannot be assigned to two conflicting active applications
@@ -249,7 +261,15 @@ class ApplicationCreateSerializer(serializers.ModelSerializer):
                 )
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
+        # Recheck after taking the pet lock: a death may have been recorded
+        # between serializer validation and saving this application.
+        from apps.pets.models import Pet
+        pet = Pet.objects.select_for_update().get(pk=validated_data["pet"].pk)
+        if pet.status == Pet.Status.DECEASED:
+            raise serializers.ValidationError({"pet": "This pet is no longer available for adoption."})
+        validated_data["pet"] = pet
         validated_data["adopter"] = self.context["request"].user
         # Household pet information is entered once in the adopter profile.
         # Retain a submission-time snapshot without trusting duplicate form input.

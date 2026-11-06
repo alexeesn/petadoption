@@ -61,8 +61,22 @@ export interface Pet {
   is_neutered: boolean;
   adoption_fee?: string;
   images: PetImage[];
+  death_records?: PetDeathRecord[];
   created_at: string;
   updated_at: string;
+}
+
+export interface PetDeathRecord {
+  id: string;
+  death_date: string;
+  cause: string;
+  veterinarian: string;
+  internal_notes: string;
+  recorded_at: string;
+  recorded_by_email: string;
+  corrected_at: string | null;
+  corrected_by_email: string | null;
+  correction_reason: string;
 }
 
 export interface OnsiteVisitState {
@@ -95,6 +109,9 @@ export interface Application {
   reviewed_by_email?: string;
   reviewed_at?: string;
   rejection_reason: string;
+  cancellation_reason?: string;
+  death_notice_corrected?: boolean;
+  cancelled_at?: string | null;
   documents?: Document[];
   created_at: string;
   updated_at: string;
@@ -254,6 +271,8 @@ export interface Payment {
   receipt_number?: string;
   reference_number?: string;
   notes?: string;
+  death_review_required?: boolean;
+  death_review_note?: string;
   paid_at?: string;
   processed_by?: string;
   processed_by_email?: string | null;

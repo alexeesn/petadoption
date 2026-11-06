@@ -105,6 +105,7 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
         response["Cache-Control"] = "private, no-store"
         return response
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         """Create adoption record from approved application.
 
@@ -124,6 +125,11 @@ class AdoptionRecordViewSet(viewsets.ModelViewSet):
         application = get_object_or_404(
             Application, id=serializer.validated_data["application_id"]
         )
+        from apps.pets.lifecycle import lock_application_pet
+        pet = lock_application_pet(application)
+        application = Application.objects.select_for_update().get(pk=application.pk)
+        if pet.status == "deceased":
+            return Response({"error": "This pet is deceased and cannot be adopted."}, status=status.HTTP_400_BAD_REQUEST)
         if application.status != "approved":
             return Response(
                 {"error": "Application must be approved to create an adoption record."},

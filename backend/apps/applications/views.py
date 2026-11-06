@@ -54,6 +54,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         # A staff edit must not overwrite a cancellation/completion that just
         # committed while this request was waiting for the application row.
         application = self.get_object()
+        from apps.pets.lifecycle import lock_application_pet
+        lock_application_pet(application)
         Application.objects.select_for_update().get(pk=application.pk)
         return super().update(request, *args, **kwargs)
 
@@ -169,13 +171,20 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=True, methods=["post"], url_path="update-status")
+    @transaction.atomic
     def update_status(self, request, pk=None):
         app = self.get_object()
         if not (request.user.is_staff_role or request.user.is_admin_role):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        from apps.pets.lifecycle import lock_application_pet
+        pet = lock_application_pet(app)
+        app = Application.objects.select_for_update().get(pk=app.pk)
+        app.pet = pet
         serializer = ApplicationStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         new_status = serializer.validated_data["status"]
+        if pet.status == "deceased":
+            return Response({"error": "This pet is deceased. Its applications cannot be advanced or reopened."}, status=status.HTTP_400_BAD_REQUEST)
         if new_status == "approved" and app.pet.status in ("for_assessment", "under_medical_care"):
             return Response({"error": "The pet needs assessment or medical clearance before approval."}, status=status.HTTP_400_BAD_REQUEST)
         if app.status == Application.Status.APPROVED and new_status == Application.Status.CANCELLED:
@@ -277,6 +286,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if not (request.user.is_staff_role or request.user.is_admin_role):
             return Response({"error": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
+        from apps.pets.lifecycle import lock_application_pet
+        lock_application_pet(app)
         app = Application.objects.select_for_update().get(pk=app.pk)
         # Idempotent retry: already completed, return serialized data
         if app.status == Application.Status.ADOPTION_COMPLETED:

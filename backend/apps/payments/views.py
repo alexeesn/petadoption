@@ -39,7 +39,27 @@ class PaymentViewSet(viewsets.ModelViewSet):
         status = self.request.query_params.get("status")
         if status:
             qs = qs.filter(status=status)
+        if self.request.query_params.get("death_review") == "required":
+            qs = qs.filter(death_review_required=True)
         return qs
+
+    @action(detail=True, methods=["post"], url_path="resolve-death-review")
+    @transaction.atomic
+    def resolve_death_review(self, request, pk=None):
+        payment = self.get_object()
+        payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        note = request.data.get("note", "")
+        if request.data.get("confirmed") is not True or not isinstance(note, str) or not note.strip() or len(note.strip()) > 2000:
+            raise serializers.ValidationError({"note": "Provide a review outcome (up to 2000 characters) and explicit confirmation."})
+        if not payment.death_review_required:
+            return Response(PaymentSerializer(payment, context=self.get_serializer_context()).data)
+        previous = payment.death_review_note
+        payment.death_review_required = False
+        payment.death_review_note = note.strip()
+        payment.save(update_fields=["death_review_required", "death_review_note", "updated_at"])
+        from apps.audit.models import AuditLog
+        AuditLog.objects.create(user=request.user, action="payment_death_review_resolved", model_name="Payment", object_id=str(payment.pk), previous_value=previous, new_value=note.strip())
+        return Response(PaymentSerializer(payment, context=self.get_serializer_context()).data)
 
     def get_permissions(self):
         if self.action in ["list", "retrieve", "fee"]:
@@ -207,10 +227,14 @@ class PaymentViewSet(viewsets.ModelViewSet):
             link=f"/payments/{payment.id}",
         )
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
+        Payment.objects.select_for_update().get(pk=instance.pk)
+        instance.refresh_from_db()
         old_status = instance.status
         response = super().update(request, *args, **kwargs)
+        instance.refresh_from_db()
         new_status = instance.status
         if old_status != new_status:
             from apps.audit.models import AuditLog

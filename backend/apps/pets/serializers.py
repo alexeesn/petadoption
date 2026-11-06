@@ -3,7 +3,30 @@ from zoneinfo import ZoneInfo
 from django.utils import timezone
 from rest_framework import serializers
 from apps.health.services import build_adopter_health_summary
-from .models import MAX_PET_AGE_MONTHS, MAX_PET_AGE_YEARS, Pet, PetImage
+from .models import MAX_PET_AGE_MONTHS, MAX_PET_AGE_YEARS, Pet, PetImage, PetDeathRecord
+
+
+class PetDeathRecordSerializer(serializers.ModelSerializer):
+    recorded_by_email = serializers.EmailField(source="recorded_by.email", read_only=True)
+    corrected_by_email = serializers.EmailField(source="corrected_by.email", read_only=True, default=None)
+
+    class Meta:
+        model = PetDeathRecord
+        fields = ["id", "death_date", "cause", "veterinarian", "internal_notes", "recorded_at", "recorded_by_email", "corrected_at", "corrected_by_email", "correction_reason"]
+        read_only_fields = fields
+
+
+class RecordPetDeathSerializer(serializers.Serializer):
+    death_date = serializers.DateField()
+    cause = serializers.CharField(max_length=1000, required=False, default="Unknown")
+    veterinarian = serializers.CharField(max_length=200, required=False, default="", allow_blank=True)
+    internal_notes = serializers.CharField(max_length=5000, required=False, default="", allow_blank=True)
+    confirmed = serializers.BooleanField()
+
+
+class CorrectPetDeathSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=2000)
+    confirmed = serializers.BooleanField()
 
 
 class PetImageSerializer(serializers.ModelSerializer):
@@ -28,8 +51,23 @@ class PetSerializer(serializers.ModelSerializer):
     # /api/health-records/ endpoints; this field only feeds the adopter-facing
     # Pet Details page.
     health_summary = serializers.SerializerMethodField()
+    death_records = serializers.SerializerMethodField()
+
+    def get_death_records(self, obj):
+        return PetDeathRecordSerializer(obj.death_records.select_related("recorded_by", "corrected_by"), many=True).data
+
+    def get_fields(self):
+        fields = super().get_fields()
+        user = getattr(self.context.get("request"), "user", None)
+        if not user or not user.is_authenticated or not (user.is_staff_role or user.is_admin_role):
+            fields.pop("death_records", None)
+        return fields
 
     def validate_status(self, value):
+        if value == Pet.Status.DECEASED and (not self.instance or self.instance.status != Pet.Status.DECEASED):
+            raise serializers.ValidationError("Use Record pet death to confirm and record the details.")
+        if self.instance and self.instance.status == Pet.Status.DECEASED and value != Pet.Status.DECEASED:
+            raise serializers.ValidationError("Only the administrator death-entry correction action can change this status.")
         if self.instance and self.instance.status == Pet.Status.FOR_ASSESSMENT:
             if value not in (Pet.Status.FOR_ASSESSMENT, Pet.Status.AVAILABLE, Pet.Status.UNDER_MEDICAL_CARE, Pet.Status.INACTIVE):
                 raise serializers.ValidationError("Assess the pet and choose Available or Under Medical Care before proceeding with an adoption.")
@@ -47,7 +85,7 @@ class PetSerializer(serializers.ModelSerializer):
             "id", "name", "species", "breed", "age_years", "age_months", "gender", "size",
             "weight_kg", "color", "description", "arrival_date", "status",
             "is_vaccinated", "is_neutered", "images",
-            "health_summary", "created_at", "updated_at",
+            "health_summary", "death_records", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 

@@ -23,15 +23,25 @@ class PaymentSerializer(serializers.ModelSerializer):
             "package", "package_name", "amount", "adoption_fee", "method", "status",
             "payment_date", "receipt_number", "reference_number", "notes", "processed_by",
             "processed_by_email", "pet_name", "created_at", "updated_at",
+            "death_review_required", "death_review_note",
         ]
         read_only_fields = [
             "id", "application_id", "adopter_email", "adoption", "processed_by",
             "processed_by_email", "package_name", "receipt_number", "adoption_fee",
             "pet_name", "created_at", "updated_at",
+            "death_review_required", "death_review_note",
         ]
 
     def get_adoption_fee(self, obj):
         return str(PROTOTYPE_ADOPTION_FEE)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        user = getattr(self.context.get("request"), "user", None)
+        if not user or not user.is_authenticated or not (user.is_staff_role or user.is_admin_role):
+            data.pop("death_review_required", None)
+            data.pop("death_review_note", None)
+        return data
 
     def validate_amount(self, value):
         if value is None or value <= Decimal("0.00"):

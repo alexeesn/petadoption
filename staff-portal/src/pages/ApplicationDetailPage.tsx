@@ -489,6 +489,7 @@ export default function ApplicationDetailPage() {
         </label>
       </SectionCard>
 
+      {app.cancellation_reason && <SectionCard title="Cancellation reason">{app.death_notice_corrected && <p className="mb-3 text-sm font-semibold text-stone-800">The previous death notice was corrected. This application remains closed; the original cancellation reason is retained below.</p>}<p className="whitespace-pre-wrap text-sm text-stone-700">{app.cancellation_reason}</p></SectionCard>}
       {app.rejection_reason && !allowed.includes('rejected') && (
         <SectionCard title="Rejection reason">
           <p className="text-sm text-red-700 whitespace-pre-wrap">{app.rejection_reason}</p>

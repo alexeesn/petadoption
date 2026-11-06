@@ -23,7 +23,7 @@ class HealthRecordScopeTests(BaseAPITestCase):
         vaccinations = list(Vaccination.objects.order_by("pk").values())
         for scope, statuses in (
             ("active", Pet.ACTIVE_STATUSES),
-            ("history", ("adopted", "inactive")),
+            ("history", ("adopted", "inactive", "deceased")),
             ("all", Pet.Status.values),
         ):
             with self.subTest(scope=scope):
@@ -48,11 +48,11 @@ class HealthRecordScopeTests(BaseAPITestCase):
             HealthRecord.objects.create(pet=pet, record_date="2025-01-01")
         first = self.client.get("/api/health-records/", {"scope": "history"})
         second = self.client.get("/api/health-records/", {"scope": "history", "page": 2})
-        self.assertEqual(first.data["count"], 23)
+        self.assertEqual(first.data["count"], 24)
         self.assertEqual(len(first.data["results"]), 20)
         self.assertIsNotNone(first.data["next"])
-        self.assertEqual(second.data["count"], 23)
-        self.assertEqual(len(second.data["results"]), 3)
+        self.assertEqual(second.data["count"], 24)
+        self.assertEqual(len(second.data["results"]), 4)
         self.assertFalse({r["id"] for r in first.data["results"]} & {r["id"] for r in second.data["results"]})
 
     def test_existing_record_moves_between_views_as_pet_enters_and_leaves_care(self):

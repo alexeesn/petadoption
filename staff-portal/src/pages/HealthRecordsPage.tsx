@@ -205,7 +205,7 @@ export default function HealthRecordsPage() {
         setSuccess('');
         setScope(value);
       }} />
-      <p className="mb-4 text-sm text-stone-600">Active shows medical records for pets in the center's current care, including returned pets awaiting assessment. Adopted and inactive pets' records remain in History.</p>
+      <p className="mb-4 text-sm text-stone-600">Active shows medical records for pets in the center's current care, including returned pets awaiting assessment. Adopted, inactive, and deceased pets' records remain in History.</p>
 
       {showForm && (
         <Card className="mb-6 p-6">
@@ -240,7 +240,7 @@ export default function HealthRecordsPage() {
                     {pets.map(pet => <option key={pet.id} value={pet.id}>{formatPetLabel(pet.name)} ({pet.species})</option>)}
                   </select>
                 </label>
-                <p id="health-pet-help" className="mt-2 text-xs text-stone-500">Choose a pet in the center's current care. Adopted and inactive pets' records are in History. Saved records open read-only; choose Edit Health Record to make changes. Changing the pet clears unsaved entries.</p>
+                <p id="health-pet-help" className="mt-2 text-xs text-stone-500">Choose a pet in the center's current care. Adopted, inactive, and deceased pets' records are in History. Saved records open read-only; choose Edit Health Record to make changes. Changing the pet clears unsaved entries.</p>
                 {!loadingPets && !petError && pets.length === 0 && <p role="status" className="mt-2 text-sm text-stone-600">No pets are available.</p>}
                 {petError && <div role="alert" className="mt-2 text-sm text-red-600">{petError} <button type="button" className="font-semibold underline" onClick={() => setRefresh(current => current + 1)}>Retry loading pets</button></div>}
               </div>

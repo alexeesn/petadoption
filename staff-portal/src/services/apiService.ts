@@ -80,6 +80,8 @@ export const applicationService = {
 
 // ----- Pets -----
 export const petService = {
+  recordDeath: (id: string, data: Record<string, unknown>) => api.post<Pet>(`/pets/${id}/record-death/`, data),
+  correctDeath: (id: string, reason: string) => api.post<Pet>(`/pets/${id}/correct-death/`, { reason, confirmed: true }),
   list: (params?: Record<string, unknown>) => api.get('/pets/', { params }),
   retrieve: (id: string) => api.get(`/pets/${id}/`),
   // FormData uploads must send multipart; the shared axios instance defaults
@@ -220,6 +222,7 @@ export const packageService = {
 
 // ----- Payments -----
 export const paymentService = {
+  resolveDeathReview: (id: string, note: string) => api.post<import('../types').Payment>(`/payments/${id}/resolve-death-review/`, { note, confirmed: true }),
   list: (params?: Record<string, unknown>) => api.get('/payments/', { params }),
   create: (data: Record<string, unknown>) => api.post('/payments/', data),
   update: (id: string, data: Record<string, unknown>) => api.patch(`/payments/${id}/`, data),

@@ -7,6 +7,7 @@ import { PageHeader } from '../layouts/DashboardLayout';
 import { paymentService, appointmentService, applicationService } from '../services/apiService';
 import type { Payment, PaginatedResponse, Appointment, PaymentSummary } from '../types';
 import { formatDate, formatDateTime, formatCurrency, philippineDate } from '../utils/format';
+import DeathPaymentReviews from '../features/payments/DeathPaymentReviews';
 
 /** Staff filter choices for the completed onsite collection workflow. */
 const PAYMENT_STATUS_FILTERS = [
@@ -335,6 +336,7 @@ export default function PaymentsPage() {
         </Button>
       </div>
 
+      <DeathPaymentReviews onResolved={load} />
       {showRecordModal && (
         <Card className="mb-6 p-6 border-2 border-primary-200 bg-primary-50/20">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
