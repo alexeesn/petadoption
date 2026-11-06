@@ -7,6 +7,7 @@ import { Spinner, ErrorState } from '../components/UI'
 import PetCard from '../components/PetCard'
 import { Icon } from '../components/Icons'
 import PetPhoto from '../components/PetPhoto'
+import AdoptionFeeSection from '../components/AdoptionFeeSection'
 
 export default function HomePage() {
   const [featured, setFeatured] = useState<Pet[]>([])
@@ -29,6 +30,7 @@ export default function HomePage() {
           <h1 className="hero-title">A little love.<br /><span>A whole new life.</span></h1>
           <p className="hero-description">Find a companion who feels like home. Meet our pets, get to know their stories, and take the first step together.</p>
           <div className="mt-8 flex flex-wrap items-center gap-3"><Link to="/pets" className="btn btn-primary btn-lg">Find a Pet<Icon name="arrowRight" className="h-4 w-4" /></Link><a href="#how-it-works" className="btn btn-outline">How it works<Icon name="chevronRight" className="h-4 w-4" /></a></div>
+          <a href="#adoption-fee" className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-primary-800 underline decoration-primary-300 underline-offset-4 hover:text-primary-900">View the ₱500 adoption fee<Icon name="chevronRight" className="h-4 w-4" /></a>
           <div className="hero-care-note"><span className="hero-note-icon"><Icon name="shield" className="h-5 w-5" /></span><div><p className="text-sm font-semibold text-stone-800">A real connection. A thoughtful process.</p><p className="mt-1 text-xs text-stone-600">Our team is here to guide every step.</p></div></div>
         </div>
         <div className="spotlight-card">
@@ -58,5 +60,6 @@ export default function HomePage() {
         ['03', 'Meet and welcome home', 'Once approved, request your visit. Staff will guide you through the onsite steps and physical handover.'],
       ].map(([number,title,description]) => <div key={number} className="journey-step"><span className="journey-number">{number}</span><h3 className="mt-5 text-xl font-bold text-primary-900">{title}</h3><p className="mt-3 text-sm leading-7 text-stone-600">{description}</p></div>)}</div>
     </section>
+    <AdoptionFeeSection />
   </div>
 }
