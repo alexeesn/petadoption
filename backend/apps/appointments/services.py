@@ -46,14 +46,14 @@ def audit(user, action, obj, previous, new):
     )
 
 
-def notify_adopter(application, title, message, notification_type="appointment"):
+def notify_adopter(application, title, message, notification_type="appointment", *, email_template="emails/appointment_followup.html"):
     create_notification(
         user=application.adopter, title=title, message=message,
         notification_type=notification_type, link=f"/applications/{application.pk}",
     )
     # Do not send an email for a decision that is subsequently rolled back.
     from .emails import send_followup_email
-    transaction.on_commit(lambda: send_followup_email(application, title, message))
+    transaction.on_commit(lambda: send_followup_email(application, title, message, html_template=email_template))
 
 
 def visit_has_ended(appointment):

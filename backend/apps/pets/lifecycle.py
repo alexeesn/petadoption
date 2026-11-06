@@ -88,7 +88,7 @@ def record_pet_death(pet_id, actor, data):
             f"We're sorry to share that {pet.name} has passed away while in the center's care. "
             "Your application and any upcoming visit have been cancelled. "
             "Please contact the center for assistance, including any payment concerns."
-        ), notification_type="application")
+        ), notification_type="application", email_template="emails/pet_death_update.html")
     for staff in User.objects.filter(role__in=["staff", "admin"], is_active=True):
         create_notification(staff, "Pet death recorded", f"{pet.name} is marked Deceased. Affected applications and visits were closed. Review any flagged payments.", "pet", f"/pets?scope=history&status=deceased&pet={pet.pk}")
     return pet
@@ -109,5 +109,5 @@ def correct_pet_death(pet_id, actor, reason):
     audit(actor, "pet_death_corrected", death, "active death entry", reason)
     audit(actor, "pet_status_change", pet, "deceased", "for_assessment: death entry corrected")
     for application in death.affected_applications.all():
-        notify_adopter(application, "Correction to a pet update", f"The previous death notice for {pet.name} was entered in error and has been corrected by an administrator. Your application remains closed. Please contact the center for assistance.", notification_type="application")
+        notify_adopter(application, "Correction to a pet update", f"The previous death notice for {pet.name} was entered in error and has been corrected by an administrator. Your application remains closed. Please contact the center for assistance.", notification_type="application", email_template="emails/pet_death_correction.html")
     return pet

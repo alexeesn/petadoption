@@ -213,3 +213,41 @@ class SurrenderFlowTests(APITestCase):
         response = self.post_action(obj, "review", {"status": "declined", "note": "The center is unable to accept this request."})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["status"], "declined")
+
+    def test_html_emails_have_request_link_schedule_and_no_private_notes(self):
+        obj = self.create_request()
+        email = mail.outbox[-1]
+        html, mime = email.alternatives[0]
+        self.assertEqual(mime, 'text/html')
+        self.assertIn('Your request is with our team.', html)
+        self.assertIn('Surrender request reference', html)
+        self.assertIn(f'/surrenders/{obj["id"]}', html)
+        self.assertIn('Track your request:', email.body)
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.schedule(obj)
+        self.assertEqual(response.status_code, 200)
+        html = mail.outbox[-1].alternatives[0][0]
+        self.assertIn('Your intake visit is scheduled.', html)
+        self.assertIn('Front desk at the center, 9 AM.', html)
+        self.assertIn('Bring vaccination records if available.', html)
+        self.assertNotIn('Private capacity assessment', html)
+        self.assertNotIn('Private capacity assessment', mail.outbox[-1].body)
+
+    def test_render_failure_keeps_plain_text_delivery(self):
+        from unittest.mock import patch
+        with patch('apps.surrenders.emails.render_to_string', side_effect=RuntimeError('Template unavailable')):
+            with self.assertLogs('apps.surrenders.emails', level='ERROR'):
+                self.create_request()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertFalse(mail.outbox[0].alternatives)
+        self.assertIn('Your request for Mochi is pending review.', mail.outbox[0].body)
+
+    def test_html_escapes_user_supplied_pet_name(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post('/api/surrenders/', {
+                **self.payload(pet_name='Mochi <script>unsafe()</script>'), 'photos': [photo()],
+            }, format='multipart')
+        self.assertEqual(response.status_code, 201)
+        html = mail.outbox[-1].alternatives[0][0]
+        self.assertIn('&lt;script&gt;', html)
+        self.assertNotIn('<script>', html)

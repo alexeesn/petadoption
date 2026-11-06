@@ -69,6 +69,14 @@ Submission, resubmission, decisions, cancellation, and receipt create in-app
 notifications. Owner emails run after commit. Mail failures are logged without
 rolling back a committed request.
 
+Surrender emails use the shared PawConnect HTML letterhead with a plain-text
+fallback. Each status has its own heading and next-step message; scheduled
+intakes include the saved date/instructions, and all variants link to the
+owner's request with its reference. Public event details are captured before
+commit so a later transition cannot change an earlier email's content. Private
+staff notes and request photos are excluded. Rendering failure falls back to
+plain text without interrupting the saved workflow.
+
 ## Deployment and storage
 
 Run `python manage.py migrate`. Private photos live outside MEDIA_ROOT, at

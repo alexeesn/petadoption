@@ -1,9 +1,7 @@
 import json
-import logging
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
-from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -13,8 +11,7 @@ from apps.audit.models import AuditLog
 from apps.notifications.models import create_notification
 from apps.pets.models import Pet
 from .models import SurrenderEvent, SurrenderRequest
-
-logger = logging.getLogger(__name__)
+from .emails import send_surrender_update_email
 
 
 def today():
@@ -29,17 +26,21 @@ def record_event(request, actor, action, previous="", note="", internal_notes=""
                             previous_value=previous, new_value=json.dumps({"status": request.status, "intake_date": str(request.intake_date or ""), "pet": str(request.pet_id or "")}))
 
 
-def notify_owner(request, title, message):
+def notify_owner(request, title, message, *, email_message=None):
     create_notification(request.owner, title, message, "surrender", f"/surrenders/{request.pk}")
     email = request.owner.email
-    body = f"{message}\n\nTrack your request: {settings.ADOPTER_PORTAL_URL}/surrenders/{request.pk}"
-
-    def send():
-        try:
-            send_mail(title, body, settings.DEFAULT_FROM_EMAIL, [email])
-        except Exception:
-            logger.exception("Unable to send surrender update email")
-    transaction.on_commit(send)
+    url = f"{settings.ADOPTER_PORTAL_URL}/surrenders/{request.pk}"
+    body = f"{message}\n\nTrack your request: {url}"
+    # Capture the event's public details now, before any later transition can
+    # mutate this model. Private review notes/photos are never email context.
+    context = {
+        "title": title, "owner_name": request.owner.full_name or request.owner.email,
+        "pet_name": request.pet_name, "request_id": str(request.pk), "request_url": url,
+        "status": request.status, "status_label": request.get_status_display(),
+        "message": message if email_message is None else email_message,
+        "intake_date": request.intake_date, "intake_instructions": request.intake_instructions,
+    }
+    transaction.on_commit(lambda: send_surrender_update_email(email, title, body, context))
 
 
 def notify_staff(request, title):
@@ -76,7 +77,7 @@ def review(request, actor, data):
     message = f"Your surrender request for {request.pet_name}: {request.get_status_display()}. {data['note']}"
     if request.intake_date:
         message += f" Intake date: {request.intake_date}. {request.intake_instructions} Scheduling is not final acceptance; keep the pet in your care until handover."
-    notify_owner(request, "Surrender request updated", message)
+    notify_owner(request, "Surrender request updated", message, email_message=data["note"])
 
 
 def confirm_intake(request, actor, data):

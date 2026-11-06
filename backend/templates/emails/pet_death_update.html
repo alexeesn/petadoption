@@ -1,0 +1,19 @@
+{% extends "emails/base.html" %}
+{% block email_title %}An update about {{ pet_name }} - PawConnect{% endblock %}
+{% block preheader %}A message from the center about {{ pet_name }} and your application.{% endblock %}
+{% block eyebrow %}A message from the center{% endblock %}
+{% block heading %}A difficult update about {{ pet_name }}.{% endblock %}
+{% block content %}
+<p style="margin:0 0 16px; color:#314334;">Hello <strong>{{ adopter_name|default:"there" }}</strong>,</p>
+<p style="margin:0 0 20px; color:#495949;">We're sorry to bring you this news. We know you were hoping to welcome <strong>{{ pet_name }}</strong> into your home.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0; table-layout:fixed;">
+  <tr><td bgcolor="#f2eee6" style="padding:22px; background-color:#f2eee6; border:1px solid #d8d0c2; border-left:4px solid #8b7d68; border-radius:6px; overflow-wrap:anywhere; word-wrap:break-word;">
+    <p style="margin:0; color:#3d4038;">{{ message|linebreaksbr }}</p>
+  </td></tr>
+</table>
+<p style="margin:0 0 12px; color:#495949;">This cancellation is unrelated to your eligibility as an adopter. Your application history remains available in your account.</p>
+<p style="margin:0; color:#495949;">If you have questions or need support with an existing payment, please contact the center. The team can explain the next steps.</p>
+{% endblock %}
+{% block action %}{% include "emails/includes/action.html" with button_label="View your application details" %}{% endblock %}
+{% block reference %}{% include "emails/includes/reference.html" %}{% endblock %}
+{% block notice %}For support or questions about this update, please contact the adoption center. Thank you for the care you have shown {{ pet_name }}.{% endblock %}

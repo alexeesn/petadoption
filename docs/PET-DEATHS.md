@@ -27,6 +27,13 @@ One transaction:
 - Creates audit events and in-app notifications. Affected adopters receive a
   sensitive email after commit; private cause/veterinarian/notes are omitted.
 
+Death and correction notices have dedicated PawConnect HTML templates, a
+plain-text fallback, application reference and a portal button. Their neutral
+message panels and wording distinguish sensitive news from routine appointment
+updates. Correction emails explicitly keep the application closed and direct
+the adopter to the center; they do not announce a new adoption approval. The
+existing reschedule/return/cancellation email design is retained.
+
 Pets and Health Records show deceased pets in History. Pet inventory statistics
 and CSV exports include the deceased status. A direct public pet URL remains
 readable with an unavailable message and no Apply action. No death metadata is

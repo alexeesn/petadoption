@@ -60,6 +60,12 @@ class PetDeathTests(BaseAPITestCase):
         self.assertEqual(HealthRecord.objects.values().get(pk=self.health.pk), old_health)
         self.assertEqual(len(mail.outbox), 2)
         self.assertNotIn("CONFIDENTIAL", str([email.body for email in mail.outbox]))
+        for email in mail.outbox:
+            html, mime = email.alternatives[0]
+            self.assertEqual(mime, 'text/html')
+            self.assertIn('A difficult update about Mochi.', html)
+            self.assertIn('View your application details', html)
+            self.assertNotIn('CONFIDENTIAL', html)
         self.assertTrue(AuditLog.objects.filter(action="pet_death_recorded", user=self.staff).exists())
         self.assertTrue(AuditLog.objects.filter(action="payment_death_review_required").exists())
 
@@ -142,7 +148,8 @@ class PetDeathTests(BaseAPITestCase):
         self.assertEqual(self.client.post(url, {'reason': 'Incorrect pet selected.', 'confirmed': True}, format='json').status_code, 403)
         self.authenticate(self.admin)
         self.assertEqual(self.client.post(url, {'reason': ' ', 'confirmed': True}, format='json').status_code, 400)
-        response = self.client.post(url, {'reason': 'Incorrect pet selected.', 'confirmed': True}, format='json')
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(url, {'reason': 'Incorrect pet selected.', 'confirmed': True}, format='json')
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data['status'], 'for_assessment')
         death.refresh_from_db(); self.app.refresh_from_db(); self.payment.refresh_from_db()
@@ -151,6 +158,11 @@ class PetDeathTests(BaseAPITestCase):
         self.assertTrue(death.corrected_at)
         self.assertEqual(self.app.status, 'cancelled')
         self.assertTrue(self.payment.death_review_required)
+        correction_html = mail.outbox[-1].alternatives[0][0]
+        self.assertIn('A correction about Mochi.', correction_html)
+        self.assertIn('Your previous application remains closed.', correction_html)
+        self.assertNotIn('Incorrect pet selected.', correction_html)
+        self.assertNotIn('CONFIDENTIAL', correction_html)
         self.authenticate(self.owner)
         self.assertTrue(self.client.get(f'/api/applications/{self.app.pk}/').data['death_notice_corrected'])
 

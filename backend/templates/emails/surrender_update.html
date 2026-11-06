@@ -1,0 +1,34 @@
+{% extends "emails/base.html" %}
+{% block email_title %}{{ title }} - PawConnect{% endblock %}
+{% block preheader %}{{ pet_name }}: {{ status_label }}. View the latest details of your surrender request.{% endblock %}
+{% block eyebrow %}Pet surrender &amp; center intake{% endblock %}
+{% block heading %}{% if status == "submitted" %}Your request is with our team.{% elif status == "needs_information" %}A little more information is needed.{% elif status == "waitlisted" %}Your request is on the waitlist.{% elif status == "intake_scheduled" %}Your intake visit is scheduled.{% elif status == "received" %}The center has received {{ pet_name }}.{% elif status == "cancelled" %}Your request has been cancelled.{% else %}An update on your request.{% endif %}{% endblock %}
+{% block content %}
+<p style="margin:0 0 16px; color:#314334;">Hello <strong>{{ owner_name|default:"there" }}</strong>,</p>
+<p style="margin:0 0 20px; color:#495949;">Here's the latest update on your surrender request for <strong>{{ pet_name }}</strong>.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px; table-layout:fixed;">
+  <tr><td bgcolor="#e4ecdd" style="padding:18px 20px; background-color:#e4ecdd; border:1px solid #c4dabb; border-radius:8px; overflow-wrap:anywhere; word-wrap:break-word;">
+    <p style="margin:0 0 6px; color:#5a6957; font-size:11px; font-weight:700; letter-spacing:1.1px; line-height:18px; text-transform:uppercase;">Request status</p>
+    <p style="margin:0; color:#193726; font-size:19px; font-weight:700; line-height:27px;">{{ status_label }}</p>
+  </td></tr>
+</table>
+<p style="margin:0 0 20px; color:#314334; overflow-wrap:anywhere; word-wrap:break-word;">{{ message|linebreaksbr }}</p>
+{% if status == "intake_scheduled" %}
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0; table-layout:fixed;">
+  <tr><td bgcolor="#fbf5eb" style="padding:20px; background-color:#fbf5eb; border:1px solid #dfcfb7; border-radius:8px; overflow-wrap:anywhere; word-wrap:break-word;">
+    <p style="margin:0 0 8px; color:#765831; font-size:11px; font-weight:700; line-height:18px; letter-spacing:1.1px; text-transform:uppercase;">Your intake visit</p>
+    <p style="margin:0 0 12px; color:#193726; font-size:20px; font-weight:700; line-height:28px;">{{ intake_date|date:"F j, Y" }}</p>
+    <p style="margin:0 0 6px; color:#5a6957; font-size:12px; font-weight:700; line-height:20px;">Center instructions</p>
+    <p style="margin:0; color:#314334;">{{ intake_instructions|linebreaksbr }}</p>
+  </td></tr>
+</table>
+{% endif %}
+{% if status == "needs_information" %}<p style="margin:0; color:#495949;">Open your request, update the information the team asked for, and send it back for review.</p>
+{% elif status == "received" %}<p style="margin:0; color:#495949;">The physical handover is complete. You can view the confirmation and request history in your account.</p>
+{% elif status == "cancelled" %}<p style="margin:0; color:#495949;">This request is closed and any scheduled intake has been cancelled. The pet remains in your care.</p>
+{% elif status == "declined" %}<p style="margin:0; color:#495949;">This request is closed. Please contact the center if you need help understanding the decision.</p>
+{% else %}<p style="margin:0; color:#495949;">Please keep the pet in your care until the center receives it and confirms the handover. Submitting or scheduling a request does not guarantee acceptance or transfer custody.</p>{% endif %}
+{% endblock %}
+{% block action %}{% include "emails/includes/action.html" with application_url=request_url button_label="View your surrender request" %}{% endblock %}
+{% block reference %}{% include "emails/includes/reference.html" with application_id=request_id reference_label="Surrender request reference" %}{% endblock %}
+{% block notice %}For questions about surrender assessment, available space, or intake requirements, please contact the adoption center.{% endblock %}

@@ -20,11 +20,11 @@ from .models import Appointment
 logger = logging.getLogger(__name__)
 
 
-def send_followup_email(application, title, message):
+def send_followup_email(application, title, message, *, html_template="emails/appointment_followup.html"):
     """Use the existing configured Django email transport for follow-up decisions."""
     url = f"{settings.ADOPTER_PORTAL_URL}/applications/{application.pk}"
     _send(title, f"Hello {application.adopter.full_name or application.adopter.email},\n\n{message}\n\nView your application: {url}\n\nPawConnect",
-          "emails/appointment_followup.html", {
+          html_template, {
               "title": title, "message": message, "application_url": url,
               "adopter_name": application.adopter.full_name or application.adopter.email,
               "pet_name": application.pet.name, "application_id": str(application.pk),
